@@ -238,22 +238,279 @@
     };
   }
 
-  // ---------- live & final (Task 10 fills these in) ----------
+  // ---------- live & final ----------
+
+  const PLAYING = ['live', 'suddenDeath'];
+  const REASON_LINE = {
+    time: "Time's up", suddenDeath: 'Won in sudden death', bagOut: 'Tiles ran out',
+    resign: 'Opponent resigned', awarded: 'Awarded by the host', walkover: 'Walkover', corrected: 'Result corrected by the host'
+  };
+
+  const teamOf = (room, seat) => (seat === 'A' ? room.teamAName : room.teamBName);
+  const playerOf = (room, seat) => (room.seats[seat] ? room.seats[seat].name : teamOf(room, seat));
+  const isSeat = s => s === 'A' || s === 'B';
+
+  function myTurn(room, ctx) {
+    const s = ctx.state.mySeat;
+    return isSeat(s) && room.game && room.game.turn === s && PLAYING.includes(room.status) &&
+      !room.clock.paused && !room.game.pending;
+  }
+
+  function lastMoveText(room) {
+    const lm = room.game && room.game.lastMove;
+    if (!lm) return '';
+    const who = esc(playerOf(room, lm.seat));
+    if (lm.type === 'pass') return `${who} passed`;
+    if (lm.type === 'timeout') return `${who} ran out of time`;
+    const words = lm.words.map(w => esc(w.word)).join(', ');
+    return `${who} played ${words} (${lm.total})${lm.unverified ? ' · <span class="muted">unverified</span>' : ''}`;
+  }
+
+  function buildLive(el, ctx) {
+    el.innerHTML = `
+      <div class="panel"><div class="arena" id="liveRoot">
+        <div class="status-line" id="tossLine"></div>
+        <div class="scorebar">
+          <div class="side" id="sideA"></div>
+          <div><div class="clock" id="matchClock">0:00</div><div class="turnclock" id="turnClock"></div></div>
+          <div class="side right" id="sideB"></div>
+        </div>
+        <div class="status-line" id="statusLine"></div>
+        <div id="noticeBox" style="width:100%;max-width:520px;"></div>
+        <div id="hostBar" style="width:100%;max-width:520px;"></div>
+        <div id="board-container"></div>
+        <div class="rack hidden" id="rack"></div>
+        <div id="rejectBox" style="width:100%;max-width:520px;"></div>
+        <div class="actions-row hidden" id="actions">
+          <button id="playBtn">✅ Play</button>
+          <button id="recallBtn" class="secondary">↩ Recall</button>
+          <button id="passBtn" class="secondary">⏭ Pass</button>
+          <button id="resignBtn" class="danger">Resign</button>
+        </div>
+        <div class="status-line" id="lastMove"></div>
+        <a href="#" class="small-text">← Back to start</a>
+      </div></div>`;
+    const ui = ctx.state.ui;
+    Object.assign(ui, { temp: [], selected: null, busy: false, rejected: null, seenMove: -1, tried: {} });
+    const $ = s => el.querySelector(s);
+
+    $('#recallBtn').onclick = () => { ui.temp = []; ui.selected = null; ui.rejected = null; update(el, ctx.state.room, ctx); };
+
+    $('#passBtn').onclick = async () => {
+      const room = ctx.state.room;
+      if (!myTurn(room, ctx) || !confirm('Pass your turn?')) return;
+      const seat = ctx.state.mySeat;
+      const res = await Store.mutateRoom(ctx.code, r => Match.applyPass(r, seat, { now: Store.serverNow(), expectedMoveCount: room.game.moveCount }));
+      if (!res.committed) UI.toast('Could not pass (the game state changed).', 'error');
+    };
+
+    $('#resignBtn').onclick = async () => {
+      const seat = ctx.state.mySeat;
+      if (!isSeat(seat) || !confirm('Resign this match? The other team gets the win.')) return;
+      await Store.mutateRoom(ctx.code, r => Match.resign(r, seat, Store.serverNow()));
+    };
+
+    $('#playBtn').onclick = async () => {
+      const room = ctx.state.room;
+      const seat = ctx.state.mySeat;
+      if (!myTurn(room, ctx) || ui.busy) return;
+      const placements = ui.temp.map(t => ({ r: t.r, c: t.c, letter: t.letter }));
+      const m = Match.prepareMove(room, seat, placements);
+      if (!m.ok) return UI.toast(ScrabbleEngine.ERROR_TEXT[m.error] || 'Invalid move.', 'error');
+      const expectedMoveCount = room.game.moveCount;
+      ui.busy = true; $('#playBtn').textContent = '🔍 Checking…'; update(el, room, ctx);
+      try {
+        const check = await Dictionary.checkWords(m.words.map(w => w.word));
+        if (check.rejected.length) {
+          ui.rejected = { placements, words: m.words, rejectedWords: check.rejected, total: m.total, expectedMoveCount };
+          return;
+        }
+        const res = await Store.mutateRoom(ctx.code, r => Match.applyPlay(r, seat, placements, { now: Store.serverNow(), expectedMoveCount, unverified: check.unverified }));
+        if (res.committed) { ui.temp = []; ui.selected = null; }
+        else { UI.toast('Move not accepted (time up or the game changed).', 'error'); ui.temp = []; }
+      } finally {
+        ui.busy = false; $('#playBtn').textContent = '✅ Play';
+        update(el, ctx.state.room, ctx);
+      }
+    };
+
+    $('#rejectBox').onclick = async ev => {
+      const b = ev.target.closest('button');
+      if (!b || !ui.rejected) return;
+      if (b.dataset.act === 'recall') { ui.rejected = null; ui.temp = []; ui.selected = null; return update(el, ctx.state.room, ctx); }
+      if (b.dataset.act === 'appeal') {
+        const rej = ui.rejected;
+        const seat = ctx.state.mySeat;
+        b.disabled = true;
+        const res = await Store.mutateRoom(ctx.code, r => Match.requestAppeal(r, seat, rej.placements, {
+          now: Store.serverNow(), expectedMoveCount: rej.expectedMoveCount, words: rej.words, rejectedWords: rej.rejectedWords, total: rej.total
+        }));
+        ui.rejected = null;
+        if (res.committed) { ui.temp = []; ui.selected = null; UI.toast('Sent to the host for a decision.', 'ok'); }
+        else UI.toast('Could not send the appeal (time up or the game changed).', 'error');
+        update(el, ctx.state.room, ctx);
+      }
+    };
+
+    // Clocks + automatic timeout / time-up writes.
+    App.onTick(() => tick(el, ctx));
+  }
+
+  function onSquare(el, ctx, r, c) {
+    const room = ctx.state.room;
+    const ui = ctx.state.ui;
+    if (!myTurn(room, ctx) || ui.busy || ui.rejected) return;
+    const i = ui.temp.findIndex(t => t.r === r && t.c === c);
+    if (i !== -1) { ui.temp.splice(i, 1); return update(el, room, ctx); }
+    if (room.game.board[ScrabbleEngine.key(r, c)] || ui.selected === null) return;
+    const rack = room.game.racks[ctx.state.mySeat];
+    ui.temp.push({ r, c, letter: rack[ui.selected], rackIndex: ui.selected });
+    ui.selected = null;
+    update(el, room, ctx);
+  }
+
+  function update(el, room, ctx) {
+    const ui = ctx.state.ui;
+    // Timers and async handlers can fire after the view switched to the final screen.
+    if (!el.querySelector('#liveRoot') || !room || !room.game || !PLAYING.concat('hostDecision').includes(room.status)) return;
+    const $ = s => el.querySelector(s);
+    const g = room.game;
+    const seat = ctx.state.mySeat;
+    const phase = Match.roomPhase(room);
+
+    // A new move happened (or my rack changed): clear any half-built placement.
+    if (g.moveCount !== ui.seenMove) {
+      if (ui.seenMove !== -1) { ui.temp = []; ui.selected = null; ui.rejected = null; }
+      ui.seenMove = g.moveCount;
+    }
+
+    const toss = Date.now() < ctx.state.tossUntil;
+    $('#tossLine').innerHTML = toss ? `🪙 Coin toss: <b>${esc(teamOf(room, g.firstSeat))}</b> goes first` : '';
+    if (toss && !ui.tossTimer) ui.tossTimer = setTimeout(() => { ui.tossTimer = null; update(el, ctx.state.room, ctx); }, ctx.state.tossUntil - Date.now() + 50);
+
+    for (const s of SEATS) {
+      const side = $('#side' + s);
+      side.classList.toggle('turn', g.turn === s && PLAYING.includes(room.status));
+      side.innerHTML = `<div class="team">${esc(teamOf(room, s))}</div>
+        <div class="player">${esc(playerOf(room, s))}${seat === s ? ' (you)' : ''}</div>
+        <div class="score">${g.scores[s]}</div>`;
+    }
+
+    let status = '';
+    if (phase === 'paused') status = '⏸ Paused by the host';
+    else if (phase === 'appeal') status = `⚖️ Waiting for the host to decide on ${esc(playerOf(room, g.pending.seat))}'s word…`;
+    else if (phase === 'hostDecision') status = 'Still tied after 3 sudden-death rounds. Waiting for host decision.';
+    else {
+      const turnTxt = myTurn(room, ctx) ? '<b>Your turn</b>' : `${esc(playerOf(room, g.turn))}'s turn`;
+      status = phase === 'suddenDeath' ? `⚡ Sudden death: round ${g.suddenDeath.rounds + 1} of ${Match.SUDDEN_DEATH_MAX_ROUNDS} · ${turnTxt}` : turnTxt;
+    }
+    $('#statusLine').innerHTML = status;
+
+    const mine = myTurn(room, ctx);
+    UI.renderBoard($('#board-container'), g.board, {
+      temp: mine ? ui.temp : [],
+      pending: g.pending ? g.pending.placements : null,
+      onSquare: (r, c) => onSquare(el, ctx, r, c)
+    });
+
+    const rackEl = $('#rack');
+    rackEl.classList.toggle('hidden', !isSeat(seat));
+    if (isSeat(seat)) {
+      UI.renderRack(rackEl, g.racks[seat], {
+        selectedIndex: ui.selected,
+        usedIndices: mine ? ui.temp.map(t => t.rackIndex) : [],
+        onTile: i => { if (!myTurn(ctx.state.room, ctx) || ui.busy) return; ui.selected = ui.selected === i ? null : i; update(el, ctx.state.room, ctx); }
+      });
+    }
+
+    $('#actions').classList.toggle('hidden', !isSeat(seat));
+    for (const id of ['#playBtn', '#recallBtn', '#passBtn']) $(id).disabled = !mine || ui.busy || !!ui.rejected;
+    $('#resignBtn').disabled = !isSeat(seat) || !['live', 'suddenDeath', 'hostDecision'].includes(room.status);
+
+    $('#rejectBox').innerHTML = ui.rejected ? `<div class="warn-line stack">
+        <div>❌ ${ui.rejected.rejectedWords.map(esc).join(', ')} not found in the dictionary.</div>
+        <div class="row"><button class="secondary small" data-act="recall">↩ Recall</button><button class="small" data-act="appeal">⚖️ Ask host</button></div>
+      </div>` : '';
+
+    if (isSeat(seat) && g.pending && g.pending.seat === seat) {
+      $('#rejectBox').innerHTML = '<div class="warn-line">⚖️ Waiting for the host to approve your word…</div>';
+    }
+
+    $('#lastMove').innerHTML = lastMoveText(room);
+    if (RoomLive.updateHost) RoomLive.updateHost(el, room, ctx);
+    tick(el, ctx);
+  }
+
+  function tick(el, ctx) {
+    const room = ctx.state.room;
+    if (!room || !room.clock || !el.querySelector('#liveRoot')) return;
+    const now = Store.serverNow();
+    const c = room.clock;
+    const phase = Match.roomPhase(room);
+    const matchMs = c.paused ? c.paused.matchRemainingMs : c.endsAt - now;
+    const turnMs = c.paused ? c.paused.turnRemainingMs : Match.TURN_MS - (now - c.turnStartedAt);
+    const mc = el.querySelector('#matchClock');
+    if (room.status === 'suddenDeath') mc.textContent = 'SD';
+    else if (room.status === 'hostDecision') mc.textContent = '—';
+    else mc.textContent = UI.formatClock(matchMs);
+    mc.classList.toggle('low', room.status === 'live' && matchMs <= 60000);
+    el.querySelector('#turnClock').textContent = PLAYING.includes(room.status) ? `turn ${UI.formatClock(turnMs)}` : '';
+
+    // Only seated players and the host write automatic transitions; spectators never write.
+    const writer = isSeat(ctx.state.mySeat) || App.isHost();
+    if (!writer || !PLAYING.includes(room.status) || c.paused || (room.game && room.game.pending)) return;
+    const tried = ctx.state.ui.tried;
+    if (room.status === 'live' && now >= c.endsAt) {
+      const key = 'end:' + c.endsAt;
+      if (!tried[key]) { tried[key] = true; Store.mutateRoom(ctx.code, r => Match.resolveTimeUp(r, Store.serverNow())); }
+      return;
+    }
+    if (now >= c.turnStartedAt + Match.TURN_MS) {
+      const key = 'turn:' + c.turnStartedAt + ':' + room.game.moveCount;
+      if (!tried[key]) {
+        tried[key] = true;
+        const expectedMoveCount = room.game.moveCount, expectedTurnStartedAt = c.turnStartedAt, seat = room.game.turn;
+        Store.mutateRoom(ctx.code, r => Match.applyPass(r, seat, { now: Store.serverNow(), expectedMoveCount, timeout: true, expectedTurnStartedAt }));
+      }
+    }
+  }
 
   const RoomLive = {
     renderLive(el, room, ctx) {
-      const toss = Date.now() < ctx.state.tossUntil;
-      const first = room.game.firstSeat === 'A' ? room.teamAName : room.teamBName;
+      if (!el.querySelector('#liveRoot')) buildLive(el, ctx);
+      update(el, room, ctx);
+    },
+
+    renderFinal(el, room, ctx) {
+      if (ctx.state.ui.tossTimer) { clearTimeout(ctx.state.ui.tossTimer); ctx.state.ui.tossTimer = null; }
+      let body;
+      if (room.status === 'void' || !room.result) {
+        body = '<div class="final-banner"><div class="win" style="color:var(--text-muted)">This room was voided</div><p class="muted">It does not count for either team.</p></div>';
+      } else {
+        const res = room.result;
+        const winTeam = teamOf(room, res.winner);
+        let reason = REASON_LINE[res.reason] || '';
+        if (res.reason === 'resign') reason = `${playerOf(room, res.winner === 'A' ? 'B' : 'A')} resigned`;
+        body = `<div class="final-banner stack">
+          <div class="win">🏆 ${esc(winTeam)} wins</div>
+          <div>${esc(playerOf(room, 'A'))} <b>${res.scoreA}</b> – <b>${res.scoreB}</b> ${esc(playerOf(room, 'B'))}</div>
+          <div><span class="badge live">+1 ${esc(winTeam)}</span></div>
+          <div class="muted small-text">${esc(reason)}</div>
+        </div>`;
+      }
       el.innerHTML = `<div class="panel narrow stack">
         <div class="versus">${esc(room.teamAName)} <span class="muted">vs</span> ${esc(room.teamBName)}</div>
-        <div class="center" id="tossLine">${toss ? `🪙 Coin toss: <b>${esc(first)}</b> goes first` : 'Live'}</div>
+        ${body}
+        <div id="finalHost"></div>
+        ${room.game ? '<div id="board-container"></div>' : ''}
+        <button class="secondary" id="backBtn">← Back to start</button>
       </div>`;
-      if (toss) setTimeout(() => ctx.render(), ctx.state.tossUntil - Date.now() + 50);
+      if (room.game) UI.renderBoard(el.querySelector('#board-container'), room.game.board, {});
+      el.querySelector('#backBtn').onclick = () => App.go('');
+      if (RoomLive.updateFinalHost) RoomLive.updateFinalHost(el, room, ctx);
     },
-    renderFinal(el, room) {
-      el.innerHTML = `<div class="panel narrow"><div class="final-banner">${room.status === 'void' ? 'This room was voided.' : 'Final'}</div></div>`;
-    },
-    teardown() {}
+
+    teardown(ctx) { if (ctx.state.ui.tossTimer) clearTimeout(ctx.state.ui.tossTimer); }
   };
   root.RoomLive = RoomLive;
 
