@@ -1,57 +1,69 @@
 # DICT-SCRABBLE
 
-**DICT Digital Scrabble Sportsfest 2026**: a browser-based, real-time multiplayer Scrabble tournament app.
+**DICT Digital Scrabble Sportsfest 2026**: the Scrabble event of the DICT sportsfest, played in the browser.
 
-Players sign in with an email address and display name, queue for a match, and play on a shared 15×15 board. Other people can watch any live game as spectators. A host runs the tournament from an admin panel on the same page.
+Each team sends one representative. The host sets up **fixture rooms** (for example *NCR vs Region IV-A, 10 minutes*) and shares a short room code. The two players join with the code and play one timed game while their teams watch. **The winner's team gets 1 point and the loser's team 0.** Team standings update live.
 
 ## Features
 
-- **Real-time multiplayer:** 2-player or 4-player matches, synced live through Firebase Realtime Database
-- **Four servers:** Server 1 is for the tournament and Servers 2–4 are for casual play. Each server keeps its own players, matches and settings.
-- **Automatic matchmaking:** players click *Find Next Match* and are paired once enough players are searching
-- **Scrabble board:** standard premium squares (2L / 3L / 2W / 3W / centre star), standard letter values, 7-tile racks
-- **Dictionary check:** words are checked against the [Free Dictionary API](https://dictionaryapi.dev/)
-- **Turn timer:** 60 seconds per turn. When time runs out, the turn is passed automatically.
-- **Fair-play rules:**
-  - Switching tabs during a live match counts as a strike, and 3 strikes forfeit the match
-  - 3 passes in a row disqualify the player
-- **Spectator mode:** watch any live match; players' racks stay hidden
-- **Host admin dashboard** (password-protected):
-  - Choose 2-player or 4-player mode
-  - Set the bracket size (4 / 8 / 16 / 32)
-  - Set how long the tournament runs
-  - Open a 5-minute registration grace period
-  - Lock or unlock registration
-  - Kick off the tournament, which also generates the bracket
-  - Reset a server's data
-- **Knockout bracket and leaderboard** views
-
-## Tech stack
-
-- Plain HTML, CSS and JavaScript in a single file (`index.html`), with no framework and no build step
-- [Firebase Realtime Database](https://firebase.google.com/docs/database), v8 SDK loaded from a CDN
-- jQuery 3.6.0, loaded from a CDN
-- Free Dictionary API for checking words
+- **Fixture rooms with codes:** the host picks the two teams and the match length, then shares a code like `K7Q-42M`.
+- **Easy in, easy out:**
+  - Players join with just the code and their name.
+  - A refresh, or reopening the link, puts them back in their seat.
+  - Spectators join with the same code and pick "Just watch".
+- **Timed games:**
+  - The host sets the match clock, and each turn has a 60-second limit.
+  - When time runs out, the higher score wins.
+  - A tie goes to sudden death; after 3 tied rounds, the host decides.
+- **Real Scrabble rules:**
+  - A shared tile bag.
+  - The first word covers the centre star, and every later word must connect to tiles already on the board.
+  - Side words are scored too, and premium squares count only under newly placed tiles.
+  - Using all 7 tiles in one move adds a 50-point bonus.
+- **Dictionary check:** words are checked with the [Free Dictionary API](https://dictionaryapi.dev/). If a real word isn't found, the player can **ask the host**, and the clocks pause until the host approves or denies it.
+- **The host decides:**
+  - **During a game:** pause or resume, award a win, void a room, remove a player.
+  - **No-show rooms:** walkover or void.
+  - **Fair-play warnings:** when a player leaves the screen, the host gets a warning. There are no automatic penalties.
+- **Live team standings:** wins, losses and points, on the host dashboard.
 
 ## Running locally
 
-No install or build needed. Serve the folder and open it in a browser:
+No install or build needed:
 
 ```bash
 python -m http.server 8000
-# open http://localhost:8000/
+# open http://localhost:8000/        → join page
+#      http://localhost:8000/#host   → host dashboard
 ```
 
-To try multiplayer, open the page in two or more browser windows or profiles. Register a different player in each window, all on the **same server**. Then unlock the host panel in one window and click **Kickoff Tournament**.
+To try a game, open three browser windows: the host and two players. Use a private/incognito window for the second player so it's treated as a different device.
 
-> **Note:** the page connects to the live Firebase database configured in `index.html`. Anything you do locally (registering, playing, resetting a server) changes real data.
+> **Note:** there's no separate test database. Local runs use the live Firebase data under `scrabble/`. Use team names starting with `TEST-`, and void or delete them afterwards.
+
+## Tests
+
+The Scrabble rules and the room logic are covered by unit tests that use Node's built-in test runner (Node 18+, no packages):
+
+```bash
+node --test "tests/*.test.js"
+```
 
 ## Project structure
 
 ```
-index.html   # The whole app: styles, markup, game engine, Firebase sync, UI logic
-banner.png   # Header banner image
-CLAUDE.md    # Detailed architecture notes, data schema and known issues
+index.html            # page shell; loads the scripts below
+css/style.css         # all styles
+js/engine.js          # Scrabble rules (pure, tested)
+js/match.js           # room state: seats, turns, clocks, results, standings (pure, tested)
+js/dictionary.js      # word check with timeout (tested)
+js/store.js           # Firebase connection and safe (transactional) writes
+js/ui.js              # shared rendering helpers
+js/view-host.js       # host dashboard
+js/view-room.js       # join page, lobby, live game, final screen
+js/app.js             # routing and clock ticker
+tests/                # unit tests
+docs/                 # design, plan and dry-run checklist
 ```
 
-See [`CLAUDE.md`](CLAUDE.md) for the architecture, the Firebase data schema and the list of known gameplay issues.
+See [`CLAUDE.md`](CLAUDE.md) for the architecture and data model, and [`docs/dry-run-checklist.md`](docs/dry-run-checklist.md) for the pre-event test script.
