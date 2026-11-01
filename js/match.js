@@ -251,11 +251,146 @@
     return enterSuddenDeath(clone(room), now);
   }
 
+  // ---------- pause & appeals ----------
+
+  function pausedSnapshot(room, now, by) {
+    return {
+      by,
+      matchRemainingMs: room.clock.endsAt - now,
+      turnRemainingMs: Math.max(0, TURN_MS - (now - room.clock.turnStartedAt))
+    };
+  }
+
+  // Mutates r (a clone): restart both clocks from the stored remaining times.
+  function resumeInPlace(r, now) {
+    const p = r.clock.paused;
+    r.clock.endsAt = now + p.matchRemainingMs;
+    r.clock.turnStartedAt = now - (TURN_MS - p.turnRemainingMs);
+    r.clock.paused = null;
+    return r;
+  }
+
+  function pauseClocks(room, now, by = 'host') {
+    if (!PLAYING.includes(room.status) || !room.clock || room.clock.paused) return null;
+    const r = clone(room);
+    r.clock.paused = pausedSnapshot(room, now, by);
+    return r;
+  }
+
+  function resumeClocks(room, now) {
+    if (!room.clock || !room.clock.paused) return null;
+    if (room.game && room.game.pending) return null; // appeals resume via resolveAppeal
+    return resumeInPlace(clone(room), now);
+  }
+
+  function requestAppeal(room, seat, placements, { now, expectedMoveCount, words, rejectedWords, total }) {
+    if (!canAct(room, seat, expectedMoveCount, now)) return null;
+    if (!prepareMove(room, seat, placements).ok) return null;
+    const r = clone(room);
+    r.game.pending = { seat, placements, words, rejectedWords, total, requestedAt: now };
+    r.clock.paused = pausedSnapshot(room, now, 'appeal');
+    return r;
+  }
+
+  function resolveAppeal(room, approve, { now }) {
+    if (!room.game || !room.game.pending || !room.clock || !room.clock.paused) return null;
+    const r = clone(room);
+    const pending = r.game.pending;
+    r.game.pending = null;
+    resumeInPlace(r, now);
+    if (!approve) return r;
+    return playCore(r, pending.seat, pending.placements, now, false) || r;
+  }
+
+  // ---------- host decisions & endings ----------
+
+  const DECIDABLE = ['live', 'suddenDeath', 'hostDecision'];
+
+  function resign(room, seat, now) {
+    if (!DECIDABLE.includes(room.status)) return null;
+    return finalize(room, other(seat), 'resign', now);
+  }
+
+  function awardWin(room, seat, now) {
+    if (!DECIDABLE.includes(room.status)) return null;
+    return finalize(room, seat, 'awarded', now);
+  }
+
+  function walkover(room, seat, now) {
+    if (room.status !== 'waiting') return null;
+    return finalize(room, seat, 'walkover', now);
+  }
+
+  function voidRoom(room, now) {
+    if (room.status === 'void') return null;
+    const r = clone(room);
+    r.status = 'void';
+    r.voidedAt = now;
+    return r;
+  }
+
+  function correctResult(room, now) {
+    if (room.status !== 'final' || !room.result) return null;
+    const r = clone(room);
+    const winner = other(r.result.winner);
+    r.result.winner = winner;
+    r.result.teamId = winner === 'A' ? r.teamA : r.teamB;
+    r.result.reason = 'corrected';
+    r.result.decidedAt = now;
+    return r;
+  }
+
+  function recordScreenLeave(room, seat) {
+    if (!PLAYING.includes(room.status)) return null;
+    const r = clone(room);
+    r.fairPlay[seat].screenLeaves = (r.fairPlay[seat].screenLeaves || 0) + 1;
+    return r;
+  }
+
+  function roomPhase(room) {
+    if (room.game && room.game.pending) return 'appeal';
+    if (room.clock && room.clock.paused && room.clock.paused.by === 'host') return 'paused';
+    return room.status;
+  }
+
+  // ---------- standings ----------
+
+  function computeStandings(teams, rooms) {
+    const table = {};
+    const ensure = (id, fallbackName) => {
+      if (!table[id]) {
+        const name = (teams && teams[id] && teams[id].name) || fallbackName || id;
+        table[id] = { teamId: id, name, wins: 0, losses: 0, points: 0, rank: 0 };
+      }
+      return table[id];
+    };
+    for (const id of Object.keys(teams || {})) ensure(id);
+    for (const room of Object.values(rooms || {})) {
+      if (!room || room.status !== 'final' || !room.result) continue;
+      const winSeat = room.result.winner;
+      const loseSeat = other(winSeat);
+      const idOf = s => (s === 'A' ? room.teamA : room.teamB);
+      const nameOf = s => (s === 'A' ? room.teamAName : room.teamBName);
+      const w = ensure(idOf(winSeat), nameOf(winSeat));
+      const l = ensure(idOf(loseSeat), nameOf(loseSeat));
+      w.wins += 1; w.points += 1;
+      l.losses += 1;
+    }
+    const list = Object.values(table).sort((a, b) => b.points - a.points || a.name.localeCompare(b.name));
+    list.forEach((t, i) => {
+      t.rank = i > 0 && list[i - 1].points === t.points ? list[i - 1].rank : i + 1;
+    });
+    return list;
+  }
+
   return {
     CODE_ALPHABET, TURN_MS, SUDDEN_DEATH_MAX_ROUNDS,
     generateRoomCode, formatCode, normalizeCode, createRoom, normalizeRoom,
     claimSeat, setReady, removePlayer, startMatch,
     prepareMove, applyPlay, applyPass, resolveTimeUp, finalize,
+    requestAppeal, resolveAppeal, pauseClocks, resumeClocks,
+    resign, awardWin, walkover, voidRoom, correctResult, recordScreenLeave,
+    roomPhase, computeStandings,
     _internal: { clone, other, playCore, enterSuddenDeath }
   };
 });

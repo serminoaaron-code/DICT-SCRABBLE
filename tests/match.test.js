@@ -310,3 +310,146 @@ test('bag-out with a tie enters sudden death', () => {
   assert.strictEqual(n.status, 'suddenDeath');
   assert.strictEqual(n.game.turn, n.game.firstSeat);
 });
+
+// ---------- Task 5 ----------
+
+const appealOpts = (now, expectedMoveCount = 0) => ({
+  now, expectedMoveCount, words: [{ word: 'CAT', score: 10 }], rejectedWords: ['CAT'], total: 10
+});
+
+test('appeal pauses clocks and blocks other moves', () => {
+  const r = liveRoom({ game: { racks: { A: RACK_CAT, B: RACK_CAT } } });
+  const n = M.requestAppeal(r, 'A', CAT, appealOpts(21000));
+  assert.strictEqual(M.roomPhase(n), 'appeal');
+  assert.deepStrictEqual(n.clock.paused, { by: 'appeal', matchRemainingMs: 580000, turnRemainingMs: 40000 });
+  assert.deepStrictEqual(n.game.pending, {
+    seat: 'A', placements: CAT, words: [{ word: 'CAT', score: 10 }], rejectedWords: ['CAT'], total: 10, requestedAt: 21000
+  });
+  assert.strictEqual(M.applyPass(n, 'A', { now: 22000, expectedMoveCount: 0 }), null);
+  assert.strictEqual(M.resolveTimeUp(n, 700000), null);
+  assert.strictEqual(M.requestAppeal(n, 'A', CAT, appealOpts(22000)), null, 'only one pending');
+});
+
+test('approve applies the pending move after resuming', () => {
+  const r = liveRoom({ game: { racks: { A: RACK_CAT, B: RACK_CAT } }, clock: { endsAt: 400000, turnStartedAt: 100000 } });
+  const asked = M.requestAppeal(r, 'A', CAT, appealOpts(100000));
+  const n = M.resolveAppeal(asked, true, { now: 160000 });
+  assert.strictEqual(n.game.scores.A, 10);
+  assert.strictEqual(n.game.turn, 'B');
+  assert.strictEqual(n.clock.endsAt, 460000);
+  assert.strictEqual(n.clock.paused, null);
+  assert.strictEqual(n.game.pending, null);
+  assert.strictEqual(n.game.lastMove.type, 'play');
+});
+
+test('deny returns turn with remaining turn time', () => {
+  const r = liveRoom({ game: { racks: { A: RACK_CAT, B: RACK_CAT } } });
+  const asked = M.requestAppeal(r, 'A', CAT, appealOpts(21000));
+  const n = M.resolveAppeal(asked, false, { now: 51000 });
+  assert.strictEqual(n.game.turn, 'A');
+  assert.strictEqual(51000 - n.clock.turnStartedAt, 20000);
+  assert.strictEqual(n.game.pending, null);
+  assert.strictEqual(n.clock.paused, null);
+  assert.strictEqual(n.game.scores.A, 0);
+  assert.strictEqual(n.game.moveCount, 0);
+  assert.strictEqual(M.resolveAppeal(n, true, { now: 52000 }), null, 'nothing pending');
+});
+
+test('host pause and resume shift endsAt', () => {
+  const p = M.pauseClocks(liveRoom(), 11000);
+  assert.strictEqual(M.roomPhase(p), 'paused');
+  assert.strictEqual(M.pauseClocks(p, 12000), null, 'already paused');
+  const n = M.resumeClocks(p, 101000);
+  assert.strictEqual(n.clock.endsAt, 691000);
+  assert.strictEqual(n.clock.turnStartedAt, 91000);
+  assert.strictEqual(n.clock.paused, null);
+  assert.strictEqual(M.roomPhase(n), 'live');
+  assert.strictEqual(M.resumeClocks(n, 102000), null, 'not paused');
+});
+
+test('walkover only from waiting', () => {
+  const w = M.walkover(baseRoom(), 'A', 5000);
+  assert.strictEqual(w.status, 'final');
+  assert.deepStrictEqual(w.result, { winner: 'A', teamId: 'tA', scoreA: 0, scoreB: 0, reason: 'walkover', decidedAt: 5000 });
+  assert.strictEqual(M.walkover(liveRoom(), 'A', 5000), null);
+});
+
+test('resign gives the other seat the win', () => {
+  const n = M.resign(liveRoom(), 'A', 5000);
+  assert.strictEqual(n.result.winner, 'B');
+  assert.strictEqual(n.result.reason, 'resign');
+  assert.strictEqual(M.resign(baseRoom(), 'A', 5000), null);
+});
+
+test('awardWin works from live, paused and hostDecision', () => {
+  assert.strictEqual(M.awardWin(liveRoom(), 'B', 5000).result.reason, 'awarded');
+  assert.strictEqual(M.awardWin(M.pauseClocks(liveRoom(), 5000), 'A', 6000).result.winner, 'A');
+  assert.strictEqual(M.awardWin(liveRoom({ status: 'hostDecision' }), 'A', 6000).status, 'final');
+  assert.strictEqual(M.awardWin(baseRoom(), 'A', 6000), null);
+});
+
+function finalRoom(code, teamA, teamB, winner) {
+  const r = M.createRoom({ code, teamA, teamB, teamAName: teamA + '-name', teamBName: teamB + '-name', label: '', matchLengthSec: 600, now: 1 });
+  return M.walkover(r, winner, 2);
+}
+
+test('void excludes the room from standings', () => {
+  const teams = { tA: { name: 'NCR' }, tB: { name: 'CAR' } };
+  const fin = finalRoom('AAAAAA', 'tA', 'tB', 'A');
+  const voided = M.voidRoom(fin, 3);
+  assert.strictEqual(voided.status, 'void');
+  assert.strictEqual(voided.voidedAt, 3);
+  assert.notStrictEqual(voided.result, null, 'result kept for the record');
+  const s = M.computeStandings(teams, { AAAAAA: voided });
+  assert.ok(s.every(t => t.wins === 0 && t.losses === 0));
+  assert.strictEqual(M.voidRoom(voided, 4), null);
+});
+
+test('computeStandings counts wins, losses and shared ranks', () => {
+  const teams = { T1: { name: 'NCR' }, T2: { name: 'CAR' }, T3: { name: 'Region VII' }, T4: { name: 'BARMM' }, T5: { name: 'Zeta' } };
+  const rooms = {
+    R1: finalRoom('R1', 'T1', 'T2', 'A'),
+    R2: finalRoom('R2', 'T3', 'T4', 'A'),
+    R3: finalRoom('R3', 'T1', 'T3', 'A'),
+    R4: M.voidRoom(finalRoom('R4', 'T2', 'T4', 'A'), 3),
+    R5: M.createRoom({ code: 'R5', teamA: 'T2', teamB: 'T5', matchLengthSec: 600, now: 1 })
+  };
+  const s = M.computeStandings(teams, rooms);
+  assert.deepStrictEqual(s.map(t => [t.teamId, t.wins, t.losses, t.points, t.rank]), [
+    ['T1', 2, 0, 2, 1],
+    ['T3', 1, 1, 1, 2],
+    ['T4', 0, 1, 0, 3],
+    ['T2', 0, 1, 0, 3],
+    ['T5', 0, 0, 0, 3]
+  ]);
+  assert.strictEqual(s[0].name, 'NCR');
+});
+
+test('computeStandings keeps a deleted team by its snapshot name', () => {
+  const s = M.computeStandings({ T1: { name: 'NCR' } }, { R1: finalRoom('R1', 'T1', 'gone', 'B') });
+  const gone = s.find(t => t.teamId === 'gone');
+  assert.strictEqual(gone.name, 'gone-name');
+  assert.strictEqual(gone.wins, 1);
+});
+
+test('correctResult flips the winner', () => {
+  const n = M.correctResult(finalRoom('R1', 'tA', 'tB', 'A'), 9);
+  assert.strictEqual(n.result.winner, 'B');
+  assert.strictEqual(n.result.teamId, 'tB');
+  assert.strictEqual(n.result.reason, 'corrected');
+  assert.strictEqual(n.result.decidedAt, 9);
+  assert.strictEqual(M.correctResult(liveRoom(), 9), null);
+});
+
+test('recordScreenLeave increments only during live play', () => {
+  const n = M.recordScreenLeave(liveRoom(), 'A');
+  assert.strictEqual(n.fairPlay.A.screenLeaves, 1);
+  assert.strictEqual(M.recordScreenLeave(n, 'A').fairPlay.A.screenLeaves, 2);
+  assert.strictEqual(M.recordScreenLeave(baseRoom(), 'A'), null);
+});
+
+test('roomPhase reports status otherwise', () => {
+  assert.strictEqual(M.roomPhase(baseRoom()), 'waiting');
+  assert.strictEqual(M.roomPhase(liveRoom()), 'live');
+  assert.strictEqual(M.roomPhase(finalRoom('R1', 'tA', 'tB', 'A')), 'final');
+});
