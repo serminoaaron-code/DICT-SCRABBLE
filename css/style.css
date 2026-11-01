@@ -16,6 +16,10 @@
 
   /* status chips (badges, warn/ok lines) keep their own fixed light tint in both themes */
   --green-bg: #ecfdf5;
+  --red-bg: #fef2f2;
+  /* readable text on the light status-tint backgrounds above, fixed in both themes */
+  --green-ink: #067a3e;
+  --red-ink: #c81e15;
   --gold: var(--yellow);
 
   /* legacy aliases so existing component rules stay theme-correct without a
@@ -75,18 +79,18 @@ body::before { width: 320px; height: 320px; right: -110px; top: -110px; backgrou
 body::after { width: 240px; height: 240px; left: -90px; bottom: -90px; background: var(--red); }
 html[data-theme="dark"] body::before, html[data-theme="dark"] body::after { opacity: .35; }
 
-button, input, select { font: inherit; padding: 10px 14px; border-radius: 6px; border: 0; outline: none; }
-button { background: var(--navy); color: #fff; font-weight: 700; cursor: pointer; transition: filter .15s, transform .15s; }
-button:hover { filter: brightness(1.15); }
-button:active { transform: translateY(1px); }
-button:disabled { opacity: .5; cursor: not-allowed; filter: none; transform: none; }
-button.secondary { background: var(--panel2); color: var(--text); border: 1px solid var(--border); }
-button.danger { background: var(--red); }
-button.small { padding: 5px 10px; font-size: 12px; }
-button.link { background: none; color: var(--text); padding: 0; text-decoration: underline; font-weight: 600; }
-input, select { background: #fff; border: 1px solid var(--border); color: var(--navy); width: 100%; }
-input:focus, select:focus { border-color: var(--navy); }
-label { display: block; color: var(--text-muted); margin: 10px 0 4px; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; }
+button, input, select { font: inherit; padding: 11px 16px; border-radius: 12px; border: 0; outline: none; }
+button { background: var(--navy); color: #fff; font-weight: 800; cursor: pointer; box-shadow: 0 3px 0 rgba(0,0,0,.22); transition: filter .15s, transform .1s, box-shadow .1s; }
+button:hover { filter: brightness(1.14); }
+button:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(0,0,0,.22); }
+button:disabled { opacity: .5; cursor: not-allowed; filter: none; transform: none; box-shadow: none; }
+button.secondary, .btn-secondary { background: var(--surface); color: var(--text); border: 2px solid var(--line); box-shadow: none; }
+button.danger, .btn-primary { background: var(--red); color: #fff; }
+button.small { padding: 6px 12px; font-size: 12px; border-radius: 9px; box-shadow: none; }
+button.link, .btn-ghost { background: none; color: var(--text); padding: 0; text-decoration: underline; font-weight: 700; box-shadow: none; border-radius: 0; }
+input, select { background: var(--bg); border: 2px solid var(--line); color: var(--text); width: 100%; }
+input:focus, select:focus { border-color: var(--blue); }
+label { display: block; color: var(--muted); margin: 10px 0 4px; font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; }
 
 .hidden { display: none !important; }
 .muted { color: var(--text-muted); }
@@ -107,45 +111,61 @@ label { display: block; color: var(--text-muted); margin: 10px 0 4px; font-weigh
 .icon-toggle:hover { filter: brightness(1.08); }
 
 main { position: relative; z-index: 1; max-width: 1100px; margin: 16px auto; padding: 0 16px; }
-.panel { background: var(--panel); border: 2px solid var(--border); border-radius: 10px; padding: 18px; box-shadow: 0 8px 20px rgba(0,0,0,.4); }
-.panel h2, .panel h3 { margin-top: 0; color: var(--text); }
-.panel + .panel { margin-top: 16px; }
+/* .card is the Pop container; .panel is kept as an alias so older markup still gets the same look */
+.panel, .card { background: var(--surface); border: 2px solid var(--line); border-radius: 18px; padding: 18px; box-shadow: 0 10px 24px rgba(11,31,77,.14); }
+html[data-theme="dark"] .panel, html[data-theme="dark"] .card { box-shadow: 0 10px 24px rgba(0,0,0,.45); }
+.panel h2, .card h2, .panel h3, .card h3 { margin-top: 0; color: var(--text); }
+.panel + .panel, .card + .card { margin-top: 16px; }
 .narrow { max-width: 460px; margin: 0 auto; }
 
-/* ---------- badges ---------- */
-.badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 12px; border: 1px solid var(--border); background: var(--panel); color: var(--text-muted); white-space: nowrap; text-transform: uppercase; }
-.badge.live { border-color: #10b981; color: var(--green); background: var(--green-bg); }
+/* ---------- badges, chips, pills ---------- */
+.badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 800; padding: 4px 10px; border-radius: 999px; border: 2px solid var(--line); background: var(--surface); color: var(--muted); white-space: nowrap; text-transform: uppercase; letter-spacing: .3px; }
+.badge.live { border-color: var(--green); color: var(--navy); background: var(--green); }
 .badge.waiting { }
 .badge.final { border-color: var(--gold); color: #92400e; background: var(--cream); }
 .badge.void { text-decoration: line-through; }
-.badge.warn, .badge.paused, .badge.appeal, .badge.hostDecision, .badge.suddenDeath { border-color: var(--red); color: var(--red); background: #fef2f2; }
-.warn-line { background: #fef2f2; color: var(--red); border: 1px solid #fecaca; border-radius: 6px; padding: 6px 8px; font-size: 12px; }
-.ok-line { background: var(--green-bg); color: var(--green); border: 1px solid #a7f3d0; border-radius: 6px; padding: 6px 8px; font-size: 12px; }
+.badge.warn, .badge.paused, .badge.appeal, .badge.hostDecision, .badge.suddenDeath { border-color: var(--red); color: #fff; background: var(--red); }
+.warn-line { background: var(--red-bg); color: var(--red-ink); border: 2px solid #fecaca; border-radius: 10px; padding: 8px 10px; font-size: 12px; font-weight: 600; }
+.ok-line { background: var(--green-bg); color: var(--green-ink); border: 2px solid #a7f3d0; border-radius: 10px; padding: 8px 10px; font-size: 12px; font-weight: 600; }
+
+/* chips: team colour tags, consistent everywhere (Team A blue, Team B red) */
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 11px; border-radius: 999px; font-weight: 800; font-size: 12px; letter-spacing: .2px; white-space: nowrap; line-height: 1.5; }
+.chip-a { background: var(--blue); color: #fff; }
+.chip-b { background: var(--red); color: #fff; }
+
+/* generic status pill (base for the game-screen turn pill built in a later task) */
+.pill { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 16px; border-radius: 999px; font-weight: 800; font-size: 13px; background: var(--surface); color: var(--text); border: 2px solid var(--line); }
+
+/* bottom sheet / overlay primitives (used by later tasks for temporary boxes) */
+.overlay-root { position: fixed; inset: 0; z-index: 9400; pointer-events: none; }
+.sheet { position: fixed; left: 50%; bottom: 0; transform: translateX(-50%); z-index: 9400; width: 100%; max-width: 520px; background: var(--surface); color: var(--text); border: 2px solid var(--line); border-bottom: 0; border-radius: 18px 18px 0 0; padding: 14px 16px calc(14px + env(safe-area-inset-bottom, 0px)); box-shadow: 0 -10px 26px rgba(0,0,0,.28); pointer-events: auto; }
 
 /* ---------- host dashboard ---------- */
 .dash { display: grid; grid-template-columns: 1fr 1.5fr 1fr; gap: 16px; align-items: start; }
-.dash .panel + .panel { margin-top: 0; }
-.list-item { display: flex; justify-content: space-between; align-items: center; gap: 8px; border: 1px solid var(--border); border-radius: 6px; padding: 7px 9px; margin: 6px 0; background: var(--panel); }
-.list-item .name { font-weight: 600; overflow-wrap: anywhere; }
-.room-card { border: 1px solid var(--border); border-radius: 8px; padding: 10px; margin: 8px 0; background: var(--panel); }
-.room-card .teams { font-weight: 700; overflow-wrap: anywhere; }
-.room-card .meta { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.dash .panel + .panel, .dash .card + .card { margin-top: 0; }
+.list-item { display: flex; justify-content: space-between; align-items: center; gap: 8px; border: 2px solid var(--line); border-radius: 12px; padding: 8px 11px; margin: 6px 0; background: var(--bg); }
+.list-item .name { font-weight: 700; overflow-wrap: anywhere; }
+.room-card { border: 2px solid var(--line); border-radius: 14px; padding: 11px 12px; margin: 10px 0; background: var(--bg); }
+.room-card .teams { font-weight: 800; overflow-wrap: anywhere; }
+.room-card .meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
 .room-card .actions { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
 .code { font-family: ui-monospace, Consolas, monospace; font-weight: 800; letter-spacing: 2px; }
-.code-big { font-family: 'Archivo Black', ui-monospace, Consolas, monospace; font-size: 26px; letter-spacing: 4px; text-align: center; background: var(--cream); border: 2px dashed var(--gold); border-radius: 8px; padding: 8px; color: var(--navy); }
+.code-big { font-family: 'Archivo Black', ui-monospace, Consolas, monospace; font-size: 26px; letter-spacing: 4px; text-align: center; background: var(--cream); border: 3px dashed var(--navy); border-radius: 12px; padding: 10px; color: var(--navy); }
 
 table.standings { width: 100%; border-collapse: collapse; }
-table.standings th { text-align: left; font-size: 11px; text-transform: uppercase; color: var(--text-muted); border-bottom: 2px solid var(--border); padding: 6px; }
-table.standings td { padding: 7px 6px; border-bottom: 1px solid var(--border); font-size: 14px; overflow-wrap: anywhere; }
-table.standings td.pts { font-weight: 800; }
+table.standings th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .4px; color: var(--muted); border-bottom: 2px solid var(--line); padding: 7px 6px; }
+table.standings td { padding: 8px 6px; border-bottom: 1px solid var(--line); font-size: 14px; overflow-wrap: anywhere; }
+table.standings td.pts { font-weight: 800; color: var(--text); }
+table.standings tr:first-child td { font-weight: 700; }
 
 /* ---------- room: lobby ---------- */
-.versus { font-size: 20px; font-weight: 800; color: var(--text); text-align: center; overflow-wrap: anywhere; }
-.seat { display: flex; justify-content: space-between; align-items: center; gap: 8px; border: 1px solid var(--border); border-radius: 8px; padding: 9px 10px; background: var(--panel); }
-.seat.ready { border-color: #10b981; background: var(--green-bg); }
-.seat.empty { border-style: dashed; color: var(--text-muted); }
-.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #d1d5db; margin-right: 6px; vertical-align: middle; }
-.dot.on { background: #10b981; }
+.versus { font-size: 20px; font-weight: 800; color: var(--text); text-align: center; overflow-wrap: anywhere; display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; }
+.versus .vs-sep { color: var(--muted); font-size: 13px; font-weight: 700; text-transform: uppercase; }
+.seat { display: flex; justify-content: space-between; align-items: center; gap: 8px; border: 2px solid var(--line); border-radius: 12px; padding: 10px 12px; background: var(--bg); }
+.seat.ready { border-color: var(--green); background: var(--green-bg); color: var(--navy); }
+.seat.empty { border-style: dashed; color: var(--muted); }
+.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #9aa5b8; margin-right: 6px; vertical-align: middle; }
+.dot.on { background: var(--green); }
 
 /* ---------- room: live ---------- */
 .arena { display: flex; flex-direction: column; align-items: center; gap: 10px; }
@@ -181,11 +201,12 @@ table.standings td.pts { font-weight: 800; }
 .rack .tile.used { opacity: .25; cursor: default; }
 .actions-row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
 
-.hostbar { width: 100%; max-width: 520px; background: var(--panel2); border: 2px solid var(--gold); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
-.hostbar h4 { margin: 0; color: var(--text); font-size: 13px; text-transform: uppercase; }
+.hostbar { width: 100%; max-width: 520px; background: var(--panel2); border: 2px solid var(--gold); border-radius: 14px; padding: 11px 12px; display: flex; flex-direction: column; gap: 8px; }
+.hostbar h4 { margin: 0; color: var(--text); font-size: 13px; text-transform: uppercase; letter-spacing: .3px; }
 
 .final-banner { text-align: center; padding: 10px; }
-.final-banner .win { font-size: 26px; font-weight: 800; color: var(--green); overflow-wrap: anywhere; }
+.final-banner .win { font-family: 'Archivo Black', Impact, sans-serif; font-size: 18px; color: var(--text); overflow-wrap: anywhere; }
+.final-banner .win .chip { font-size: 18px; padding: 7px 16px; margin: 0 2px; vertical-align: middle; }
 
 /* ---------- playground ---------- */
 .playground-bar { position: sticky; top: 0; z-index: 9000; background: #fde047; color: #422006; text-align: center; padding: 6px 10px; font-size: 13px; display: flex; gap: 10px; justify-content: center; align-items: center; flex-wrap: wrap; box-shadow: 0 2px 6px rgba(0,0,0,.3); }
@@ -218,7 +239,7 @@ table.big td.pts { font-weight: 800; color: var(--dict-yellow); }
 }
 @media (max-width: 480px) {
   main, .site-header { padding: 0 8px; }
-  .panel { padding: 12px; }
+  .panel, .card { padding: 12px; }
   .sq { font-size: 6px; }
   .tile { font-size: 11px; }
   .tile .sub { display: none; }

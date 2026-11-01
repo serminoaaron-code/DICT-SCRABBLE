@@ -6,20 +6,24 @@
   const seatKey = code => 'scrabble.seat.' + code;
   const SEATS = ['A', 'B'];
 
+  // Team colour chip: Team A is always blue, Team B is always red, everywhere.
+  const chip = (seat, name) => `<span class="chip chip-${seat.toLowerCase()}">${esc(name)}</span>`;
+  const versusHtml = room => `<div class="versus">${chip('A', room.teamAName)}<span class="vs-sep">vs</span>${chip('B', room.teamBName)}</div>`;
+
   // ---------- join page ----------
 
   function showJoin(el) {
     el.innerHTML = `
-      <div class="panel narrow">
+      <div class="card narrow">
         <h2>🔤 Join a room</h2>
         <p class="muted small-text">Enter the room code from your host and your name.</p>
         <form id="joinForm" class="stack">
           <div><label for="joinCode">Room code</label><input id="joinCode" placeholder="e.g. K7Q-42M" autocomplete="off" autocapitalize="characters"></div>
           <div><label for="joinName">Your name</label><input id="joinName" maxlength="40" autocomplete="name" placeholder="Your name"></div>
-          <button type="submit">Find room</button>
+          <button type="submit" class="btn-primary">Find room</button>
         </form>
       </div>
-      <div class="panel narrow">
+      <div class="card narrow">
         <h3>🏆 Team standings</h3>
         <div id="joinStandings"><p class="muted small-text">Loading…</p></div>
       </div>`;
@@ -124,12 +128,12 @@
     function render() {
       const room = state.room;
       if (room === null) {
-        el.innerHTML = `<div class="panel narrow"><h2>Room not found</h2>
+        el.innerHTML = `<div class="card narrow"><h2>Room not found</h2>
           <p class="muted">No room with code <span class="code">${esc(Match.formatCode(code))}</span>. Check the code with your host.</p>
           <a href="#">← Back to start</a></div>`;
         return;
       }
-      if (!room) { el.innerHTML = '<div class="panel narrow"><p class="muted">Loading room…</p></div>'; return; }
+      if (!room) { el.innerHTML = '<div class="card narrow"><p class="muted">Loading room…</p></div>'; return; }
 
       const seated = state.mySeat === 'A' || state.mySeat === 'B';
       const host = App.isHost();
@@ -159,20 +163,20 @@
       };
       const anyFree = SEATS.some(s => !room.seats[s]);
       el.innerHTML = `
-        <div class="panel narrow stack">
-          <div class="versus">${esc(room.teamAName)} <span class="muted">vs</span> ${esc(room.teamBName)}</div>
+        <div class="card narrow stack">
+          ${versusHtml(room)}
           <div class="center muted small-text">Room <span class="code">${esc(Match.formatCode(code))}</span>${room.label ? ' · ' + esc(room.label) : ''}</div>
           <div><label for="choiceName">Your name</label><input id="choiceName" maxlength="40" placeholder="Your name"></div>
           ${!inPlay ? btn('A') + btn('B')
             : (anyFree ? '<p class="muted small-text center">This match is in progress. If you are a player switching devices, take your seat:</p>' +
                 SEATS.filter(s => !room.seats[s]).map(btn).join('')
               : '<p class="muted small-text center">This match has already started. You can watch it. (Switching devices? Ask the host to free your seat.)</p>')}
-          <button class="secondary" data-watch="1">👁️ Just watch</button>
+          <button class="btn-secondary" data-watch="1">👁️ Just watch</button>
           <a href="#" class="small-text">← Back to start</a>
         </div>`;
       const nameInput = el.querySelector('#choiceName');
       nameInput.value = Store.local.get('scrabble.name') || '';
-      el.querySelector('.panel').onclick = async ev => {
+      el.querySelector('.card').onclick = async ev => {
         const b = ev.target.closest('button');
         if (!b || b.disabled) return;
         if (b.dataset.watch) {
@@ -197,26 +201,26 @@
       const hostOnline = Object.values(room.presence).includes('host');
       const seatRow = seat => {
         const s = room.seats[seat];
-        const team = esc(nameOf(room, seat));
+        const team = chip(seat, nameOf(room, seat));
         if (!s) return `<div class="seat empty"><span>${team}</span><span class="small-text">Waiting for player…</span></div>`;
         const online = Match.isSeatOnline(room, seat);
         return `<div class="seat ${s.ready ? 'ready' : ''}" data-seat-row="${seat}">
           <span><span class="dot ${online ? 'on' : ''}"></span>${team} · <b>${esc(s.name)}</b>${state.mySeat === seat ? ' (you)' : ''}</span>
           <span class="row">
             <span class="badge ${s.ready ? 'live' : ''}">${s.ready ? 'Ready' : 'Not ready'}</span>
-            ${host ? `<button class="secondary small" data-remove="${seat}">Remove</button>` : ''}
+            ${host ? `<button class="btn-secondary small" data-remove="${seat}">Remove</button>` : ''}
           </span></div>`;
       };
       const mine = (state.mySeat === 'A' || state.mySeat === 'B') ? room.seats[state.mySeat] : null;
       const bothReady = SEATS.every(s => room.seats[s] && room.seats[s].ready);
       el.innerHTML = `
-        <div class="panel narrow stack">
-          <div class="versus">${esc(room.teamAName)} <span class="muted">vs</span> ${esc(room.teamBName)}</div>
+        <div class="card narrow stack">
+          ${versusHtml(room)}
           <div class="center muted small-text">Room <span class="code">${esc(Match.formatCode(code))}</span> · ${Math.round(room.matchLengthSec / 60)} min${room.label ? ' · ' + esc(room.label) : ''}</div>
           ${seatRow('A')}${seatRow('B')}
           <div class="seat"><span><span class="dot ${hostOnline ? 'on' : ''}"></span>⚙ Host</span><span class="small-text muted" id="watchCount">👁️ ${Match.watcherCount(room)} watching</span></div>
-          ${mine ? `<button id="readyBtn" class="${mine.ready ? 'secondary' : ''}">${mine.ready ? 'Not ready' : "I'm ready"}</button>` : ''}
-          ${host ? `<button id="startBtn" ${bothReady ? '' : 'disabled'}>▶ Start match</button>
+          ${mine ? `<button id="readyBtn" class="${mine.ready ? 'btn-secondary' : 'btn-primary'}">${mine.ready ? 'Not ready' : "I'm ready"}</button>` : ''}
+          ${host ? `<button id="startBtn" class="btn-primary" ${bothReady ? '' : 'disabled'}>▶ Start match</button>
                     <div class="small-text muted center">${bothReady ? 'Both players are ready.' : 'Start unlocks when both players are ready.'}</div>` : ''}
           ${!mine && !host ? '<p class="muted small-text center">Waiting for the host to start the match…</p>' : ''}
           <div class="row" style="justify-content:space-between;">
@@ -546,20 +550,20 @@
         let reason = REASON_LINE[res.reason] || '';
         if (res.reason === 'resign') reason = `${playerOf(room, res.winner === 'A' ? 'B' : 'A')} resigned`;
         body = `<div class="final-banner stack">
-          <div class="win">🏆 ${esc(winTeam)} wins</div>
+          <div class="win">🏆 ${chip(res.winner, winTeam)} wins</div>
           <div>${esc(playerOf(room, 'A'))} <b>${res.scoreA}</b> – <b>${res.scoreB}</b> ${esc(playerOf(room, 'B'))}</div>
           <div><span class="badge live">+1 ${esc(winTeam)}</span></div>
           <div class="muted small-text">${esc(reason)}${res.note ? ': ' + esc(res.note) : ''}</div>
         </div>`;
       }
-      el.innerHTML = `<div class="panel narrow stack">
-        <div class="versus">${esc(room.teamAName)} <span class="muted">vs</span> ${esc(room.teamBName)}</div>
+      el.innerHTML = `<div class="card narrow stack">
+        ${versusHtml(room)}
         ${body}
         <div id="finalHost"></div>
         ${room.game ? '<div id="board-container"></div>' : ''}
         <h3 style="margin-bottom:0;">🏆 Team standings</h3>
         <div id="finalStandings"></div>
-        <button class="secondary" id="backBtn">← Back to start</button>
+        <button class="btn-secondary" id="backBtn">← Back to start</button>
       </div>`;
       if (room.game) UI.renderBoard(el.querySelector('#board-container'), room.game.board, {});
       const ui = ctx.state.ui;
