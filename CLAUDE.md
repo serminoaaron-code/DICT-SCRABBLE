@@ -4,81 +4,94 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-**DICT Digital Scrabble Sportsfest 2026** is a browser-based, real-time multiplayer Scrabble tournament app for the DICT sportsfest. Players register with an email and display name, queue for matches (2-player or 4-player), and play on a shared 15×15 board. Spectators can watch live games. A host/admin can run the tournament: start a grace period, lock registration, set the length, generate a knockout bracket, and reset a server.
+**DICT Digital Scrabble Sportsfest 2026** is the Scrabble event of an intramurals-style DICT sportsfest. Each team sends one representative. The host creates **fixture rooms**: Team A vs Team B, one timed game, joined with a short code. The winner's team gets **+1** and the loser **0**, and team standings update live. Spectators can watch any room, and `?view=scoreboard` shows a big-screen standings view for a projector.
+
+Design and plan: `docs/superpowers/specs/2026-11-01-tournament-rooms-design.md`, `docs/superpowers/plans/2026-11-01-tournament-rooms.md`.
 
 **Scope:** work in this repo means improving the game: gameplay, rules, scoring and UI. Infrastructure is out of scope: Firebase rules and project setup, auth, hosting, environment and secrets belong to a separate DevOps owner. If a game change depends on infrastructure, mention it in one line as a handoff.
 
-Upstream: `https://github.com/serminoaaron-code/DICT-SCRABBLE`. There is no CI. **Git workflow:** don't commit to `main` directly. Create a feature branch (`feat/…`, `fix/…`, `docs/…`) and merge into `main` through a pull request. Don't add `Co-Authored-By` trailers to commits.
+Upstream: `https://github.com/serminoaaron-code/DICT-SCRABBLE`, served by GitHub Pages. There is no CI. **Git workflow:** don't commit to `main` directly. Create a feature branch (`feat/…`, `fix/…`, `docs/…`) and merge into `main` through a pull request. Don't add `Co-Authored-By` trailers to commits.
 
 ## Tech stack
 
 | Layer | Technology |
 |---|---|
-| UI | Plain HTML + CSS (custom properties in `:root`) + vanilla ES2017+ JavaScript, all inline in `index.html` |
-| DOM helpers | jQuery 3.6.0 (loaded from CDN, but the code uses `document.getElementById` throughout; jQuery is effectively unused) |
-| Backend / realtime sync | Firebase **Realtime Database**, **v8 namespaced SDK** 8.10.1 (`firebase.database()`, `ref().on(...)`). Not the v9 modular API. |
-| Word validation | Public Free Dictionary API: `https://api.dictionaryapi.dev/api/v2/entries/en/<word>` |
-| Assets | `banner.png` (header image; hidden via `onerror` if it's missing) |
-| Build / package manager / tests / lint | **None.** There is no `package.json`, bundler, test suite or linter. |
+| UI | Plain HTML + CSS (`css/style.css`, theme variables in `:root`) + vanilla JavaScript in plain `<script>` tags. **No build step, no `package.json`.** |
+| Realtime sync | Firebase **Realtime Database**, **v8 namespaced SDK** 8.10.1 from the CDN (`firebase.database()`, `ref().transaction()`). Not the v9 modular API. |
+| Word check | Free Dictionary API `https://api.dictionaryapi.dev/api/v2/entries/en/<word>` |
+| Tests | Node ≥18 built-in runner, no packages |
 
-## Running locally
-
-No build step. Serve the folder over HTTP and open it in a browser:
+## Commands
 
 ```bash
-python -m http.server 8000      # then open http://localhost:8000/
-# or: npx serve .
+python -m http.server 8000              # run locally → http://localhost:8000/
+node --test "tests/*.test.js"           # all unit tests (quote the glob; works in bash and PowerShell)
+node --test tests/match.test.js         # one file
+node --test --test-name-pattern="sudden death" "tests/*.test.js"   # tests matching a name
 ```
 
-Opening `index.html` directly via `file://` mostly works, but a local server is closer to how it's deployed. To test multiplayer, open several browser windows or profiles. Each one is a separate client, and matchmaking needs 2 (or 4) players with status `searching` on the **same server tab**.
+Routes: `#` = join page · `#room=CODE` = room · `#host` = host dashboard (password is the `HOST_ADMIN_PASSWORD` constant in `js/view-host.js`, client-side only).
 
-The host password is the constant `HOST_ADMIN_PASSWORD` in `index.html`. It is checked only on the client.
-
-> ⚠️ The app connects to the **live production Firebase database** (the project is `dict-chess-tournament`, shared with the DICT chess tournament app). Local testing writes real data. "Reset Server Data" erases `matches`, `settings` and `bracket` for the selected server. Check with the user before running destructive host actions against production.
+**Data areas (`js/env.js`):**
+- **Local runs use the playground**, `scrabble_playground/`, and show a yellow banner with **Reset playground**. "Local" means `localhost`, `127.0.0.1`, a LAN IP or `file://`.
+- **The deployed site uses `scrabble/`**, the real tournament data.
+- `?db=live` / `?db=playground` overrides the automatic choice.
+- Both areas live in the Firebase project `dict-chess-tournament`, which is shared with the chess app. There's no offline emulator: it would need Java + firebase-tools, which isn't set up.
+- **Reset tournament** (host) and **Reset playground** delete everything under the *current* area.
+- Never use `?db=live` for testing unless the user asks.
 
 ## Architecture
 
-Everything is in `index.html`, in this order: `<style>` → markup (panels) → one `<script>` block split into sections by `// ====` banner comments. Main sections:
+Script load order (in `index.html`): `engine.js → match.js → dictionary.js → store.js → ui.js → view-host.js → view-room.js → app.js`.
 
-1. **Scrabble engine**: `LETTER_VALUES`, `INITIAL_TILE_DISTRIBUTION` (98 tiles, no blanks), `PREMIUM_GRID` (15×15 of `tw|dw|tl|dl|center|''`), and `class ScrabbleGame` (board, racks, scores, turn order, passes, disqualification, serialization).
-2. **Dictionary validation**: `validateEnglishWord()` (fails *open*: if the network call errors, the word is accepted) and `extractWordFromPlacements()`.
-3. **Firebase init + multi-server**: `getServerPath(subpath)` prefixes every DB path with `server_${currentServerId}/`. Server 1 is labelled "Tournament"; Servers 2–4 are "Casual". `switchServer()` detaches and re-binds all listeners.
-4. **Realtime listeners** (`bindServerListeners`): the in-memory mirrors `globalSettings`, `allPlayers`, `allMatches` and `tournamentBracket` are refreshed from DB events, and each event triggers a re-render. **The UI is always derived from these mirrors.** To change behaviour, write to Firebase and let the listener re-render; don't mutate the DOM directly.
-5. **Fair-play**: a `visibilitychange` listener counts tab switches during a live match. 3 strikes forfeit the match.
-6. **Player entry / lobby / matchmaking**: email is the identity key (`checkReturningPlayer`, `registerPlayer`). `attemptAutoMatchmaking()` runs on *whichever client* sees enough `searching` players. It creates the match and sets those players to `in-game` in one multi-path `db.ref().update()`.
-7. **Gameplay**: `setupMatch` → `renderPlayerCards` / `renderScrabbleBoard` / `renderPlayerRack`. Tiles placed this turn live in `tempBoardPlacements` until `submitWordMove()` or `recallTempTiles()`. Turn timer: 60s, client-side (`resetTurnTimer`).
-8. **Spectator mode**: `spectateMatch`, `syncSpectatorBoard`. Racks are hidden in the UI.
-9. **Bracket + host controls + leaderboard**: `kickoffTournament`, `startGracePeriod`, `toggleRegistrationLock`, `resetTournamentData`, `renderBracketView`, `updateLeaderboard`.
+| File | Role |
+|---|---|
+| `js/engine.js` | **Pure Scrabble rules** (global `ScrabbleEngine`): letters, tile bag, `PREMIUM_GRID`, board map, `validatePlacement`, `findWords` (main word + cross-words), `scoreMove` (+50 bingo), `ERROR_TEXT`. |
+| `js/match.js` | **Pure room-state transitions** (global `Match`). Every mutator takes a room and returns a *new* room, or `null` to reject: `claimSeat`, `startMatch` (coin toss), `applyPlay`, `applyPass`, `resolveTimeUp`, sudden death, `requestAppeal`/`resolveAppeal`, pause/resume, `resign`/`awardWin`/`walkover`/`voidRoom`/`correctResult`. Also `computeStandings` and `roomPhase`. |
+| `js/env.js` | `Env.dataRoot()` picks the Firebase data area: playground for local runs, real data when deployed. |
+| `js/dictionary.js` | `checkWords()`: 404 = rejected; error/timeout (5 s) = accepted but `unverified`. |
+| `js/store.js` | Firebase wiring (global `Store`): watchers, `mutateRoom`, `createRoom`, presence, team CRUD, `serverNow()` (server-time estimate), `local` (localStorage with fallback). |
+| `js/ui.js` | Shared rendering: `escapeHtml`, `formatClock`, `renderBoard`, `renderRack`, `renderStandings`, `toast`. |
+| `js/view-host.js` | Host login + dashboard (Teams, Fixture rooms, Standings, Reset). |
+| `js/view-room.js` | Join page, room lobby, live game (`RoomLive`), host control bar, final screen, fair-play reporting. |
+| `js/app.js` | Router (`hashchange`) and the shared 250 ms ticker (`App.onTick`, cleared on every route change). |
 
-### Realtime Database schema (per server)
+`engine.js`, `match.js` and `dictionary.js` use a small UMD wrapper so they load both as browser globals and via Node `require` (the tests).
 
-```
-server_<1..4>/
-  settings/   { playerMode: '2P'|'4P', registrationLocked, tournamentStarted, tournamentEnded,
-                tournamentEndTime (ms epoch), graceTimerEnd (ms epoch) }
-  players/<playerId>   { name, email, status: 'idle'|'searching'|'in-game', online, joinedAt }
-  matches/<matchId>    { playerIds[], playerNames[], numPlayers, status: 'Live'|'Completed',
-                         gameState: <JSON string>, strikes[], createdAt, lastMoveAt, forfeitReason? }
-  bracket/             { stages: [{ name, matches: [{ p1, p2, p1Score?, p2Score? }] }] }
+### The core rule: every room write is a transaction around a pure `Match` function
+
+```js
+Store.mutateRoom(code, r => Match.applyPlay(r, seat, placements, { now: Store.serverNow(), expectedMoveCount }))
 ```
 
-`playerId` = `'player_' + random`. `matchId` = `'match_' + push().key`. `players/<id>/online` is set to `false` through `onDisconnect()`.
+`mutateRoom` runs a Firebase `transaction()`. The `Match` function's guards (status, turn, `moveCount`, `turnStartedAt`, `result === null`) make every write idempotent and race-safe. Several browsers may try the same automatic transition (turn timeout, time-up) and only one wins. **Results are recorded exactly once.** Put new game logic in `match.js` with a unit test, then call it through `mutateRoom`. Don't write room data any other way.
 
-### Game state sync model
+Automatic transitions (turn timeout → pass, match time-up → result or sudden death) are attempted by **seated players and the host**, never spectators, from the ticker in `view-room.js`.
 
-- The client whose turn it is computes the whole new state on its own machine and writes `matches/<id>/gameState` as a JSON string (`ScrabbleGame.getStateString()`). Other clients compare strings in `syncGameState` and reload when the string differs. **There is no server-side validation.** The game trusts the clients, and every rack is in the shared state.
-- Many timers run separately on each client: turn timer, grace timer, tournament timer. Any client that notices a deadline has passed may write the result to `settings`.
+### Firebase data (`scrabble/`)
 
-## Known gaps and bugs (verified in code; check before relying on these features)
+```
+scrabble/
+  teams/<pushId>: { name, createdAt }
+  rooms/<CODE>:   { code, teamA, teamB, teamAName, teamBName, label, matchLengthSec, createdAt,
+                    status: 'waiting'|'live'|'suddenDeath'|'hostDecision'|'final'|'void',
+                    seats: { A|B: { name, clientId, ready } },
+                    presence: { <clientId>: 'A'|'B'|'watch'|'host' },     # onDisconnect remove
+                    clock: { startedAt, endsAt, turnStartedAt, paused: {by:'host'|'appeal', matchRemainingMs, turnRemainingMs} },
+                    game: { board: {"r_c": letter}, bag[], racks{A,B}, scores{A,B}, firstSeat, turn, moveCount,
+                            pending (appeal), suddenDeath {startMove, rounds}, lastMove },
+                    fairPlay: { A|B: { screenLeaves } },
+                    result: { winner, teamId, scoreA, scoreB, reason, decidedAt }, voidedAt }
+```
 
-- **Tile bag isn't synced.** `getStateString()` stores only `tileBagCount`, and `loadStateString()` never restores `tileBag`. When a client draws tiles, it draws from its own freshly shuffled full bag, so the 98-tile distribution isn't kept.
-- **`PREMIUM_GRID` row 7 has 14 cells, not 15.** The `''` after `'center'` is missing, so the right-edge triple-word square shifts and column 14 is undefined (it renders as normal).
-- **Move validation is minimal.** It checks only that tiles are in a straight line, then looks up the placed letters joined in order. It doesn't check for gaps, for connection to existing tiles, for the centre square on the first move, or for cross-words. Scoring (`calculatePlacementScore`) counts only newly placed tiles, not existing tiles that are part of the word.
-- **`offerDraw()` is called by the "Offer Draw" button but never defined**, so clicking it throws a `ReferenceError`.
-- **Leaderboard** counts only `played`. `points`, `wins`, `draws` and `losses` are never filled in, and matches don't record a winner except as text in `forfeitReason`.
-- **The bracket is display-only.** It isn't connected to matchmaking or results. Stages use `Array(n).fill({...})`, so every match in a stage shares one object. For bracket size ≥ 8, the first stage gets `bracketSize/2` matches.
-- **No natural game end.** A game ends only when all but one player is disqualified (3 consecutive passes or 3 tab strikes), someone resigns, or a forfeit happens. It doesn't end when the bag empties.
-- Line 1 of `index.html` is a stray `<a_file_has_been_created ...>` wrapper tag left over from AI-generated output, with no closing tag. Browsers ignore it, but it's not valid HTML.
+- "Paused" and "appeal" are **derived** by `Match.roomPhase()` from `clock.paused` and `game.pending`; they aren't stored statuses.
+- Standings are **never stored**. They're computed from `final` rooms by `Match.computeStandings`.
+- **Firebase storage rules:**
+  - Never write `undefined`.
+  - Never store arrays containing `null`. The board is a sparse map for this reason.
+  - Firebase drops empty arrays and objects, so **always pass reads through `Match.normalizeRoom()`** (`Store` watchers already do).
+- The device remembers its seat in localStorage (`scrabble.seat.<CODE>`, `scrabble.clientId`), so a refresh puts the player back in their seat.
+- The legacy `server_1..4/` data from the old app is ignored.
 
 ## Required workflow: Superpowers first, code second
 
@@ -89,11 +102,17 @@ This project uses the **Superpowers** plugin (`superpowers@claude-plugins-offici
 | New feature, change in game rules or behaviour, UI addition | `superpowers:brainstorming` → `superpowers:writing-plans` → `superpowers:executing-plans` (or `superpowers:subagent-driven-development` for plans whose tasks are independent of each other) |
 | Bug, unexpected behaviour, desync between clients | `superpowers:systematic-debugging`: reproduce it, find the root cause and state it before proposing a fix. No guess-and-patch. |
 | Starting a feature branch | `superpowers:using-git-worktrees` (or at least `git switch -c feat/…` off `main`) |
-| Before saying anything is done or fixed | `superpowers:verification-before-completion`: run it in the browser (2+ windows for multiplayer) and show the evidence |
+| Rules or room logic (`engine.js`, `match.js`, `dictionary.js`) | `superpowers:test-driven-development`: write the failing test in `tests/` first |
+| Before saying anything is done or fixed | `superpowers:verification-before-completion`: unit tests, plus the browser (2+ windows for multiplayer). Show the evidence. |
 | Work is finished | `/security-review`, then `superpowers:requesting-code-review`, then `superpowers:finishing-a-development-branch` to open the PR |
 | Responding to PR feedback | `superpowers:receiving-code-review` |
 
-**Edge cases every brainstorm and plan must cover:** 2P and 4P modes, spectators, several clients writing to Firebase at the same time, a player's browser disconnecting mid-turn, and all 4 servers (data must stay separate per server through `getServerPath()`).
+**Edge cases every brainstorm and plan must cover:**
+- players, spectators and the host
+- several clients writing to Firebase at the same time
+- a player refreshing or disconnecting mid-turn
+- the host window being closed
+- phone-width screens (360px)
 
 **Scope of the security review:** game-level problems only:
 - Unescaped user input in `innerHTML` (XSS)
@@ -102,11 +121,9 @@ This project uses the **Superpowers** plugin (`superpowers@claude-plugins-offici
 
 Infrastructure findings (Firebase rules, auth, hosting) belong to DevOps. Note them as a one-line handoff.
 
-There's no automated test suite, so `superpowers:test-driven-development` only applies once test infrastructure is added. Until then, verify changes manually in the browser.
-
 ## Conventions when editing
 
-- Keep the single-file structure unless the user asks to split it. Put new code in the matching `// ====` section.
-- Use the Firebase **v8** API style (`db.ref(path).on/once/update/set`). Always build paths with `getServerPath()` so servers stay isolated.
-- Pass any user-supplied string (names, emails, match labels) through `escapeHtml()` before putting it in `innerHTML`.
-- Use the CSS custom properties in `:root` (`--scrabble-*`, `--dict-*`, `--sq-*`) rather than new hard-coded colours. The mobile breakpoint is `max-width: 768px`.
+- Firebase **v8** API style only. All paths under `scrabble/`.
+- User-supplied strings (team names, player names, labels, words) go through `UI.escapeHtml()` before they're put into `innerHTML`. Names are capped at 40 characters.
+- Use the CSS custom properties in `:root` (`--scrabble-*`, `--dict-*`, `--sq-*`) rather than new hard-coded colours. Breakpoints: 900px (dashboard stacks) and 480px (phone).
+- Fair play only **warns** the host (screen-leave counter); there are no automatic penalties. "Host decides" is the rule for disputes: appeals, walkover/void, award win.

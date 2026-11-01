@@ -40,5 +40,27 @@
       "Bash(firebase database:remove:*)",
       "PowerShell(firebase database:remove:*)"
     ]
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -Command \"[System.Media.SystemSounds]::Asterisk.Play(); (New-Object -ComObject WScript.Shell).Popup('Claude finished',3,'Claude Code - DICT Scrabble',64) | Out-Null\""
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -Command \"[System.Media.SystemSounds]::Exclamation.Play(); (New-Object -ComObject WScript.Shell).Popup('Claude needs your input',3,'Claude Code - DICT Scrabble',48) | Out-Null\""
+          }
+        ]
+      }
+    ]
   }
 }
