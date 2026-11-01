@@ -28,7 +28,15 @@
 
   function formatCode(code) { return code.slice(0, 3) + '-' + code.slice(3); }
 
-  function normalizeCode(input) { return String(input || '').toUpperCase().replace(/[\s-]/g, ''); }
+  function normalizeCode(input) {
+    return String(input || '').toUpperCase().split('').filter(ch => CODE_ALPHABET.includes(ch)).join('');
+  }
+
+  // A real room has a status and both teams; a reconnecting client's presence write can
+  // otherwise create a "ghost" node with only presence/<id> under a deleted room.
+  function isRoomRecord(raw) {
+    return !!(raw && raw.status && raw.teamA && raw.teamB);
+  }
 
   // ---------- room shape ----------
 
@@ -396,7 +404,7 @@
 
   return {
     CODE_ALPHABET, TURN_MS, SUDDEN_DEATH_MAX_ROUNDS,
-    generateRoomCode, formatCode, normalizeCode, createRoom, normalizeRoom,
+    generateRoomCode, formatCode, normalizeCode, isRoomRecord, createRoom, normalizeRoom,
     claimSeat, setReady, removePlayer, startMatch,
     prepareMove, applyPlay, applyPass, resolveTimeUp, finalize,
     requestAppeal, resolveAppeal, pauseClocks, resumeClocks,

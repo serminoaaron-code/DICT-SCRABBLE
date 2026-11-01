@@ -18,7 +18,12 @@
           <div><label for="joinName">Your name</label><input id="joinName" maxlength="40" autocomplete="name" placeholder="Your name"></div>
           <button type="submit">Find room</button>
         </form>
+      </div>
+      <div class="panel narrow">
+        <h3>🏆 Team standings</h3>
+        <div id="joinStandings"><p class="muted small-text">Loading…</p></div>
       </div>`;
+    const standings = UI.mountStandings(() => el.querySelector('#joinStandings'));
     el.querySelector('#joinName').value = Store.local.get('scrabble.name') || '';
     el.querySelector('#joinForm').onsubmit = ev => {
       ev.preventDefault();
@@ -28,7 +33,7 @@
       if (name) Store.local.set('scrabble.name', name);
       App.go('room=' + code);
     };
-    return null;
+    return () => standings.off();
   }
 
   // ---------- room view ----------
@@ -132,20 +137,32 @@
       return RoomLive.renderLive(el, room, ctx);
     }
 
+    function stopWatching() {
+      Store.local.remove(seatKey(code));
+      state.mySeat = null;
+      setRole(App.isHost() ? 'host' : null);
+      render();
+    }
+
     function renderChoices(room) {
+      const inPlay = room.status !== 'waiting';
       const btn = seat => {
         const s = room.seats[seat];
         const team = nameOf(room, seat);
-        return s
-          ? `<button disabled>${esc(team)}: taken by ${esc(s.name)}</button>`
-          : `<button data-claim="${seat}">Play for ${esc(team)}</button>`;
+        if (s) return `<button disabled>${esc(team)}: taken by ${esc(s.name)}</button>`;
+        // An empty seat in a running game: the player is continuing on a new device (host freed the seat).
+        return `<button data-claim="${seat}">${inPlay ? `Take ${esc(team)}'s seat` : `Play for ${esc(team)}`}</button>`;
       };
+      const anyFree = SEATS.some(s => !room.seats[s]);
       el.innerHTML = `
         <div class="panel narrow stack">
           <div class="versus">${esc(room.teamAName)} <span class="muted">vs</span> ${esc(room.teamBName)}</div>
           <div class="center muted small-text">Room <span class="code">${esc(Match.formatCode(code))}</span>${room.label ? ' · ' + esc(room.label) : ''}</div>
           <div><label for="choiceName">Your name</label><input id="choiceName" maxlength="40" placeholder="Your name"></div>
-          ${room.status === 'waiting' ? btn('A') + btn('B') : '<p class="muted small-text center">This match has already started. You can watch it.</p>'}
+          ${!inPlay ? btn('A') + btn('B')
+            : (anyFree ? '<p class="muted small-text center">This match is in progress. If you are a player switching devices, take your seat:</p>' +
+                SEATS.filter(s => !room.seats[s]).map(btn).join('')
+              : '<p class="muted small-text center">This match has already started. You can watch it. (Switching devices? Ask the host to free your seat.)</p>')}
           <button class="secondary" data-watch="1">👁️ Just watch</button>
           <a href="#" class="small-text">← Back to start</a>
         </div>`;
@@ -201,6 +218,7 @@
           <div class="row" style="justify-content:space-between;">
             <a href="#" class="small-text">← Back to start</a>
             ${mine ? '<button class="link small-text" id="leaveSeat">Leave seat</button>' : ''}
+            ${state.mySeat === 'watch' ? '<button class="link small-text" id="stopWatching">Stop watching / take a seat</button>' : ''}
           </div>
         </div>`;
 
@@ -212,6 +230,7 @@
         const res = await Store.mutateRoom(code, r => Match.startMatch(r, Store.serverNow(), Math.random));
         if (!res.committed) UI.toast('Could not start: both players must be ready.', 'error');
       };
+      if ($('#stopWatching')) $('#stopWatching').onclick = stopWatching;
       if ($('#leaveSeat')) $('#leaveSeat').onclick = async () => {
         const seat = state.mySeat;
         forgetSeat();
@@ -228,7 +247,7 @@
       });
     }
 
-    const ctx = { code, me, state, setRole, render };
+    const ctx = { code, me, state, setRole, render, stopWatching };
 
     // Fair play: a seated player leaving the screen during play is reported to the host (no penalty).
     const onVisibility = () => {
@@ -250,6 +269,18 @@
   }
 
   // ---------- live & final ----------
+
+  // Automatic writes (timeout, time-up) are idempotent; retry every 3 s while the
+  // condition still holds, in case a transaction was aborted (e.g. by a reconnect).
+  const Retry = {
+    due(tried, key) {
+      const last = tried[key];
+      if (last && Date.now() - last < 3000) return false;
+      tried[key] = Date.now();
+      return true;
+    }
+  };
+  root.RoomRetry = Retry;
 
   const PLAYING = ['live', 'suddenDeath'];
   const REASON_LINE = {
@@ -299,8 +330,10 @@
           <button id="resignBtn" class="danger">Resign</button>
         </div>
         <div class="status-line" id="lastMove"></div>
-        <a href="#" class="small-text">← Back to start</a>
+        <div class="row"><a href="#" class="small-text">← Back to start</a>
+          <button class="link small-text hidden" id="stopWatching">Stop watching / take a seat</button></div>
       </div></div>`;
+    el.querySelector('#stopWatching').onclick = () => ctx.stopWatching();
     const ui = ctx.state.ui;
     Object.assign(ui, { temp: [], selected: null, busy: false, rejected: null, seenMove: -1, tried: {} });
     const $ = s => el.querySelector(s);
@@ -448,6 +481,7 @@
     }
 
     $('#lastMove').innerHTML = lastMoveText(room);
+    $('#stopWatching').classList.toggle('hidden', seat !== 'watch');
     if (RoomLive.updateHost) RoomLive.updateHost(el, room, ctx);
     tick(el, ctx);
   }
@@ -472,14 +506,12 @@
     if (!writer || !PLAYING.includes(room.status) || c.paused || (room.game && room.game.pending)) return;
     const tried = ctx.state.ui.tried;
     if (room.status === 'live' && now >= c.endsAt) {
-      const key = 'end:' + c.endsAt;
-      if (!tried[key]) { tried[key] = true; Store.mutateRoom(ctx.code, r => Match.resolveTimeUp(r, Store.serverNow())); }
+      if (Retry.due(tried, 'end:' + c.endsAt)) Store.mutateRoom(ctx.code, r => Match.resolveTimeUp(r, Store.serverNow()));
       return;
     }
     if (now >= c.turnStartedAt + Match.TURN_MS) {
       const key = 'turn:' + c.turnStartedAt + ':' + room.game.moveCount;
-      if (!tried[key]) {
-        tried[key] = true;
+      if (Retry.due(tried, key)) {
         const expectedMoveCount = room.game.moveCount, expectedTurnStartedAt = c.turnStartedAt, seat = room.game.turn;
         Store.mutateRoom(ctx.code, r => Match.applyPass(r, seat, { now: Store.serverNow(), expectedMoveCount, timeout: true, expectedTurnStartedAt }));
       }
@@ -514,9 +546,14 @@
         ${body}
         <div id="finalHost"></div>
         ${room.game ? '<div id="board-container"></div>' : ''}
+        <h3 style="margin-bottom:0;">🏆 Team standings</h3>
+        <div id="finalStandings"></div>
         <button class="secondary" id="backBtn">← Back to start</button>
       </div>`;
       if (room.game) UI.renderBoard(el.querySelector('#board-container'), room.game.board, {});
+      const ui = ctx.state.ui;
+      if (!ui.standings) ui.standings = UI.mountStandings(() => el.querySelector('#finalStandings'));
+      else ui.standings.render();
       el.querySelector('#backBtn').onclick = () => App.go('');
       if (RoomLive.updateFinalHost) RoomLive.updateFinalHost(el, room, ctx);
     },
@@ -558,6 +595,10 @@
           ${SEATS.map(s => `<button class="small secondary" data-host="award" data-seat="${s}">Award win → ${esc(teamOf(room, s))}</button>`).join('')}
           <button class="small danger" data-host="void">Void</button>
         </div>
+        <div class="row small-text">
+          <span class="muted">Player switching devices?</span>
+          ${SEATS.filter(s => room.seats[s]).map(s => `<button class="small secondary" data-host="remove" data-seat="${s}">Free ${esc(room.seats[s].name)}'s seat</button>`).join('')}
+        </div>
       </div>`;
       bar.onclick = async ev => {
         const b = ev.target.closest('button[data-host]');
@@ -576,6 +617,11 @@
         } else if (act === 'void') {
           if (!confirm('Void this room? It will count for no one.')) return;
           fn = r => Match.voidRoom(r, now());
+        } else if (act === 'remove') {
+          const seat = b.dataset.seat;
+          const s = ctx.state.room.seats[seat];
+          if (!s || !confirm(`Free ${s.name}'s seat? They (or their new device) can take it again with the room code. Their tiles and score stay.`)) return;
+          fn = r => Match.removePlayer(r, seat);
         }
         if (!fn) return;
         b.disabled = true;
@@ -602,7 +648,10 @@
       };
     },
 
-    teardown(ctx) { if (ctx.state.ui.tossTimer) clearTimeout(ctx.state.ui.tossTimer); }
+    teardown(ctx) {
+      if (ctx.state.ui.tossTimer) clearTimeout(ctx.state.ui.tossTimer);
+      if (ctx.state.ui.standings) ctx.state.ui.standings.off();
+    }
   };
   root.RoomLive = RoomLive;
 

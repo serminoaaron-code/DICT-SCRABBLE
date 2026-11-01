@@ -463,3 +463,16 @@ test('roomPhase reports status otherwise', () => {
   assert.strictEqual(M.roomPhase(liveRoom()), 'live');
   assert.strictEqual(M.roomPhase(finalRoom('R1', 'tA', 'tB', 'A')), 'final');
 });
+
+// ---------- Final review fixes ----------
+
+test('normalizeCode strips anything outside the code alphabet', () => {
+  assert.strictEqual(M.normalizeCode('K7Q42M.'), 'K7Q42M');
+  assert.strictEqual(M.normalizeCode('(k7q-42m)!'), 'K7Q42M');
+});
+
+test('isRoomRecord rejects ghost rooms made only of presence', () => {
+  assert.strictEqual(M.isRoomRecord(baseRoom()), true);
+  assert.strictEqual(M.isRoomRecord({ presence: { c1: 'A' } }), false);
+  assert.strictEqual(M.isRoomRecord(null), false);
+});

@@ -197,11 +197,21 @@
         }
       };
 
+      const tried = {};
       App.onTick(() => {
         panel.querySelectorAll('[data-clock]').forEach(span => {
           const room = state.rooms[span.dataset.clock];
           if (room) span.textContent = clockText(room);
         });
+        // The host's browser is the primary recorder of time-up results (spec §7).
+        const now = Store.serverNow();
+        for (const room of Object.values(state.rooms)) {
+          if (room.status !== 'live' || !room.clock || room.clock.paused || (room.game && room.game.pending)) continue;
+          if (now < room.clock.endsAt) continue;
+          if (RoomRetry.due(tried, room.code + ':' + room.clock.endsAt)) {
+            Store.mutateRoom(room.code, r => Match.resolveTimeUp(r, Store.serverNow()));
+          }
+        }
       });
 
       return { render() { fillSelects(); renderList(); } };

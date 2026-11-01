@@ -85,5 +85,17 @@
     }
   }
 
-  root.UI = { escapeHtml, formatClock, toast, renderStandings, renderBoard, renderRack };
+  // Live team standings into whatever element getEl() returns (it may be re-created by re-renders).
+  function mountStandings(getEl) {
+    const state = { teams: {}, rooms: {} };
+    const render = () => {
+      const target = getEl();
+      if (target) renderStandings(target, Match.computeStandings(state.teams, state.rooms));
+    };
+    const u1 = Store.watchTeams(t => { state.teams = t; render(); });
+    const u2 = Store.watchRooms(r => { state.rooms = r; render(); });
+    return { render, off() { u1(); u2(); } };
+  }
+
+  root.UI = { escapeHtml, formatClock, toast, renderStandings, renderBoard, renderRack, mountStandings };
 })(window);

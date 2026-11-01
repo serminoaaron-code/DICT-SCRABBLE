@@ -42,7 +42,10 @@
     if (hash === 'host') {
       cleanup = HostView.show(el());
     } else if (hash.startsWith('room=')) {
-      cleanup = RoomView.show(el(), Match.normalizeCode(decodeURIComponent(hash.slice(5))));
+      let raw = hash.slice(5);
+      try { raw = decodeURIComponent(raw); } catch (e) { /* malformed escape: use as-is */ }
+      const code = Match.normalizeCode(raw);
+      cleanup = code.length === 6 ? RoomView.show(el(), code) : RoomView.showJoin(el());
     } else {
       cleanup = RoomView.showJoin(el());
     }

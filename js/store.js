@@ -59,13 +59,16 @@
     return watch(`${ROOT}/rooms`, s => {
       const raw = s.val() || {};
       const out = {};
-      for (const code of Object.keys(raw)) out[code] = Match.normalizeRoom(raw[code]);
+      for (const code of Object.keys(raw)) {
+        if (!Match.isRoomRecord(raw[code])) continue; // skip presence-only ghost nodes
+        out[code] = Match.normalizeRoom(Object.assign({}, raw[code], { code }));
+      }
       return out;
     }, cb);
   }
 
   function watchRoom(code, cb) {
-    return watch(`${ROOT}/rooms/${code}`, s => (s.exists() ? Match.normalizeRoom(s.val()) : null), cb);
+    return watch(`${ROOT}/rooms/${code}`, s => (s.exists() && Match.isRoomRecord(s.val()) ? Match.normalizeRoom(s.val()) : null), cb);
   }
 
   function addTeam(name) {
@@ -103,10 +106,13 @@
     const ref = db.ref(`${ROOT}/rooms/${code}/presence/${clientId()}`);
     const connRef = db.ref('.info/connected');
     const onConn = snap => {
-      if (snap.val() === true) {
+      if (snap.val() !== true) return;
+      // Only mark presence in a room that still exists (a reset/deleted room must not be recreated).
+      db.ref(`${ROOT}/rooms/${code}/status`).once('value').then(s => {
+        if (!s.exists()) return;
         ref.onDisconnect().remove();
         ref.set(role);
-      }
+      });
     };
     connRef.on('value', onConn);
     return () => {
