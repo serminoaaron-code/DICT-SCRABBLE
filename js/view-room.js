@@ -230,8 +230,19 @@
 
     const ctx = { code, me, state, setRole, render };
 
+    // Fair play: a seated player leaving the screen during play is reported to the host (no penalty).
+    const onVisibility = () => {
+      const room = state.room;
+      const seat = state.mySeat;
+      if (!document.hidden || !room || (seat !== 'A' && seat !== 'B')) return;
+      if (room.status !== 'live' && room.status !== 'suddenDeath') return;
+      Store.mutateRoom(code, r => Match.recordScreenLeave(r, seat));
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
     const unsub = Store.watchRoom(code, onRoom);
     return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
       unsub();
       if (presenceOff) presenceOff();
       if (root.RoomLive && RoomLive.teardown) RoomLive.teardown(ctx);
@@ -508,6 +519,69 @@
       if (room.game) UI.renderBoard(el.querySelector('#board-container'), room.game.board, {});
       el.querySelector('#backBtn').onclick = () => App.go('');
       if (RoomLive.updateFinalHost) RoomLive.updateFinalHost(el, room, ctx);
+    },
+
+    // Host control bar + notices shown to everyone (disconnects).
+    updateHost(el, room, ctx) {
+      const g = room.game;
+      const phase = Match.roomPhase(room);
+      const inPlay = ['live', 'suddenDeath', 'hostDecision'].includes(room.status);
+
+      const offline = SEATS.filter(s => room.seats[s] && !Match.isSeatOnline(room, s));
+      el.querySelector('#noticeBox').innerHTML = inPlay && offline.length
+        ? `<div class="warn-line">📴 ${offline.map(s => esc(room.seats[s].name)).join(' and ')} disconnected${App.isHost() ? ' · Pause to wait, or Award win' : ''}</div>`
+        : '';
+
+      const bar = el.querySelector('#hostBar');
+      if (!App.isHost()) { bar.innerHTML = ''; return; }
+      const warnings = SEATS
+        .filter(s => room.seats[s] && room.fairPlay[s].screenLeaves > 0)
+        .map(s => `<div class="warn-line">⚠️ ${esc(room.seats[s].name)} left the screen ${room.fairPlay[s].screenLeaves}×</div>`).join('');
+      let decision = '';
+      if (phase === 'appeal') {
+        const p = g.pending;
+        decision = `<div class="warn-line stack">
+          <div>⚖️ <b>${esc(playerOf(room, p.seat))}</b> played ${p.words.map(w => `${esc(w.word)} (${w.score})`).join(', ')}: <b>${p.total} pts</b>.
+          Not found: ${p.rejectedWords.map(esc).join(', ')}</div>
+          <div class="row"><button class="small" data-host="approve">✅ Approve</button><button class="small danger" data-host="deny">✖ Deny</button></div>
+        </div>`;
+      } else if (phase === 'hostDecision') {
+        decision = `<div class="warn-line stack"><div>Still tied after 3 sudden-death rounds. Award the win:</div>
+          <div class="row">${SEATS.map(s => `<button class="small" data-host="award" data-seat="${s}">🏆 ${esc(teamOf(room, s))}</button>`).join('')}</div></div>`;
+      }
+      const canPause = PLAYING.includes(room.status) && !room.clock.paused;
+      bar.innerHTML = `<div class="hostbar">
+        <h4>⚙ Host controls</h4>
+        ${warnings}${decision}
+        <div class="row">
+          ${phase === 'paused' ? '<button class="small" data-host="resume">▶ Resume</button>' : `<button class="small secondary" data-host="pause" ${canPause ? '' : 'disabled'}>⏸ Pause</button>`}
+          ${SEATS.map(s => `<button class="small secondary" data-host="award" data-seat="${s}">Award win → ${esc(teamOf(room, s))}</button>`).join('')}
+          <button class="small danger" data-host="void">Void</button>
+        </div>
+      </div>`;
+      bar.onclick = async ev => {
+        const b = ev.target.closest('button[data-host]');
+        if (!b || b.disabled) return;
+        const act = b.dataset.host;
+        const now = () => Store.serverNow();
+        let fn = null;
+        if (act === 'pause') fn = r => Match.pauseClocks(r, now(), 'host');
+        else if (act === 'resume') fn = r => Match.resumeClocks(r, now());
+        else if (act === 'approve') fn = r => Match.resolveAppeal(r, true, { now: now() });
+        else if (act === 'deny') fn = r => Match.resolveAppeal(r, false, { now: now() });
+        else if (act === 'award') {
+          const seat = b.dataset.seat;
+          if (!confirm(`Award the win to ${teamOf(ctx.state.room, seat)}?`)) return;
+          fn = r => Match.awardWin(r, seat, now());
+        } else if (act === 'void') {
+          if (!confirm('Void this room? It will count for no one.')) return;
+          fn = r => Match.voidRoom(r, now());
+        }
+        if (!fn) return;
+        b.disabled = true;
+        const res = await Store.mutateRoom(ctx.code, fn);
+        if (!res.committed) UI.toast('That action is no longer possible (the room changed).', 'error');
+      };
     },
 
     teardown(ctx) { if (ctx.state.ui.tossTimer) clearTimeout(ctx.state.ui.tossTimer); }
