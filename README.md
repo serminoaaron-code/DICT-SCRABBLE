@@ -25,7 +25,8 @@ Each team sends one representative. The host sets up **fixture rooms** (for exam
   - **During a game:** pause or resume, award a win, void a room, remove a player.
   - **No-show rooms:** walkover or void.
   - **Fair-play warnings:** when a player leaves the screen, the host gets a warning. There are no automatic penalties.
-- **Live team standings:** wins, losses and points, on the host dashboard.
+- **Live team standings:** wins, losses and points on the host dashboard, plus a big-screen view for a projector (`?view=scoreboard`).
+- **Result corrections:** the host can correct or void a finished result.
 
 ## Running locally
 

@@ -584,6 +584,24 @@
       };
     },
 
+    // Host-only: correct or void a final result.
+    updateFinalHost(el, room, ctx) {
+      const box = el.querySelector('#finalHost');
+      if (!box || !App.isHost() || room.status !== 'final' || !room.result) return;
+      const otherSeat = room.result.winner === 'A' ? 'B' : 'A';
+      box.innerHTML = `<div class="hostbar"><h4>⚙ Host</h4><div class="row">
+        <button class="small secondary" id="correctBtn">Give the win to ${esc(teamOf(room, otherSeat))}</button>
+        <button class="small danger" id="voidFinalBtn">Void</button></div></div>`;
+      box.querySelector('#correctBtn').onclick = async () => {
+        if (!confirm(`Give the win to ${teamOf(room, otherSeat)} instead?`)) return;
+        await Store.mutateRoom(ctx.code, r => Match.correctResult(r, Store.serverNow()));
+      };
+      box.querySelector('#voidFinalBtn').onclick = async () => {
+        if (!confirm('Void this result? It will count for no one.')) return;
+        await Store.mutateRoom(ctx.code, r => Match.voidRoom(r, Store.serverNow()));
+      };
+    },
+
     teardown(ctx) { if (ctx.state.ui.tossTimer) clearTimeout(ctx.state.ui.tossTimer); }
   };
   root.RoomLive = RoomLive;

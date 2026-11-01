@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-**DICT Digital Scrabble Sportsfest 2026** is the Scrabble event of an intramurals-style DICT sportsfest. Each team sends one representative. The host creates **fixture rooms**: Team A vs Team B, one timed game, joined with a short code. The winner's team gets **+1** and the loser **0**, and team standings update live. Spectators can watch any room, and a big-screen standings view is planned for a projector.
+**DICT Digital Scrabble Sportsfest 2026** is the Scrabble event of an intramurals-style DICT sportsfest. Each team sends one representative. The host creates **fixture rooms**: Team A vs Team B, one timed game, joined with a short code. The winner's team gets **+1** and the loser **0**, and team standings update live. Spectators can watch any room, and `?view=scoreboard` shows a big-screen standings view for a projector.
 
 Design and plan: `docs/superpowers/specs/2026-11-01-tournament-rooms-design.md`, `docs/superpowers/plans/2026-11-01-tournament-rooms.md`.
 

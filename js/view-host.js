@@ -150,6 +150,9 @@
           actions.push(`<button class="secondary small" data-walkover="A" data-code="${esc(room.code)}">Walkover → ${esc(nameA)}</button>`);
           actions.push(`<button class="secondary small" data-walkover="B" data-code="${esc(room.code)}">Walkover → ${esc(nameB)}</button>`);
           actions.push(`<button class="secondary small" data-void="${esc(room.code)}">Void</button>`);
+        } else if (room.status === 'final') {
+          actions.push(`<button class="secondary small" data-correct="${esc(room.code)}">Correct result</button>`);
+          actions.push(`<button class="secondary small" data-void="${esc(room.code)}">Void</button>`);
         }
         return `<div class="room-card" data-room="${esc(room.code)}">
           <div class="spread">
@@ -173,10 +176,15 @@
       $('#roomList').onclick = async ev => {
         const btn = ev.target.closest('button');
         if (!btn) return;
-        const code = btn.dataset.code || btn.dataset.void;
+        const code = btn.dataset.code || btn.dataset.void || btn.dataset.correct;
         const room = state.rooms[code];
         if (!room) return;
-        if (btn.dataset.walkover) {
+        if (btn.dataset.correct) {
+          const other = teamName(state, room, room.result.winner === 'A' ? 'B' : 'A');
+          if (!confirm(`Give the win to ${other} instead?`)) return;
+          const res = await Store.mutateRoom(code, r => Match.correctResult(r, Store.serverNow()));
+          UI.toast(res.committed ? `Result corrected: +1 ${other}.` : 'Could not correct the result.', res.committed ? 'ok' : 'error');
+        } else if (btn.dataset.walkover) {
           const seat = btn.dataset.walkover;
           const name = teamName(state, room, seat);
           if (!confirm(`Give ${name} a walkover win (+1)?`)) return;
