@@ -153,6 +153,89 @@ body.fx-active .scorebar { position: relative; z-index: 9600; }
 .fx-card .fx-word { position: static; background: rgba(255,255,255,.12); }
 .fx-card-note { font-size: 13px; font-weight: 800; letter-spacing: 1.5px; color: #dfe7ff; overflow-wrap: anywhere; }
 
+/* ==========================================================================
+   Match start (Task 9): VS intro + 3D coin toss (~5 s, mockup intro-coin-winner-v2.html),
+   and the projector's ROUND STARTING scene. Scenes have their own opaque backdrop, so
+   their colours are the same in both themes. --in-off is a negative delay that starts
+   the CSS animations at the point matching the room's clock (late arrival / refresh).
+   ========================================================================== */
+body.fx-scene main { z-index: 9100; }
+.fx-intro .fx-stage, .fx-round .fx-stage { background: #0b1f4d; }
+.fx-stage > .in-scene { inset: 0; display: none; }
+.fx-stage > .in-scene.on { display: block; }
+
+/* VS: Team A (blue, top) and Team B (red, bottom) slam in from opposite sides */
+.in-half { position: absolute; left: 0; right: 0; height: 50%; padding: 0 16px; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: calc(var(--k) * 4); color: #fff; text-align: center; }
+.in-a { top: 0; padding-bottom: calc(var(--k) * 30); background: linear-gradient(160deg, #1446a0, #0b2a75); clip-path: polygon(0 0, 100% 0, 100% 82%, 0 100%); }
+.in-b { bottom: 0; padding-top: calc(var(--k) * 30); background: linear-gradient(160deg, #e1251b, #a3140d); clip-path: polygon(0 18%, 100% 0, 100% 100%, 0 100%); }
+.in-tm { max-width: 100%; font-size: calc(var(--k) * 30); line-height: 1.1; overflow-wrap: anywhere; text-shadow: 0 4px 0 rgba(0,0,0,.25); }
+.in-tm.long { font-size: calc(var(--k) * 22); }
+.in-tm.xlong { font-size: calc(var(--k) * 16); }
+.in-pl { max-width: 100%; font-weight: 800; letter-spacing: 2px; font-size: max(11px, calc(var(--k) * 13)); overflow-wrap: anywhere; }
+.in-vs.on .in-a { animation: fx-in-l .55s calc(var(--in-off, 0ms) + 0ms) cubic-bezier(.2,1.2,.4,1) both; }
+.in-vs.on .in-b { animation: fx-in-r .55s calc(var(--in-off, 0ms) + 100ms) cubic-bezier(.2,1.2,.4,1) both; }
+@keyframes fx-in-l { from { transform: translateX(-110%); } }
+@keyframes fx-in-r { from { transform: translateX(110%); } }
+.in-badge { position: absolute; left: 50%; top: 50%; width: calc(var(--k) * 92); height: calc(var(--k) * 92); margin: calc(var(--k) * -46) 0 0 calc(var(--k) * -46);
+  border-radius: 50%; background: var(--yellow); color: var(--navy); display: flex; align-items: center; justify-content: center; z-index: 2;
+  font-size: calc(var(--k) * 36); border: calc(var(--k) * 5) solid #fff; box-shadow: 0 8px 20px rgba(0,0,0,.35); }
+.in-vs.on .in-badge { animation: fx-vs-pop .5s calc(var(--in-off, 0ms) + 600ms) cubic-bezier(.2,1.7,.4,1) both,
+  fx-vs-pulse 1s calc(var(--in-off, 0ms) + 1200ms) ease-in-out 2; }
+@keyframes fx-vs-pop { from { transform: scale(0) rotate(-180deg); } }
+@keyframes fx-vs-pulse { 50% { transform: scale(1.12); } }
+.in-tag { position: absolute; left: 0; right: 0; bottom: calc(var(--k) * 10 + env(safe-area-inset-bottom, 0px)); z-index: 3; padding: 0 12px;
+  text-align: center; color: #fff; font-size: max(10px, calc(var(--k) * 10)); font-weight: 800; letter-spacing: 2px; }
+
+/* Coin toss: Team A on the yellow face, Team B on the red face; it lands on game.firstSeat */
+.in-coin { background: radial-gradient(circle at 50% 40%, #1d4fb5, #0b1f4d 70%); }
+.in-coin.on { animation: fx-in-fade .2s var(--in-off, 0ms) both; }
+.in-coin-box { position: absolute; inset: 0; padding: 0 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #fff; text-align: center; }
+.in-coin-title { font-size: calc(var(--k) * 20); letter-spacing: 1px; }
+.in-coin-wrap { perspective: calc(var(--k) * 600); width: calc(var(--k) * 150); height: calc(var(--k) * 150); margin: calc(var(--k) * 10) 0 calc(var(--k) * 18); }
+.in-coin3d { width: 100%; height: 100%; position: relative; transform-style: preserve-3d; }
+.in-face { position: absolute; inset: 0; padding: 14%; border-radius: 50%; overflow: hidden; -webkit-backface-visibility: hidden; backface-visibility: hidden;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; line-height: 1.1; overflow-wrap: anywhere;
+  font-family: 'Archivo Black', Impact, sans-serif; font-size: calc(var(--k) * 20);
+  border: calc(var(--k) * 7) solid #e2a800; box-shadow: inset 0 0 0 4px rgba(255,255,255,.4); }
+.in-face.long { font-size: calc(var(--k) * 14); }
+.in-face.xlong { font-size: calc(var(--k) * 10); }
+.in-face span { max-width: 100%; }
+.in-face small { font-family: Inter, system-ui, sans-serif; font-weight: 800; font-size: max(9px, calc(var(--k) * 10)); letter-spacing: 2px; }
+.in-front { background: radial-gradient(circle at 35% 30%, #ffe27a, #ffc20e 60%, #d79c00); color: #0b1f4d; }
+.in-back { background: radial-gradient(circle at 35% 30%, #ff8a80, #e1251b 60%, #9e120c); color: #fff; transform: rotateY(180deg); }
+.in-shadow { width: calc(var(--k) * 110); height: calc(var(--k) * 14); border-radius: 50%; background: rgba(0,0,0,.35); margin-top: calc(var(--k) * -6); }
+.in-result { max-width: 100%; font-size: calc(var(--k) * 22); color: var(--yellow); opacity: 0; overflow-wrap: anywhere; margin-top: calc(var(--k) * 8); }
+.in-result.go { animation: fx-in-res .5s cubic-bezier(.2,1.6,.4,1) forwards; }
+.in-result.shown { opacity: 1; }
+@keyframes fx-in-res { from { opacity: 0; transform: scale(.4); } to { opacity: 1; transform: none; } }
+.in-note { font-size: max(11px, calc(var(--k) * 11)); margin-top: calc(var(--k) * 6); color: #dfe7ff; }
+@keyframes fx-in-fade { from { opacity: 0; } }
+
+/* ROUND STARTING: every matchup slams in under the title */
+.fx-round .fx-stage { background: radial-gradient(circle at 50% 40%, #1d4fb5, #0b1f4d 70%); }
+.fx-stage > .rs-box { inset: 0; padding: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: calc(var(--k) * 16); }
+.rs-title { font-size: min(calc(var(--k) * 40), 12vw); color: var(--yellow); letter-spacing: 1px; text-align: center;
+  text-shadow: 0 4px 0 rgba(0,0,0,.35); animation: fx-rs-slam .5s cubic-bezier(.2,1.6,.4,1) both; }
+.rs-list { display: flex; flex-direction: column; align-items: center; gap: calc(var(--k) * 8); max-width: 100%; }
+.fx-round.many .rs-list { flex-direction: row; flex-wrap: wrap; justify-content: center; }
+.rs-match { display: flex; align-items: center; gap: calc(var(--k) * 8); max-width: 100%; font-weight: 800; font-size: calc(var(--k) * 18); color: #fff;
+  animation: fx-rs-slam .4s calc(500ms + var(--i, 0) * 180ms) cubic-bezier(.3,1.5,.5,1) both; }
+.rs-team { padding: calc(var(--k) * 5) calc(var(--k) * 12); border-radius: 999px; border: 2px solid rgba(255,255,255,.85); overflow-wrap: anywhere; min-width: 0; }
+.rs-a { background: #1446a0; }
+.rs-b { background: #c41f16; }
+.rs-vs { color: var(--yellow); font-size: calc(var(--k) * 13); }
+@keyframes fx-rs-slam { from { opacity: 0; transform: scale(2.6); } to { opacity: 1; transform: none; } }
+
+/* reduced motion: no slides, spin, flip or slam; everything fades */
+.fx-reduced.fx-intro .in-vs.on .in-a, .fx-reduced.fx-intro .in-vs.on .in-b, .fx-reduced.fx-intro .in-vs.on .in-badge {
+  animation: fx-in-fade .4s calc(var(--in-off, 0ms) + 0ms) both; }
+.fx-reduced.fx-intro .in-coin.on { animation: fx-in-fade .4s var(--in-off, 0ms) both; }
+.fx-reduced.fx-intro .in-result.go { animation: fx-in-fade .4s forwards; opacity: 1; }
+.fx-reduced.fx-round .rs-title, .fx-reduced.fx-round .rs-match { animation-name: fx-in-fade; }
+.fx-reduced.fx-intro .fx-stage { background: #0b1f4d; }
+.fx-reduced.fx-round .fx-stage { background: radial-gradient(circle at 50% 40%, #1d4fb5, #0b1f4d 70%); }
+
 @media (prefers-reduced-motion: reduce) {
   .fx-bump { animation: none; }
   .fx-shake, .fx-rays, .fx-flash, .confetti { display: none; }

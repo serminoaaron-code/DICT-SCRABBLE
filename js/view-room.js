@@ -51,8 +51,6 @@
       teams: {},
       mySeat: Store.local.get(seatKey(code)), // 'A' | 'B' | 'watch' | null
       loaded: false,
-      prevStatus: null,
-      tossUntil: 0,
       pinned: null, // room code pinned to the big screen, or null
       ui: { lastSeenMove: null } // live-view working state (Task 10); lastSeenMove: null until the first live render
     };
@@ -109,10 +107,6 @@
       const room = raw ? Match.withTeamNames(raw, state.teams) : raw;
       const first = !state.loaded;
       state.loaded = true;
-      if (room && state.prevStatus === 'waiting' && room.status === 'live') state.tossUntil = Date.now() + 3000;
-      if (room && first && room.status === 'live' && room.game && room.game.moveCount === 0 &&
-          Store.serverNow() - room.clock.startedAt < 3000) state.tossUntil = Date.now() + 3000;
-      state.prevStatus = room ? room.status : null;
       state.room = room;
 
       // Seat taken away by the host?
@@ -479,10 +473,6 @@
       ui.seenMove = g.moveCount;
     }
 
-    const toss = Date.now() < ctx.state.tossUntil;
-    $('#tossLine').innerHTML = toss ? `🪙 Coin toss: <b>${esc(teamOf(room, g.firstSeat))}</b> goes first` : '';
-    if (toss && !ui.tossTimer) ui.tossTimer = setTimeout(() => { ui.tossTimer = null; update(el, ctx.state.room, ctx); }, ctx.state.tossUntil - Date.now() + 50);
-
     for (const s of SEATS) {
       const side = $('#side' + s);
       side.classList.toggle('turn', g.turn === s && PLAYING.includes(room.status));
@@ -621,14 +611,19 @@
   const RoomLive = {
     renderLive(el, room, ctx) {
       document.body.classList.add('in-game'); // collapsed header during a live game
-      if (!el.querySelector('#liveRoot')) buildLive(el, ctx);
+      const fresh = !el.querySelector('#liveRoot');
+      if (fresh) buildLive(el, ctx);
       update(el, room, ctx);
+      // First live render (page load, refresh, or the waiting -> live transition): the VS intro
+      // and coin toss play for whatever is left before clock.startedAt (nothing once it passed).
+      // The scene owns #tossLine ("🪙 Coin toss: <TEAM> goes first") until the clocks start.
+      if (fresh) Scenes.playIntro(el.querySelector('#liveRoot'), room, Store.serverNow());
       celebrateNewMove(el, room, ctx);
     },
 
     renderFinal(el, room, ctx) {
       Celebrate.clear();
-      if (ctx.state.ui.tossTimer) { clearTimeout(ctx.state.ui.tossTimer); ctx.state.ui.tossTimer = null; }
+      Scenes.clearIntro();
       detachLive(ctx.state.ui);
       let body;
       if (room.status === 'void' || !room.result) {
@@ -784,7 +779,7 @@
       Celebrate.clear();
       document.body.classList.remove('in-game');
       detachLive(ctx.state.ui);
-      if (ctx.state.ui.tossTimer) clearTimeout(ctx.state.ui.tossTimer);
+      Scenes.clearIntro();
       if (ctx.state.ui.standings) ctx.state.ui.standings.off();
     }
   };
