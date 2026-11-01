@@ -228,6 +228,7 @@
         <section class="panel">
           <h3>3 · Standings</h3>
           <div id="standings"></div>
+          <button class="secondary small" id="bigScreenBtn" style="margin-top:10px;width:100%;">📺 Open big-screen view</button>
         </section>
       </div>`;
 
@@ -284,6 +285,7 @@
     }
 
     el.querySelector('#lockBtn').onclick = () => { App.setHost(false); App.route(); };
+    el.querySelector('#bigScreenBtn').onclick = () => window.open(location.pathname + '?view=scoreboard', '_blank');
     el.querySelector('#resetBtn').onclick = async () => {
       const typed = prompt('This deletes ALL teams, rooms and results.\nType RESET to confirm.');
       if (typed !== 'RESET') return UI.toast('Reset cancelled.');
