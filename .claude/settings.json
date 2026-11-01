@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "enabledPlugins": {
+    "superpowers@claude-plugins-official": true
+  },
+  "permissions": {
+    "allow": [
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git branch:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(python -m http.server:*)",
+      "Bash(npx serve:*)",
+      "PowerShell(git status:*)",
+      "PowerShell(git diff:*)",
+      "PowerShell(git log:*)",
+      "PowerShell(git show:*)",
+      "PowerShell(git branch:*)",
+      "PowerShell(git add:*)",
+      "PowerShell(git commit:*)",
+      "PowerShell(python -m http.server:*)",
+      "PowerShell(npx serve:*)",
+      "WebFetch(domain:api.dictionaryapi.dev)",
+      "WebFetch(domain:firebase.google.com)"
+    ],
+    "ask": [
+      "Bash(git push:*)",
+      "Bash(git reset:*)",
+      "PowerShell(git push:*)",
+      "PowerShell(git reset:*)"
+    ],
+    "deny": [
+      "Bash(git push --force:*)",
+      "PowerShell(git push --force:*)",
+      "Bash(firebase deploy:*)",
+      "PowerShell(firebase deploy:*)",
+      "Bash(firebase database:remove:*)",
+      "PowerShell(firebase database:remove:*)"
+    ]
+  }
+}
