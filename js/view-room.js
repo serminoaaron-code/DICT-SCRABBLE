@@ -122,7 +122,7 @@
 
     function render() {
       const room = state.room;
-      document.body.classList.remove('in-game'); // RoomLive.renderLive puts it back
+      document.body.classList.remove('in-game'); // RoomLive.renderLive / renderFinal put it back
 
       if (room === null) {
         el.innerHTML = `<div class="card narrow"><h2>Room not found</h2>
@@ -296,10 +296,6 @@
   root.RoomRetry = Retry;
 
   const PLAYING = ['live', 'suddenDeath'];
-  const REASON_LINE = {
-    time: "Time's up", suddenDeath: 'Won in sudden death', bagOut: 'Tiles ran out',
-    resign: 'Opponent left the game', awarded: 'Awarded by the host', walkover: 'Walkover', corrected: 'Result corrected by the host'
-  };
 
   const teamOf = (room, seat) => (seat === 'A' ? room.teamAName : room.teamBName);
   const playerOf = (room, seat) => (room.seats[seat] ? room.seats[seat].name : teamOf(room, seat));
@@ -640,41 +636,36 @@
       celebrateNewMove(el, room, ctx);
     },
 
+    // Result screen (Scenes.renderResult): winner / other player / neutral (spectators, host) / void.
+    // Rebuilt only when the result itself changes (presence updates keep the scene as it is), so the
+    // entrance plays once. A play that ended the game (bag out, last sudden-death move) never got its
+    // word celebration on the live screen: it plays here over the result, whose entrance waits for it.
     renderFinal(el, room, ctx) {
+      document.body.classList.add('in-game'); // collapsed header, so the result scene fills a phone like the mockup
+      const ui = ctx.state.ui;
+      const viewer = Scenes.resultViewer(room, ctx.state.mySeat);
+      const res = room.result;
+      const key = [room.status, viewer, App.isHost() ? 'host' : '',
+        res ? [res.winner, res.scoreA, res.scoreB, res.reason, res.decidedAt, res.note || ''].join('/') : '',
+        room.voidedAt || '', room.voidNote || ''].join('|');
+      if (ui.finalKey === key && el.querySelector('.res-final')) {
+        RoomLive.updateFinalHost(el, room, ctx);
+        return;
+      }
+      ui.finalKey = key;
       Celebrate.clear();
       Scenes.clearIntro();
-      detachLive(ctx.state.ui);
-      let body;
-      if (room.status === 'void' || !room.result) {
-        body = '<div class="final-banner"><div class="win" style="color:var(--text-muted)">This room was voided</div><p class="muted">It does not count for either team.' +
-          (room.voidNote ? `<br>Reason: ${esc(room.voidNote)}` : '') + '</p></div>';
-      } else {
-        const res = room.result;
-        const winTeam = teamOf(room, res.winner);
-        let reason = REASON_LINE[res.reason] || '';
-        if (res.reason === 'resign') reason = `${playerOf(room, res.winner === 'A' ? 'B' : 'A')} left the game`;
-        body = `<div class="final-banner stack">
-          <div class="win">🏆 ${chip(res.winner, winTeam)} wins</div>
-          <div>${esc(playerOf(room, 'A'))} <b>${res.scoreA}</b> – <b>${res.scoreB}</b> ${esc(playerOf(room, 'B'))}</div>
-          <div><span class="badge live">+1 ${esc(winTeam)}</span></div>
-          <div class="muted small-text">${esc(reason)}${res.note ? ': ' + esc(res.note) : ''}</div>
-        </div>`;
-      }
-      el.innerHTML = `<div class="card narrow stack">
-        ${versusHtml(room)}
-        ${body}
-        <div id="finalHost"></div>
-        ${room.game ? '<div id="board-container"></div>' : ''}
-        <h3 style="margin-bottom:0;">🏆 Team standings</h3>
-        <div id="finalStandings"></div>
-        <button class="btn-secondary" id="backBtn">← Back to start</button>
-      </div>`;
+      detachLive(ui);
+      const ending = Scenes.endingCelebration(ui.lastSeenMove, room);
+      if (room.game) ui.lastSeenMove = room.game.moveCount; // nothing replays on a later rebuild
+      const delayMs = ending ? (Match.CELEBRATE_MS[ending.tier] || 0) : 0;
+      Scenes.renderResult(el, room, viewer, { animate: Scenes.resultFresh(room, Store.serverNow()), delayMs });
       if (room.game) UI.renderBoard(el.querySelector('#board-container'), room.game.board, {});
-      const ui = ctx.state.ui;
       if (!ui.standings) ui.standings = UI.mountStandings(() => el.querySelector('#finalStandings'));
       else ui.standings.render();
       el.querySelector('#backBtn').onclick = () => App.go('');
-      if (RoomLive.updateFinalHost) RoomLive.updateFinalHost(el, room, ctx);
+      RoomLive.updateFinalHost(el, room, ctx);
+      if (ending) Celebrate.show(ending, { container: el, scoreEl: null, mine: ending.seat === ctx.state.mySeat });
     },
 
     // Host control bar + notices shown to everyone (disconnects).
@@ -799,6 +790,7 @@
       document.body.classList.remove('in-game');
       detachLive(ctx.state.ui);
       Scenes.clearIntro();
+      Scenes.clearResult();
       if (ctx.state.ui.standings) ctx.state.ui.standings.off();
     }
   };

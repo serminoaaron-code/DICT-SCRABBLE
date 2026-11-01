@@ -244,7 +244,83 @@ body.fx-scene #hostBar, body.fx-active #hostBar { position: relative; z-index: 9
 .fx-reduced.fx-intro .fx-stage { background: #0b1f4d; }
 .fx-reduced.fx-round .fx-stage { background: radial-gradient(circle at 50% 40%, #1d4fb5, #0b1f4d 70%); }
 
+/* ==========================================================================
+   Result screens (Task 10, spec 5.6, mockup intro-coin-winner-v2.html): the hero sits in
+   the final screen's card. Its colours are fixed (own backdrop), the same in both themes.
+   Contrast: light surfaces (score pill, View board, void card) carry dark text; dark or
+   saturated ones (best-word chip, stamp, Back to start) carry white text.
+   --res-delay holds the entrance while a game-ending word celebration plays over it.
+   ========================================================================== */
+.res-final { gap: 12px; }
+.res-hero {
+  position: relative; overflow: hidden; isolation: isolate; border-radius: 16px;
+  min-height: min(560px, 85vh); min-height: min(560px, 85svh);
+  display: flex; flex-direction: column; text-align: center; color: #0b1f4d;
+  background: radial-gradient(circle at 50% 30%, #ffe58a, #ffc20e 35%, #f39c12 70%, #c0392b);
+}
+.res-other { background: radial-gradient(circle at 50% 30%, #3b62c4, #1446a0 45%, #0b1f4d); color: #fff; }
+.res-bg { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+.res-rays {
+  position: absolute; left: 50%; top: 30%; width: 800px; height: 800px; margin: -400px 0 0 -400px;
+  background: repeating-conic-gradient(rgba(255,255,255,.28) 0 9deg, transparent 9deg 22deg);
+  animation: res-spin 14s linear infinite;
+}
+@keyframes res-spin { to { transform: rotate(360deg); } }
+.res-in { position: relative; z-index: 1; flex: 1 0 auto; display: flex; flex-direction: column; align-items: center; padding: 44px 16px 14px; }
+.res-trophy { font-size: 76px; line-height: 1; filter: drop-shadow(0 6px 0 rgba(0,0,0,.2));
+  animation: res-drop .7s var(--res-delay, 0ms) cubic-bezier(.2,1.5,.4,1) both; }
+@keyframes res-drop { from { transform: translateY(-200px) scale(.5); } }
+/* "<TEAM> wins" is one text run: the team is a full-width inline-block, so "wins" sits on its own line */
+.res-hero .res-head { margin: 4px 0 0; max-width: 100%; color: inherit; line-height: 1.15; text-transform: uppercase; }
+.res-team { display: inline-block; width: 100%; font-size: 34px; color: #fff; overflow-wrap: anywhere;
+  -webkit-text-stroke: 2px #0b1f4d; text-shadow: 0 5px 0 #0b1f4d;
+  animation: res-slam .5s calc(var(--res-delay, 0ms) + 450ms) cubic-bezier(.2,1.7,.4,1) both; }
+.res-team.long { font-size: 26px; }
+.res-team.xlong { font-size: 19px; }
+.res-wins { font-size: 18px; letter-spacing: 3px; color: #0b1f4d; }
+.res-other .res-wins { font-size: 16px; letter-spacing: 2px; color: #fff; }
+@keyframes res-slam { from { transform: scale(3); opacity: 0; } }
+.res-score { margin-top: 14px; max-width: 100%; display: flex; gap: 14px; align-items: center; padding: 10px 16px; border-radius: 14px;
+  background: #fff8e6; color: #0b1f4d; font-weight: 800; box-shadow: 0 4px 0 rgba(11,31,77,.18); }
+/* the other player's pill: light, dark text (user's contrast fix) */
+.res-other .res-score { background: #f4f7ff; color: #0b1f4d; }
+.res-side { flex: 1 1 0; min-width: 0; }
+.res-lbl { font-size: 11px; line-height: 1.25; overflow-wrap: anywhere; }
+.res-num { font-size: 26px; line-height: 1.15; color: #0b1f4d; font-variant-numeric: tabular-nums; }
+.res-side.w .res-num { color: #067a3e; }
+.res-dash { font-size: 20px; }
+.res-plus { margin-top: 12px; max-width: 100%; overflow-wrap: anywhere; padding: 8px 18px; border-radius: 99px; font-size: 18px;
+  background: #067a3e; color: #fff; box-shadow: 0 4px 0 #04542b;
+  animation: res-slam .45s calc(var(--res-delay, 0ms) + 1600ms) cubic-bezier(.2,1.7,.4,1) both; }
+.res-plus.long { font-size: 15px; }
+.res-plus.xlong { font-size: 13px; border-radius: 14px; }
+.res-best { margin-top: 12px; max-width: 100%; overflow-wrap: anywhere; padding: 6px 12px; border-radius: 10px;
+  font-size: 12px; font-weight: 800; background: rgba(11,31,77,.88); color: #fff; }
+.res-reason { margin-top: 10px; max-width: 100%; overflow-wrap: anywhere; font-size: 13px; font-weight: 700; }
+.res-btns { position: relative; z-index: 3; display: flex; gap: 8px; padding: 0 16px 16px; }
+.res-hero .res-btns button { flex: 1 1 0; min-width: 0; padding: 11px 10px; border-radius: 12px; font-size: 14px; font-weight: 800;
+  background: #0b1f4d; color: #fff; border: 2px solid #0b1f4d; box-shadow: 0 3px 0 rgba(0,0,0,.25); }
+.res-hero .res-btns .res-alt { background: #fff; color: #0b1f4d; }
+.res-other .res-btns .res-main { border-color: rgba(255,255,255,.85); }
+.res-confetti { top: -14px; pointer-events: none; }
+.res-stand-title { margin: 6px 0 0; }
+.res-board { align-self: center; }
+
+/* void: a calm grey card with the reason */
+.res-void { min-height: 0; background: #e8ecf3; color: #24324f; }
+.res-void .res-in { padding: 22px 16px 14px; gap: 6px; }
+.res-icon { font-size: 40px; line-height: 1; }
+.res-hero .res-void-head { margin: 0; font-size: 22px; color: #24324f; }
+.res-void-note { margin: 0; font-size: 14px; color: #3d4a66; overflow-wrap: anywhere; }
+.res-void .res-btns .res-alt { border-color: #b9c3d8; }
+
+/* reduced motion: no rays or confetti (not even created); drop and slams become fades */
+.res-reduced .res-trophy, .res-reduced .res-team, .res-reduced .res-plus { animation-name: fx-in-fade; animation-timing-function: ease; }
+/* a result opened later (refresh, a later visit): no entrance at all */
+.res-static .res-trophy, .res-static .res-team, .res-static .res-plus { animation: none; }
+
 @media (prefers-reduced-motion: reduce) {
   .fx-bump { animation: none; }
-  .fx-shake, .fx-rays, .fx-flash, .confetti { display: none; }
+  .fx-shake, .fx-rays, .fx-flash, .confetti, .res-rays { display: none; }
+  .res-trophy, .res-team, .res-plus { animation-name: fx-in-fade; }
 }
