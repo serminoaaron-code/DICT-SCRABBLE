@@ -420,7 +420,7 @@
           return;
         }
         const res = await Store.mutateRoom(ctx.code, r => Match.applyPlay(r, seat, placements, { now: Store.serverNow(), expectedMoveCount, unverified: check.unverified }));
-        if (res.committed) { ui.temp = []; ui.selected = null; }
+        if (res.committed) { ui.temp = []; ui.selected = null; Sound.play('accept'); }
         else { UI.toast('Move not accepted (time up or the game changed).', 'error'); ui.temp = []; }
       } finally {
         ui.busy = false;
@@ -461,6 +461,7 @@
     const rack = room.game.racks[ctx.state.mySeat];
     ui.temp.push({ r, c, letter: rack[ui.selected], rackIndex: ui.selected });
     ui.selected = null;
+    Sound.play('place');
     update(el, room, ctx);
   }
 
@@ -553,7 +554,10 @@
     if (kind !== ui.pillKind) {
       pill.className = 'pill pill-' + kind;
       // Pop once when it becomes this player's turn.
-      if (kind === 'you' && ui.pillKind !== null) { void pill.offsetWidth; pill.classList.add('pill-pop'); }
+      if (kind === 'you' && ui.pillKind !== null) {
+        void pill.offsetWidth; pill.classList.add('pill-pop');
+        Sound.play('turn'); Sound.buzz();
+      }
       ui.pillKind = kind;
     }
     const text = p ? p.text : '';
