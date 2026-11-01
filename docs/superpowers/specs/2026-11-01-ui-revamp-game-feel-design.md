@@ -1,6 +1,6 @@
 # DICT Scrabble: UI revamp, game feel and broadcast projector (Design)
 
-**Date:** 2026-11-01 · **Branch:** `feat/ui-revamp` · **Status:** Draft, reviewer questions answered, awaiting approval
+**Date:** 2026-11-01 · **Branch:** `feat/ui-revamp` · **Status:** Approved 2026-11-01
 **Mockups:** these were approved in the brainstorming companion and are saved, git-ignored, under `.superpowers/brainstorm/103-1793532112/content/`:
 - `look-a-light-dark.html`
 - `turn-pill-compact.html`
@@ -113,7 +113,10 @@ From top to bottom:
 5. **Rack:** 7 tiles of at least 36 px.
 6. **Actions:** **Play word** (wide, red), **Recall**, **Pass**.
 
-**Resign** moves into a small **⋯ menu** (it keeps `#resignBtn`) so it can't be tapped by accident **[call]**.
+**Resign** is renamed **"Leave"** (user) and moves into a small **⋯ menu** so it can't be tapped by accident **[call]**.
+- It keeps the `#resignBtn` id and the same behaviour: leaving forfeits the match.
+- The confirm dialog says so plainly: *"Leave the game? Your team (NCR) loses this match."*
+- Result reason text becomes "<player> left the game" (was "resigned").
 
 **What "fits" means [call]:** the **visible** browser area on a 360-wide phone in Chrome, which is about **360×640** once the address bar is shown, not the full 740.
 - The six rows above must fit there for a **seated player in a normal turn**, in both themes, including the yellow PLAYGROUND bar on local runs.
