@@ -89,7 +89,9 @@
     if (!Store.playground) return;
     const bar = document.createElement('div');
     bar.className = 'playground-bar';
-    bar.innerHTML = '🧪 <b>PLAYGROUND</b>: local test data only, separate from the real tournament. ' +
+    // Full text on wide screens, one short line on phones (CSS picks one; see .pg-long/.pg-short).
+    bar.innerHTML = '<span class="pg-long">🧪 <b>PLAYGROUND</b>: local test data only, separate from the real tournament.</span>' +
+      '<span class="pg-short">🧪 <b>PLAYGROUND</b> · test data</span> ' +
       '<button class="small secondary" id="resetPlayground">Reset playground</button>';
     document.body.prepend(bar);
     bar.querySelector('#resetPlayground').onclick = async () => {

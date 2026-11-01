@@ -39,7 +39,7 @@
   };
   const PHASE_ORDER = { live: 0, appeal: 0, paused: 0, suddenDeath: 0, hostDecision: 0, waiting: 1, final: 2, void: 3 };
   const REASON_TEXT = {
-    time: 'time', suddenDeath: 'sudden death', bagOut: 'tiles out', resign: 'resigned',
+    time: 'time', suddenDeath: 'sudden death', bagOut: 'tiles out', resign: 'left the game',
     awarded: 'awarded by host', walkover: 'walkover', corrected: 'corrected by host'
   };
 
