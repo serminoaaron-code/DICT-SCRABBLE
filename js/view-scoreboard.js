@@ -57,7 +57,7 @@
     const st = {
       teams: {}, rooms: {}, pinned: null, got: { teams: false, rooms: false, pinned: false },
       dir: Director.init(), sceneId: -1, target: null, shown: null,
-      swapTimer: null, wipeTimer: null, roundKey: '',
+      swapTimer: null, wipeTimer: null, roundKey: '', hlCode: null,
       keys: {}, scores: {}
     };
 
@@ -327,6 +327,7 @@
       const room = d.featured ? st.rooms[d.featured] : null;
       if (d.scene === 'highlight' && d.move && room) {
         const seat = d.move.seat;
+        st.hlCode = d.featured;
         Celebrate.show(d.move, { container: stage, scoreEl: () => stage.querySelector(`.bp-score[data-seat="${seat}"]`), mine: false });
       } else if (d.scene === 'winner' && room) {
         const w = $('#bigWinner');
@@ -344,6 +345,13 @@
       const d = st.dir;
       if (d.scene !== 'intro') Scenes.clearIntro();
       if (d.scene !== 'roundStart') { Scenes.clearRound(); st.roundKey = ''; }
+      // Leaving a highlight: a celebration whose room is gone (host Reset) or that a scene with its own
+      // backdrop replaces is cleared at once. Back to a live room (or on to its winner card) it may
+      // finish its last few hundred ms of fade-out by itself.
+      if (d.scene !== 'highlight' && st.hlCode !== null) {
+        if (!st.rooms[st.hlCode] || ['idle', 'intro', 'roundStart'].includes(d.scene)) Celebrate.clear();
+        st.hlCode = null;
+      }
       stage.classList.toggle('is-idle', d.scene === 'idle');
       const target = d.featured;
       const changed = target !== st.target;
