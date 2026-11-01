@@ -160,6 +160,9 @@ body.fx-active .scorebar { position: relative; z-index: 9600; }
    the CSS animations at the point matching the room's clock (late arrival / refresh).
    ========================================================================== */
 body.fx-scene main { z-index: 9100; }
+/* The host's controls stay visible and clickable above any scene or celebration (e.g. Resume while
+   a paused intro is held). #liveRoot/.card make no stacking context, so this competes with the overlay. */
+body.fx-scene #hostBar, body.fx-active #hostBar { position: relative; z-index: 9600; }
 .fx-intro .fx-stage, .fx-round .fx-stage { background: #0b1f4d; }
 .fx-stage > .in-scene { inset: 0; display: none; }
 .fx-stage > .in-scene.on { display: block; }
