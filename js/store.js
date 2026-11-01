@@ -14,7 +14,8 @@
     databaseURL: "https://dict-chess-tournament-default-rtdb.firebaseio.com"
   };
 
-  const ROOT = 'scrabble';
+  const ENV = Env.dataRoot(root.location.hostname, root.location.search);
+  const ROOT = ENV.root; // 'scrabble' (live) or 'scrabble_playground' (local testing)
   let db = null;
   let offset = 0;
 
@@ -125,6 +126,7 @@
   function resetTournament() { return db.ref(ROOT).remove(); }
 
   root.Store = {
+    ROOT, playground: ENV.playground,
     init, serverNow, clientId, local,
     watchTeams, watchRooms, watchRoom,
     addTeam, renameTeam, deleteTeam,

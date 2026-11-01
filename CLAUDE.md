@@ -32,7 +32,13 @@ node --test --test-name-pattern="sudden death" "tests/*.test.js"   # tests match
 
 Routes: `#` = join page · `#room=CODE` = room · `#host` = host dashboard (password is the `HOST_ADMIN_PASSWORD` constant in `js/view-host.js`, client-side only).
 
-> ⚠️ There's no dev database. Local runs write to the **live** Firebase project `dict-chess-tournament`, which is shared with the chess app. This app only ever touches the `scrabble/` root. For testing, use team names starting with `TEST-` and void or delete them afterwards. **Reset tournament** deletes everything under `scrabble/`.
+**Data areas (`js/env.js`):**
+- **Local runs use the playground**, `scrabble_playground/`, and show a yellow banner with **Reset playground**. "Local" means `localhost`, `127.0.0.1`, a LAN IP or `file://`.
+- **The deployed site uses `scrabble/`**, the real tournament data.
+- `?db=live` / `?db=playground` overrides the automatic choice.
+- Both areas live in the Firebase project `dict-chess-tournament`, which is shared with the chess app. There's no offline emulator: it would need Java + firebase-tools, which isn't set up.
+- **Reset tournament** (host) and **Reset playground** delete everything under the *current* area.
+- Never use `?db=live` for testing unless the user asks.
 
 ## Architecture
 
@@ -42,6 +48,7 @@ Script load order (in `index.html`): `engine.js → match.js → dictionary.js �
 |---|---|
 | `js/engine.js` | **Pure Scrabble rules** (global `ScrabbleEngine`): letters, tile bag, `PREMIUM_GRID`, board map, `validatePlacement`, `findWords` (main word + cross-words), `scoreMove` (+50 bingo), `ERROR_TEXT`. |
 | `js/match.js` | **Pure room-state transitions** (global `Match`). Every mutator takes a room and returns a *new* room, or `null` to reject: `claimSeat`, `startMatch` (coin toss), `applyPlay`, `applyPass`, `resolveTimeUp`, sudden death, `requestAppeal`/`resolveAppeal`, pause/resume, `resign`/`awardWin`/`walkover`/`voidRoom`/`correctResult`. Also `computeStandings` and `roomPhase`. |
+| `js/env.js` | `Env.dataRoot()` picks the Firebase data area: playground for local runs, real data when deployed. |
 | `js/dictionary.js` | `checkWords()`: 404 = rejected; error/timeout (5 s) = accepted but `unverified`. |
 | `js/store.js` | Firebase wiring (global `Store`): watchers, `mutateRoom`, `createRoom`, presence, team CRUD, `serverNow()` (server-time estimate), `local` (localStorage with fallback). |
 | `js/ui.js` | Shared rendering: `escapeHtml`, `formatClock`, `renderBoard`, `renderRack`, `renderStandings`, `toast`. |

@@ -136,6 +136,10 @@ table.standings td.pts { font-weight: 800; }
 .final-banner { text-align: center; padding: 10px; }
 .final-banner .win { font-size: 26px; font-weight: 800; color: var(--green); overflow-wrap: anywhere; }
 
+/* ---------- playground ---------- */
+.playground-bar { position: sticky; top: 0; z-index: 9000; background: #fde047; color: #422006; text-align: center; padding: 6px 10px; font-size: 13px; display: flex; gap: 10px; justify-content: center; align-items: center; flex-wrap: wrap; box-shadow: 0 2px 6px rgba(0,0,0,.3); }
+.playground-bar button { padding: 3px 10px; font-size: 12px; }
+
 /* ---------- toast ---------- */
 #toasts { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; z-index: 9999; width: min(92vw, 420px); }
 .toast { background: #111827; color: #fff; padding: 10px 14px; border-radius: 8px; font-size: 14px; box-shadow: 0 6px 18px rgba(0,0,0,.4); }

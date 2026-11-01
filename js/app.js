@@ -53,8 +53,23 @@
 
   root.App = { go, isHost, setHost, onTick, route };
 
+  function playgroundBanner() {
+    if (!Store.playground) return;
+    const bar = document.createElement('div');
+    bar.className = 'playground-bar';
+    bar.innerHTML = '🧪 <b>PLAYGROUND</b>: local test data only, separate from the real tournament. ' +
+      '<button class="small secondary" id="resetPlayground">Reset playground</button>';
+    document.body.prepend(bar);
+    bar.querySelector('#resetPlayground').onclick = async () => {
+      if (!confirm('Delete ALL playground teams, rooms and results? (Real tournament data is not affected.)')) return;
+      await Store.resetTournament();
+      UI.toast('Playground reset.', 'ok');
+    };
+  }
+
   document.addEventListener('DOMContentLoaded', () => {
     Store.init();
+    playgroundBanner();
     window.addEventListener('hashchange', route);
     route();
   });

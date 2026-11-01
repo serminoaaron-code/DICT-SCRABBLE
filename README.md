@@ -40,7 +40,16 @@ python -m http.server 8000
 
 To try a game, open three browser windows: the host and two players. Use a private/incognito window for the second player so it's treated as a different device.
 
-> **Note:** there's no separate test database. Local runs use the live Firebase data under `scrabble/`. Use team names starting with `TEST-`, and void or delete them afterwards.
+### Local playground
+
+When the page runs locally, it uses a separate **playground** data area (`scrabble_playground/`) instead of the real tournament data. A yellow **🧪 PLAYGROUND** banner shows this. "Local" means `localhost`, `127.0.0.1`, or a `192.168.x.x` / `10.x.x.x` address.
+
+- Play as much as you like. The real tournament (`scrabble/`) is never touched.
+- **Reset playground** in the banner wipes all test teams, rooms and results.
+- **Test on phones:** run `python -m http.server 8000` and open `http://<your-PC's-IP>:8000/` on a phone on the same Wi-Fi. Find the IP with `ipconfig`. Windows Firewall may ask to allow Python. Phones also get the playground.
+- Add `?db=live` to the URL to use the real data from a local copy, e.g. `http://localhost:8000/?db=live#host`. Only do this on purpose.
+
+The deployed GitHub Pages site always uses the real tournament data.
 
 ## Tests
 

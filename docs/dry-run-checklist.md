@@ -9,8 +9,12 @@
 - **Spectator** (optional): any device.
 
 **Before you start:**
-- This uses the **live** database. Name every team with the `TEST-` prefix, and void or delete everything afterwards (see the end).
-- Open the deployed site, or a local copy with `python -m http.server 8000`.
+- Run it from the **local playground**, so the real tournament data stays untouched:
+  1. On the host laptop, in the project folder, run `python -m http.server 8000`.
+  2. The host opens `http://localhost:8000/#host`.
+  3. Everyone else on the same Wi-Fi opens `http://<host-laptop-IP>:8000/`. Find the IP with `ipconfig`, under "IPv4 Address".
+  4. Every screen should show the yellow **🧪 PLAYGROUND** banner. If one doesn't, stop: that device is on real data.
+- If Windows Firewall asks about Python, allow it on **Private** networks, so phones can connect.
 
 Tick each box. If something fails, note what you did, what you saw, and on which device.
 
@@ -51,9 +55,9 @@ Tick each box. If something fails, note what you did, what you saw, and on which
 - [ ] New room: a player presses **Resign**. The other team wins.
 - [ ] New room: nobody joins. The host uses **Walkover → TEST-A** on the dashboard, and it counts as +1. On another waiting room, **Void** counts for nobody.
 
-## 6. Clean up (important)
-- [ ] Void every `TEST-` room. Then delete the `TEST-` teams, or use **Reset tournament** (type `RESET`) if no real teams have been entered yet.
-- [ ] Standings are empty, or show only real teams, before the event starts.
+## 6. Clean up
+- [ ] Press **Reset playground** in the yellow banner. This deletes only test data.
+- [ ] Open the real site (GitHub Pages, no banner) and check that its Standings are empty or show only real teams.
 
 ## Notes / issues found
 | # | Device | What happened | Expected |
