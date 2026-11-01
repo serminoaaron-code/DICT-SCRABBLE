@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **DICT Digital Scrabble Sportsfest 2026** is a browser-based, real-time multiplayer Scrabble tournament app for the DICT sportsfest. Players register with an email and display name, queue for matches (2-player or 4-player), and play on a shared 15×15 board. Spectators can watch live games. A host/admin can run the tournament: start a grace period, lock registration, set the length, generate a knockout bracket, and reset a server.
 
+**Scope:** work in this repo means improving the game: gameplay, rules, scoring and UI. Infrastructure is out of scope: Firebase rules and project setup, auth, hosting, environment and secrets belong to a separate DevOps owner. If a game change depends on infrastructure, mention it in one line as a handoff.
+
 Upstream: `https://github.com/serminoaaron-code/DICT-SCRABBLE`. Commits so far were made through GitHub's web uploader ("Add files via upload"). There is no CI.
 
 ## Tech stack
