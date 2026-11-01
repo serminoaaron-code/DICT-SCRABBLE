@@ -165,9 +165,9 @@ table.standings td.pts { font-weight: 800; }
 .scrabble-grid { display: grid; grid-template-columns: repeat(15, 1fr); grid-template-rows: repeat(15, 1fr); gap: 1px; width: 100%; height: 100%; background: var(--gridbg); padding: 1px; }
 .sq { display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; color: var(--text); cursor: pointer; position: relative; }
 .sq.normal { background: var(--sq); }
-.sq.dl { background: var(--sq-dl); color: #fff; }
-.sq.tl { background: var(--sq-tl); color: #fff; }
-.sq.dw, .sq.center { background: var(--sq-dw); color: var(--navy); }
+.sq.dl { background: var(--sq-dl); color: var(--navy); font-weight: 800; }
+.sq.tl { background: var(--sq-tl); color: var(--navy); font-weight: 800; }
+.sq.dw, .sq.center { background: var(--sq-dw); color: var(--navy); font-weight: 800; }
 .sq.tw { background: var(--sq-tw); color: #fff; }
 .tile { width: 92%; height: 92%; background: var(--cream); border: 1px solid var(--gold); border-radius: 3px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px; color: var(--navy); position: relative; box-shadow: 0 2px 3px rgba(0,0,0,.2); }
 .tile .sub { position: absolute; bottom: 0; right: 2px; font-size: 7px; font-weight: 600; }
