@@ -127,6 +127,8 @@
 
     function render() {
       const room = state.room;
+      document.body.classList.remove('in-game'); // RoomLive.renderLive puts it back
+
       if (room === null) {
         el.innerHTML = `<div class="card narrow"><h2>Room not found</h2>
           <p class="muted">No room with code <span class="code">${esc(Match.formatCode(code))}</span>. Check the code with your host.</p>
@@ -299,7 +301,7 @@
   const PLAYING = ['live', 'suddenDeath'];
   const REASON_LINE = {
     time: "Time's up", suddenDeath: 'Won in sudden death', bagOut: 'Tiles ran out',
-    resign: 'Opponent resigned', awarded: 'Awarded by the host', walkover: 'Walkover', corrected: 'Result corrected by the host'
+    resign: 'Opponent left the game', awarded: 'Awarded by the host', walkover: 'Walkover', corrected: 'Result corrected by the host'
   };
 
   const teamOf = (room, seat) => (seat === 'A' ? room.teamAName : room.teamBName);
@@ -322,35 +324,66 @@
     return `${who} played ${words} (${lm.total})${lm.unverified ? ' · <span class="muted">unverified</span>' : ''}`;
   }
 
+  // Removes the document/window listeners added by buildLive (⋯ menu, board fit).
+  function detachLive(ui) {
+    if (ui.onDocClick) document.removeEventListener('click', ui.onDocClick);
+    if (ui.onResize) window.removeEventListener('resize', ui.onResize);
+    ui.onDocClick = null;
+    ui.onResize = null;
+  }
+
   function buildLive(el, ctx) {
+    detachLive(ctx.state.ui);
+    // Phone-first order: score bar, turn pill, one-line caption, board, rack, actions.
+    // Temporary boxes (#noticeBox, #rejectBox) are fixed bottom sheets so they never push the board.
     el.innerHTML = `
-      <div class="panel"><div class="arena" id="liveRoot">
-        <div class="status-line" id="tossLine"></div>
+      <div class="card live-card"><div class="arena" id="liveRoot">
         <div class="scorebar">
           <div class="side" id="sideA"></div>
-          <div><div class="clock" id="matchClock">0:00</div><div class="turnclock" id="turnClock"></div></div>
+          <div class="clock" id="matchClock">0:00</div>
           <div class="side right" id="sideB"></div>
         </div>
-        <div class="status-line" id="statusLine"></div>
-        <div id="noticeBox" style="width:100%;max-width:520px;"></div>
-        <div id="hostBar" style="width:100%;max-width:520px;"></div>
+        <div class="pill-row"><div class="pill pill-them" id="statusLine" role="status" aria-live="polite"><span class="pill-text"></span><span class="pill-clock" id="turnClock"></span></div></div>
+        <div class="caption-row"><span id="tossLine"></span><span id="lastMove"></span></div>
         <div id="board-container"></div>
         <div class="rack hidden" id="rack"></div>
-        <div id="rejectBox" style="width:100%;max-width:520px;"></div>
         <div class="actions-row hidden" id="actions">
-          <button id="playBtn">✅ Play</button>
+          <button id="playBtn" class="btn-primary">✅ Play word</button>
           <button id="recallBtn" class="secondary">↩ Recall</button>
           <button id="passBtn" class="secondary">⏭ Pass</button>
-          <button id="resignBtn" class="danger">Resign</button>
+          <div class="more-wrap">
+            <button id="moreBtn" class="secondary" aria-label="More options" aria-haspopup="true" aria-expanded="false">⋯</button>
+            <div class="more-menu hidden" id="moreMenu">
+              <a href="#" class="more-item">← Back to start</a>
+              <button id="resignBtn" class="danger more-item">Leave</button>
+            </div>
+          </div>
         </div>
-        <div class="status-line" id="lastMove"></div>
-        <div class="row"><a href="#" class="small-text">← Back to start</a>
+        <div id="hostBar"></div>
+        <div class="row live-foot" id="liveFoot"><a href="#" class="small-text">← Back to start</a>
           <button class="link small-text hidden" id="stopWatching">Stop watching / take a seat</button></div>
+        <div id="noticeBox" class="sheet sheet-notice"></div>
+        <div id="rejectBox" class="sheet sheet-reject"></div>
       </div></div>`;
     el.querySelector('#stopWatching').onclick = () => ctx.stopWatching();
     const ui = ctx.state.ui;
-    Object.assign(ui, { temp: [], selected: null, busy: false, rejected: null, seenMove: -1, tried: {} });
+    Object.assign(ui, { temp: [], selected: null, busy: false, rejected: null, seenMove: -1, tried: {}, pillKind: null, noticeHidden: null });
     const $ = s => el.querySelector(s);
+
+    // ⋯ menu: Leave lives here so it can't be tapped by accident.
+    // Element references, not lookups: Leave can swap in the final screen before this click bubbles.
+    const menu = $('#moreMenu');
+    const moreBtn = $('#moreBtn');
+    const setMenu = open => { menu.classList.toggle('hidden', !open); moreBtn.setAttribute('aria-expanded', String(open)); };
+    moreBtn.onclick = ev => { ev.stopPropagation(); setMenu(menu.classList.contains('hidden')); };
+    menu.onclick = () => setMenu(false);
+    ui.onDocClick = ev => { if (!ev.target.closest || !ev.target.closest('.more-wrap')) setMenu(false); };
+    document.addEventListener('click', ui.onDocClick);
+
+    // Seated players: shrink the board so the whole game screen fits the visible window.
+    ui.onResize = () => fitBoard(el, ctx);
+    window.addEventListener('resize', ui.onResize);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => fitBoard(el, ctx));
 
     $('#recallBtn').onclick = () => { ui.temp = []; ui.selected = null; ui.rejected = null; update(el, ctx.state.room, ctx); };
 
@@ -364,7 +397,7 @@
 
     $('#resignBtn').onclick = async () => {
       const seat = ctx.state.mySeat;
-      if (!isSeat(seat) || !confirm('Resign this match? The other team gets the win.')) return;
+      if (!isSeat(seat) || !confirm(`Leave the game? Your team (${teamOf(ctx.state.room, seat)}) loses this match.`)) return;
       await Store.mutateRoom(ctx.code, r => Match.resign(r, seat, Store.serverNow()));
     };
 
@@ -387,7 +420,8 @@
         if (res.committed) { ui.temp = []; ui.selected = null; }
         else { UI.toast('Move not accepted (time up or the game changed).', 'error'); ui.temp = []; }
       } finally {
-        ui.busy = false; $('#playBtn').textContent = '✅ Play';
+        ui.busy = false;
+        if ($('#playBtn')) $('#playBtn').textContent = '✅ Play word'; // gone if the play ended the game
         update(el, ctx.state.room, ctx);
       }
     };
@@ -434,7 +468,6 @@
     const $ = s => el.querySelector(s);
     const g = room.game;
     const seat = ctx.state.mySeat;
-    const phase = Match.roomPhase(room);
 
     // A new move happened (or my rack changed): clear any half-built placement.
     if (g.moveCount !== ui.seenMove) {
@@ -449,20 +482,9 @@
     for (const s of SEATS) {
       const side = $('#side' + s);
       side.classList.toggle('turn', g.turn === s && PLAYING.includes(room.status));
-      side.innerHTML = `<div class="team">${esc(teamOf(room, s))}</div>
-        <div class="player">${esc(playerOf(room, s))}${seat === s ? ' (you)' : ''}</div>
-        <div class="score">${g.scores[s]}</div>`;
+      side.innerHTML = `<span class="chip chip-${s.toLowerCase()} team">${esc(teamOf(room, s))}</span>
+        <div class="who"><span class="player">${esc(playerOf(room, s))}${seat === s ? ' (you)' : ''}</span><span class="score disp">${g.scores[s]}</span></div>`;
     }
-
-    let status = '';
-    if (phase === 'paused') status = '⏸ Paused by the host';
-    else if (phase === 'appeal') status = `⚖️ Waiting for the host to decide on ${esc(playerOf(room, g.pending.seat))}'s word…`;
-    else if (phase === 'hostDecision') status = 'Still tied after 3 sudden-death rounds. Waiting for host decision.';
-    else {
-      const turnTxt = myTurn(room, ctx) ? '<b>Your turn</b>' : `${esc(playerOf(room, g.turn))}'s turn`;
-      status = phase === 'suddenDeath' ? `⚡ Sudden death: round ${g.suddenDeath.rounds + 1} of ${Match.SUDDEN_DEATH_MAX_ROUNDS} · ${turnTxt}` : turnTxt;
-    }
-    $('#statusLine').innerHTML = status;
 
     const mine = myTurn(room, ctx);
     UI.renderBoard($('#board-container'), g.board, {
@@ -485,19 +507,58 @@
     for (const id of ['#playBtn', '#recallBtn', '#passBtn']) $(id).disabled = !mine || ui.busy || !!ui.rejected;
     $('#resignBtn').disabled = !isSeat(seat) || !['live', 'suddenDeath', 'hostDecision'].includes(room.status);
 
-    $('#rejectBox').innerHTML = ui.rejected ? `<div class="warn-line stack">
-        <div>❌ ${ui.rejected.rejectedWords.map(esc).join(', ')} not found in the dictionary.</div>
-        <div class="row"><button class="secondary small" data-act="recall">↩ Recall</button><button class="small" data-act="appeal">⚖️ Ask host</button></div>
-      </div>` : '';
-
+    // Bottom sheet (empty = hidden): the recall / ask-host choice, or my appeal waiting for the host.
+    let sheet = ui.rejected ? `<div class="sheet-msg">❌ <b>${ui.rejected.rejectedWords.map(esc).join(', ')}</b> not found in the dictionary.</div>
+        <div class="sheet-actions"><button class="secondary" data-act="recall">↩ Recall</button><button class="btn-primary" data-act="appeal">⚖️ Ask host</button></div>` : '';
     if (isSeat(seat) && g.pending && g.pending.seat === seat) {
-      $('#rejectBox').innerHTML = '<div class="warn-line">⚖️ Waiting for the host to approve your word…</div>';
+      sheet = '<div class="sheet-msg">⚖️ Waiting for the host to approve your word…</div>';
     }
+    $('#rejectBox').innerHTML = sheet;
 
     $('#lastMove').innerHTML = lastMoveText(room);
     $('#stopWatching').classList.toggle('hidden', seat !== 'watch');
+    // Seated players reach "Back to start" through the ⋯ menu, so nothing sits below the actions.
+    $('#liveFoot').classList.toggle('hidden', isSeat(seat));
+    $('#liveRoot').classList.toggle('seated', isSeat(seat));
     if (RoomLive.updateHost) RoomLive.updateHost(el, room, ctx);
     tick(el, ctx);
+    fitBoard(el, ctx);
+  }
+
+  // Seated players see the whole game screen without scrolling: if the action row would end
+  // below the visible window, shrink the (square) board by the overflow. Others keep the full
+  // board and may scroll (the host bar sits below the actions).
+  const BOARD_MIN_PX = 220;
+  function fitBoard(el, ctx) {
+    const board = el.querySelector('#board-container');
+    const actions = el.querySelector('#actions');
+    if (!board || !actions || !el.querySelector('#liveRoot')) return;
+    board.style.width = '';
+    if (!isSeat(ctx.state.mySeat)) return;
+    const gap = 8; // breathing room under the action row
+    const over = actions.getBoundingClientRect().bottom + gap - window.innerHeight;
+    if (over > 0) board.style.width = Math.max(BOARD_MIN_PX, Math.floor(board.getBoundingClientRect().width - over)) + 'px';
+  }
+
+  // Turn pill (#statusLine) with the turn clock (#turnClock) inside it.
+  function renderPill(el, room, ctx) {
+    const pill = el.querySelector('#statusLine');
+    if (!pill) return;
+    const p = Pill.state(room, ctx.state.mySeat, Store.serverNow());
+    const ui = ctx.state.ui;
+    const kind = p ? p.kind : 'none';
+    if (kind !== ui.pillKind) {
+      pill.className = 'pill pill-' + kind;
+      // Pop once when it becomes this player's turn.
+      if (kind === 'you' && ui.pillKind !== null) { void pill.offsetWidth; pill.classList.add('pill-pop'); }
+      ui.pillKind = kind;
+    }
+    const text = p ? p.text : '';
+    const txtEl = pill.querySelector('.pill-text');
+    if (txtEl.textContent !== text) txtEl.textContent = text;
+    const clock = p && p.ms !== null ? UI.formatClock(p.ms) : '';
+    const clockEl = pill.querySelector('#turnClock');
+    if (clockEl.textContent !== clock) clockEl.textContent = clock;
   }
 
   function tick(el, ctx) {
@@ -507,13 +568,12 @@
     const c = room.clock;
     const phase = Match.roomPhase(room);
     const matchMs = c.paused ? c.paused.matchRemainingMs : c.endsAt - now;
-    const turnMs = c.paused ? c.paused.turnRemainingMs : Match.TURN_MS - (now - c.turnStartedAt);
     const mc = el.querySelector('#matchClock');
     if (room.status === 'suddenDeath') mc.textContent = 'SD';
     else if (room.status === 'hostDecision') mc.textContent = '—';
     else mc.textContent = UI.formatClock(matchMs);
     mc.classList.toggle('low', room.status === 'live' && matchMs <= 60000);
-    el.querySelector('#turnClock').textContent = PLAYING.includes(room.status) ? `turn ${UI.formatClock(turnMs)}` : '';
+    renderPill(el, room, ctx);
 
     // Only seated players and the host write automatic transitions; spectators never write.
     const writer = isSeat(ctx.state.mySeat) || App.isHost();
@@ -534,12 +594,14 @@
 
   const RoomLive = {
     renderLive(el, room, ctx) {
+      document.body.classList.add('in-game'); // collapsed header during a live game
       if (!el.querySelector('#liveRoot')) buildLive(el, ctx);
       update(el, room, ctx);
     },
 
     renderFinal(el, room, ctx) {
       if (ctx.state.ui.tossTimer) { clearTimeout(ctx.state.ui.tossTimer); ctx.state.ui.tossTimer = null; }
+      detachLive(ctx.state.ui);
       let body;
       if (room.status === 'void' || !room.result) {
         body = '<div class="final-banner"><div class="win" style="color:var(--text-muted)">This room was voided</div><p class="muted">It does not count for either team.' +
@@ -548,7 +610,7 @@
         const res = room.result;
         const winTeam = teamOf(room, res.winner);
         let reason = REASON_LINE[res.reason] || '';
-        if (res.reason === 'resign') reason = `${playerOf(room, res.winner === 'A' ? 'B' : 'A')} resigned`;
+        if (res.reason === 'resign') reason = `${playerOf(room, res.winner === 'A' ? 'B' : 'A')} left the game`;
         body = `<div class="final-banner stack">
           <div class="win">🏆 ${chip(res.winner, winTeam)} wins</div>
           <div>${esc(playerOf(room, 'A'))} <b>${res.scoreA}</b> – <b>${res.scoreB}</b> ${esc(playerOf(room, 'B'))}</div>
@@ -579,10 +641,21 @@
       const phase = Match.roomPhase(room);
       const inPlay = ['live', 'suddenDeath', 'hostDecision'].includes(room.status);
 
+      // Disconnect notice: a bottom sheet that can be hidden (✕) until the set of offline players changes.
       const offline = SEATS.filter(s => room.seats[s] && !Match.isSeatOnline(room, s));
-      el.querySelector('#noticeBox').innerHTML = inPlay && offline.length
-        ? `<div class="warn-line">📴 ${offline.map(s => esc(room.seats[s].name)).join(' and ')} disconnected${App.isHost() ? ' · Pause to wait, or Award win' : ''}</div>`
+      const ui = ctx.state.ui;
+      const noticeKey = offline.map(s => s + ':' + room.seats[s].clientId).join('|');
+      if (!offline.length) ui.noticeHidden = null; // a new disconnect shows again
+      const notice = el.querySelector('#noticeBox');
+      notice.innerHTML = inPlay && offline.length && ui.noticeHidden !== noticeKey
+        ? `<div class="sheet-row"><div class="sheet-msg">📴 ${offline.map(s => esc(room.seats[s].name)).join(' and ')} disconnected${App.isHost() ? ' · Pause to wait, or Award win' : ''}</div>
+            <button class="btn-ghost sheet-close" data-act="hideNotice" aria-label="Hide this notice">✕</button></div>`
         : '';
+      notice.onclick = ev => {
+        if (!ev.target.closest('[data-act=hideNotice]')) return;
+        ui.noticeHidden = noticeKey;
+        notice.innerHTML = '';
+      };
 
       const bar = el.querySelector('#hostBar');
       if (!App.isHost()) { bar.innerHTML = ''; return; }
@@ -667,6 +740,8 @@
     },
 
     teardown(ctx) {
+      document.body.classList.remove('in-game');
+      detachLive(ctx.state.ui);
       if (ctx.state.ui.tossTimer) clearTimeout(ctx.state.ui.tossTimer);
       if (ctx.state.ui.standings) ctx.state.ui.standings.off();
     }

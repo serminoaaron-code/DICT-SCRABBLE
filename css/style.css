@@ -168,18 +168,45 @@ table.standings tr:first-child td { font-weight: 700; }
 .dot.on { background: var(--green); }
 
 /* ---------- room: live ---------- */
-.arena { display: flex; flex-direction: column; align-items: center; gap: 10px; }
-.scorebar { width: 100%; max-width: 520px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; background: var(--bar); color: var(--cream); border-radius: 10px; padding: 10px 12px; }
-.scorebar .side { min-width: 0; }
-.scorebar .side.right { text-align: right; }
-.scorebar .team { font-size: 11px; text-transform: uppercase; opacity: .85; overflow-wrap: anywhere; }
-.scorebar .player { font-size: 13px; font-weight: 700; overflow-wrap: anywhere; }
-.scorebar .score { font-family: 'Archivo Black', sans-serif; font-size: 24px; }
-.scorebar .side.turn .player::before { content: '▶ '; color: var(--dict-yellow); }
-.scorebar .clock { font-family: ui-monospace, Consolas, monospace; font-size: 22px; font-weight: 800; text-align: center; }
-.scorebar .turnclock { font-size: 12px; text-align: center; opacity: .85; }
-.scorebar .clock.low { color: #fca5a5; }
-.status-line { font-size: 13px; color: var(--text-muted); text-align: center; min-height: 18px; }
+/* Phone-first column: score bar, turn pill, caption, board, rack, actions (spec §5.3). */
+.live-card { padding: 14px; }
+.arena { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.arena > * { width: 100%; max-width: 520px; }
+
+/* score bar: [chip / ▶ player  score] [match clock] [chip / score  player] */
+.scorebar { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 8px; background: var(--bar); color: #fff; border-radius: 12px; padding: 6px 10px; }
+.scorebar .side { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
+.scorebar .side.right { align-items: flex-end; text-align: right; }
+.scorebar .side .chip { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; font-size: 10.5px; padding: 1px 8px; line-height: 16px; box-shadow: 0 0 0 1.5px rgba(255,255,255,.8); }
+.scorebar .who { display: flex; align-items: baseline; gap: 6px; width: 100%; min-width: 0; }
+.scorebar .side.right .who { flex-direction: row-reverse; }
+.scorebar .player { flex: 1 1 auto; min-width: 0; font-size: 12px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.scorebar .score { flex: none; font-family: 'Archivo Black', Impact, sans-serif; font-size: 22px; line-height: 1; }
+.scorebar .side.turn .player::before { content: '▶ '; color: var(--yellow); }
+.scorebar .clock { font-family: ui-monospace, Consolas, monospace; font-size: 16px; font-weight: 800; text-align: center; padding: 3px 8px; border-radius: 8px; background: rgba(255,255,255,.18); color: #fff; }
+.scorebar .clock.low { background: var(--red); color: #fff; }
+
+/* turn pill = #statusLine, with #turnClock inside */
+.pill-row { display: flex; justify-content: center; min-width: 0; }
+#statusLine.pill { max-width: 100%; min-width: 0; padding: 2px 12px; font-size: 12.5px; line-height: 18px; white-space: nowrap; overflow: hidden; }
+#statusLine .pill-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+#statusLine .pill-clock { flex: none; font-family: ui-monospace, Consolas, monospace; font-size: 13px; }
+#statusLine .pill-clock:empty { display: none; }
+.pill-you { background: var(--green); color: var(--navy); border-color: var(--green); box-shadow: 0 0 0 4px rgba(0,166,81,.22), 0 0 14px rgba(0,166,81,.45); }
+.pill-you::before { content: ''; flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--navy); }
+.pill-them { background: var(--surface); color: var(--text); border-color: var(--line); }
+.pill-low { background: var(--red); color: #fff; border-color: var(--red); }
+.pill-ready, .pill-paused, .pill-appeal, .pill-hostDecision { background: var(--yellow); color: var(--navy); border-color: var(--yellow); }
+.pill-suddenDeath { background: var(--bg); color: var(--text); border-color: var(--red); }
+.pill-none { visibility: hidden; }
+.pill-pop { animation: pill-pop .38s ease-out; }
+@keyframes pill-pop { 0% { transform: scale(1); } 40% { transform: scale(1.14); } 100% { transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .pill-pop { animation: pill-fade .38s ease-out; } }
+@keyframes pill-fade { from { opacity: .4; } to { opacity: 1; } }
+
+/* one-line caption under the pill: coin toss / last move */
+.caption-row { height: 16px; line-height: 16px; font-size: 12px; color: var(--muted); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#tossLine:not(:empty) + #lastMove:not(:empty)::before { content: ' · '; }
 
 #board-container { width: 100%; max-width: 520px; aspect-ratio: 1 / 1; border: 4px solid var(--navy); border-radius: 6px; overflow: hidden; background: var(--navy); user-select: none; }
 .scrabble-grid { display: grid; grid-template-columns: repeat(15, 1fr); grid-template-rows: repeat(15, 1fr); gap: 1px; width: 100%; height: 100%; background: var(--gridbg); padding: 1px; }
@@ -199,7 +226,35 @@ table.standings tr:first-child td { font-weight: 700; }
 .rack .tile .sub { font-size: 9px; }
 .rack .tile.selected { transform: translateY(-5px); box-shadow: 0 0 10px var(--dict-yellow); border-color: var(--dict-yellow); }
 .rack .tile.used { opacity: .25; cursor: default; }
-.actions-row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.actions-row { display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 6px; }
+.actions-row button { padding: 10px 6px; font-size: 13px; white-space: nowrap; }
+.more-wrap { position: relative; }
+#moreBtn { width: 42px; height: 100%; padding: 0; font-size: 18px; line-height: 1; }
+.more-menu { position: absolute; right: 0; bottom: calc(100% + 6px); z-index: 60; min-width: 190px; display: flex; flex-direction: column; gap: 4px; padding: 6px; background: var(--surface); border: 2px solid var(--line); border-radius: 14px; box-shadow: 0 10px 24px rgba(0,0,0,.28); }
+.more-menu .more-item { width: 100%; text-align: left; }
+.more-menu a.more-item { display: block; padding: 9px 12px; border-radius: 10px; color: var(--text); font-weight: 700; font-size: 14px; text-decoration: none; }
+.more-menu a.more-item:hover { background: var(--bg); }
+.live-foot { justify-content: space-between; }
+#hostBar:empty { display: none; }
+
+/* temporary boxes are bottom sheets (fixed, so they never push the board); empty = hidden */
+.sheet:empty { display: none; }
+.sheet-notice { border-color: var(--yellow); }
+.sheet-reject { z-index: 9450; border-color: var(--red); }
+.sheet-msg { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.sheet-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.sheet-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+.sheet-close { flex: none; padding: 4px 8px; font-size: 16px; text-decoration: none; }
+
+/* collapsed header during a live game: one line, no banner image */
+body.in-game { padding-bottom: 0; }
+/* padding, not margin: a top margin would collapse through <body> (min-height 100vh) and add scroll */
+body.in-game .site-header { margin-top: 0; padding-top: 6px; }
+body.in-game .header-card img { display: none; }
+body.in-game .header-bar { flex-wrap: nowrap; padding: 5px 10px; }
+body.in-game .header-bar .title { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
+body.in-game .header-bar nav { flex: none; }
+body.in-game main { margin: 8px auto 0; }
 
 .hostbar { width: 100%; max-width: 520px; background: var(--panel2); border: 2px solid var(--gold); border-radius: 14px; padding: 11px 12px; display: flex; flex-direction: column; gap: 8px; }
 .hostbar h4 { margin: 0; color: var(--text); font-size: 13px; text-transform: uppercase; letter-spacing: .3px; }
@@ -246,5 +301,10 @@ table.big td.pts { font-weight: 800; color: var(--dict-yellow); }
   .rack { gap: 4px; padding: 6px; }
   .rack .tile { width: 36px; height: 36px; font-size: 16px; }
   .scorebar .score { font-size: 20px; }
-  .scorebar .clock { font-size: 18px; }
+  .scorebar .clock { font-size: 15px; padding: 3px 6px; }
+  /* the game screen drops the card frame on phones so the board gets the width */
+  body main .card.live-card { padding: 0; background: none; border: 0; box-shadow: none; }
+  .arena { gap: 6px; }
+  #board-container { border-width: 3px; }
+  .rack { min-height: 48px; }
 }
