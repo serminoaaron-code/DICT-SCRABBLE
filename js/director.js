@@ -32,7 +32,8 @@
   function init() {
     return {
       featured: null, scene: 'idle', sceneUntil: 0, since: 0,
-      queue: [], corner: null, seen: {}, ignoredPin: null, roundCodes: [], move: null
+      queue: [], corner: null, seen: {}, ignoredPin: null, roundCodes: [], move: null,
+      sceneId: 0 // +1 on every new scene: the view re-renders when it changes
     };
   }
 
@@ -98,7 +99,9 @@
     }
   }
 
+  // A timed scene (until > 0) is always a fresh scene, even the same scene type in the same room.
   function setScene(s, scene, until, move = null, roundCodes = []) {
+    if (until > 0) s.fresh = true;
     s.scene = scene;
     s.sceneUntil = until;
     s.move = move;
@@ -172,11 +175,20 @@
     return pool.find(c => c > cur) || pool[0];
   }
 
+  // One director tick. sceneId goes up when the scene type or the featured room
+  // changes, or a new timed scene (intro, roundStart, highlight, winner) begins.
   function step(state, rooms, pinned, now) {
     const prev = state || init();
-    rooms = rooms || {};
-    pinned = pinned || null;
-    const s = { ...prev, queue: (prev.queue || []).slice(), roundCodes: (prev.roundCodes || []).slice() };
+    const s = advance(prev, rooms || {}, pinned || null, now);
+    const fresh = !!s.fresh;
+    delete s.fresh;
+    const changed = fresh || s.scene !== prev.scene || s.featured !== prev.featured;
+    s.sceneId = (prev.sceneId || 0) + (changed ? 1 : 0);
+    return s;
+  }
+
+  function advance(prev, rooms, pinned, now) {
+    const s = { ...prev, fresh: false, queue: (prev.queue || []).slice(), roundCodes: (prev.roundCodes || []).slice() };
     if (s.ignoredPin && s.ignoredPin !== pinned) s.ignoredPin = null; // the host changed the pin
 
     const d = diff(prev.seen || {}, rooms, now);

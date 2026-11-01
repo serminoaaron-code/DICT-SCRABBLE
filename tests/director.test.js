@@ -478,3 +478,44 @@ test('a deleted room ends its scene and drops its queued events', () => {
   assert.deepStrictEqual(s.queue, []);
   assert.deepStrictEqual(s.seen, {});
 });
+
+test('sceneId increases on every new scene, including two highlights in a row in one room', () => {
+  assert.strictEqual(Director.init().sceneId, 0);
+  let rooms = { AAA: live('AAA'), BBB: live('BBB') };
+  let s = Director.step(Director.init(), rooms, null, 0);
+  const id0 = s.sceneId;
+  assert.ok(id0 > 0, 'idle -> room featuring AAA is a new scene');
+
+  // A quiet step keeps the id.
+  s = Director.step(s, rooms, null, 1000);
+  assert.strictEqual(s.sceneId, id0);
+
+  // Highlight in AAA (already featured): scene changes.
+  rooms = { ...rooms, AAA: played(rooms.AAA, 40) };
+  s = Director.step(s, rooms, null, 2000);
+  assert.strictEqual(s.scene, 'highlight');
+  const id1 = s.sceneId;
+  assert.ok(id1 > id0);
+
+  // A second highlight in the same room queues, then plays: same scene and room, new id.
+  rooms = { ...rooms, AAA: played(rooms.AAA, 60) };
+  s = Director.step(s, rooms, null, 3000);
+  assert.strictEqual(s.sceneId, id1, 'queued, the running scene keeps its id');
+  s = Director.step(s, rooms, null, 2000 + HL3);
+  assert.strictEqual(s.scene, 'highlight');
+  assert.strictEqual(s.featured, 'AAA');
+  assert.strictEqual(s.move.tier, 4);
+  const id2 = s.sceneId;
+  assert.ok(id2 > id1, 'back-to-back highlights in one room get distinct ids');
+
+  // Back to the room: new id; then a rotation: new id.
+  s = Director.step(s, rooms, null, 2000 + HL3 + HL4);
+  assert.strictEqual(s.scene, 'room');
+  const id3 = s.sceneId;
+  assert.ok(id3 > id2);
+  s = Director.step(s, rooms, null, 2000 + HL3 + HL4 + 500);
+  assert.strictEqual(s.sceneId, id3);
+  s = Director.step(s, rooms, null, 40000);
+  assert.strictEqual(s.featured, 'BBB');
+  assert.ok(s.sceneId > id3, 'rotation is a new scene');
+});
