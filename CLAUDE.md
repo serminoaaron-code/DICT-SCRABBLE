@@ -80,6 +80,14 @@ server_<1..4>/
 - **No natural game end.** A game ends only when all but one player is disqualified (3 consecutive passes or 3 tab strikes), someone resigns, or a forfeit happens. It doesn't end when the bag empties.
 - Line 1 of `index.html` is a stray `<a_file_has_been_created ...>` wrapper tag left over from AI-generated output, with no closing tag. Browsers ignore it, but it's not valid HTML.
 
+## Required workflow: think before coding
+
+Don't go straight from a one-line request to code changes. Every non-trivial task starts with a deliberate first step:
+
+- **New features or changes in behaviour → brainstorm first.** Before writing code, pin down the goal, the constraints, the edge cases (2P vs 4P, spectators, several clients writing at once, all 4 servers), and 2–3 approaches with their trade-offs. Agree on a design with the user, then implement. Use the `superpowers:brainstorming` skill if it's available.
+- **Bugs → debug systematically first.** Reproduce the bug, trace it to the root cause in the code, and state the cause before proposing a fix. Don't patch symptoms by guessing. Use the `superpowers:systematic-debugging` skill if it's available.
+- **Security audit before calling the work done.** Review the change for game-level problems, such as unescaped user input in `innerHTML` (XSS), clients writing state they shouldn't (scores, other players' racks or turns), and race conditions between clients. Use `/security-review` if it's available. Findings about infrastructure (Firebase rules, auth, hosting) are out of scope: list them as a one-line handoff to DevOps.
+
 ## Conventions when editing
 
 - Keep the single-file structure unless the user asks to split it. Put new code in the matching `// ====` section.
