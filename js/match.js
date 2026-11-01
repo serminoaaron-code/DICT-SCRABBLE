@@ -59,6 +59,7 @@
     r.seats = r.seats || {};
     for (const s of SEATS) r.seats[s] = r.seats[s] || null;
     r.watchers = r.watchers || {};
+    r.presence = r.presence || {};
     r.fairPlay = r.fairPlay || {};
     for (const s of SEATS) {
       r.fairPlay[s] = r.fairPlay[s] || {};
@@ -347,6 +348,16 @@
     return r;
   }
 
+  // presence/<clientId> = 'A' | 'B' | 'watch' | 'host' (removed on disconnect)
+  function isSeatOnline(room, seat) {
+    const s = room.seats && room.seats[seat];
+    return !!(s && room.presence && room.presence[s.clientId]);
+  }
+
+  function watcherCount(room) {
+    return Object.values(room.presence || {}).filter(v => v === 'watch').length;
+  }
+
   function roomPhase(room) {
     if (room.game && room.game.pending) return 'appeal';
     if (room.clock && room.clock.paused && room.clock.paused.by === 'host') return 'paused';
@@ -390,7 +401,7 @@
     prepareMove, applyPlay, applyPass, resolveTimeUp, finalize,
     requestAppeal, resolveAppeal, pauseClocks, resumeClocks,
     resign, awardWin, walkover, voidRoom, correctResult, recordScreenLeave,
-    roomPhase, computeStandings,
+    roomPhase, computeStandings, isSeatOnline, watcherCount,
     _internal: { clone, other, playCore, enterSuddenDeath }
   };
 });

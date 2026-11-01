@@ -448,6 +448,16 @@ test('recordScreenLeave increments only during live play', () => {
   assert.strictEqual(M.recordScreenLeave(baseRoom(), 'A'), null);
 });
 
+test('presence map defaults and drives seat online / watcher count', () => {
+  const r = M.normalizeRoom(Object.assign(readyRoom(), { presence: undefined }));
+  assert.deepStrictEqual(r.presence, {});
+  r.presence = { c1: 'A', w1: 'watch', w2: 'watch', h1: 'host' };
+  assert.strictEqual(M.isSeatOnline(r, 'A'), true);
+  assert.strictEqual(M.isSeatOnline(r, 'B'), false);
+  assert.strictEqual(M.watcherCount(r), 2);
+  assert.strictEqual(M.isSeatOnline(baseRoom(), 'A'), false);
+});
+
 test('roomPhase reports status otherwise', () => {
   assert.strictEqual(M.roomPhase(baseRoom()), 'waiting');
   assert.strictEqual(M.roomPhase(liveRoom()), 'live');
