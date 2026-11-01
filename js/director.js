@@ -38,16 +38,17 @@
 
   const isLive = room => !!room && LIVE.includes(room.status);
 
-  // Sudden death, or the last minute of the match clock (a paused clock uses its frozen time).
+  // Sudden death, or the last minute of a running match clock. A paused room (host
+  // pause or appeal) and a live room whose clock already ran out (nobody resolved
+  // time-up, e.g. an abandoned room) are frozen boards, never drama.
   function isDrama(room, now) {
     if (!isLive(room)) return false;
-    if (room.status === 'suddenDeath') return true;
-    if (room.status !== 'live' || !room.clock) return false;
     const c = room.clock;
-    const left = c.paused && typeof c.paused.matchRemainingMs === 'number'
-      ? c.paused.matchRemainingMs
-      : c.endsAt - now;
-    return Number.isFinite(left) && left <= DRAMA_MS;
+    if (c && c.paused) return false;
+    if (room.status === 'suddenDeath') return true;
+    if (room.status !== 'live' || !c) return false;
+    const left = c.endsAt - now;
+    return Number.isFinite(left) && left > 0 && left <= DRAMA_MS;
   }
 
   // The host's pin holds the screen unless that room finished (or was voided) or its pin was spent.
@@ -78,8 +79,10 @@
     return { events, seen: next };
   }
 
-  // Queue order: the pinned room's own events, then highlights, then starts/ends (FIFO within each).
-  const rank = (ev, pinFor) => (ev.code === pinFor ? 0 : ev.type === 'highlight' ? 1 : 2);
+  // Queue order (FIFO within each): the pinned room's own events, then starts (an intro
+  // can't wait: past its startedAt it is never played), then highlights, then ends.
+  const RANK = { start: 1, highlight: 2, end: 3 };
+  const rank = (ev, pinFor) => (ev.code === pinFor ? 0 : RANK[ev.type]);
 
   function enqueue(queue, ev, pinFor) {
     const r = rank(ev, pinFor);
@@ -121,7 +124,8 @@
     return true;
   }
 
-  // Start event(s): one combined roundStart, a single intro, or (too late for an intro) a plain cut.
+  // Start event(s): one combined roundStart or a single intro. Too late for an intro,
+  // nothing happens: the room just joins the rotation (spec §5.7.4).
   // Returns true when a timed scene started.
   function playStart(s, ev, rooms, pinned, now) {
     if (!isLive(rooms[ev.code])) return false;
@@ -134,11 +138,7 @@
       });
     }
     group.sort((a, b) => a.startedAt - b.startedAt || byCode(a.code, b.code));
-    if (!group.some(e => now < e.startedAt)) {
-      // Intros are never replayed late; the new match still gets the cut.
-      setFeatured(s, group[0].code, now);
-      return false;
-    }
+    if (!group.some(e => now < e.startedAt)) return false; // intros are never replayed late
     if (group.length >= 2) {
       setFeatured(s, group[0].code, now);
       setScene(s, 'roundStart', now + ROUND_MS, null, group.map(e => e.code));

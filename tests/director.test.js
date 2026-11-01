@@ -106,7 +106,7 @@ test('prefers drama rooms when rotating', () => {
   assert.strictEqual(s.featured, 'CCC', 'skips the calm room BBB');
   s = Director.step(s, rooms, null, 40000);
   assert.strictEqual(s.featured, 'AAA');
-  // The last 60 s of the match clock also counts as drama (and a paused clock uses its frozen time).
+  // The last 60 s of the match clock also counts as drama (a paused clock does not).
   const clockRooms = {
     AAA: live('AAA'),
     BBB: live('BBB', { endsAt: 70000 }),
@@ -114,7 +114,7 @@ test('prefers drama rooms when rotating', () => {
   };
   assert.strictEqual(Director.isDrama(clockRooms.BBB, 9999), false);
   assert.strictEqual(Director.isDrama(clockRooms.BBB, 10000), true);
-  assert.strictEqual(Director.isDrama(clockRooms.CCC, 0), true);
+  assert.strictEqual(Director.isDrama(clockRooms.CCC, 0), false);
   assert.strictEqual(Director.isDrama(clockRooms.AAA, 0), false);
 });
 
@@ -362,29 +362,81 @@ test('a queued highlight goes ahead of a queued end', () => {
   assert.deepStrictEqual(s.queue.map(e => e.type + ':' + e.code), ['highlight:CCC', 'end:BBB']);
 });
 
-test('a start during a winner card cuts to that room without replaying the intro', () => {
-  let rooms = { AAA: live('AAA'), BBB: live('BBB'), CCC: waiting('CCC') };
+test('a start whose intro is over when dequeued just joins the rotation', () => {
+  let rooms = { AAA: live('AAA'), BBB: live('BBB'), CCC: live('CCC'), DDD: waiting('DDD') };
   let s = Director.step(Director.init(), rooms, null, 0);
   rooms = { ...rooms, BBB: finished(rooms.BBB) };
   s = Director.step(s, rooms, null, 1000); // winner card until 9000
-  rooms = { ...rooms, CCC: live('CCC', { startedAt: 7000 }) };
+  rooms = { ...rooms, DDD: live('DDD', { startedAt: 7000 }) };
   s = Director.step(s, rooms, null, 2000);
   assert.strictEqual(s.scene, 'winner');
   assert.strictEqual(s.queue.length, 1);
   s = Director.step(s, rooms, null, 9000);
   assert.strictEqual(s.scene, 'room', 'its startedAt has passed: no late intro');
-  assert.strictEqual(s.featured, 'CCC', 'but the queued start still cuts to the new match');
-  assert.strictEqual(s.since, 9000);
+  assert.strictEqual(s.featured, 'CCC', 'no cut to the late start: normal rotation after BBB');
+  assert.deepStrictEqual(s.queue, []);
+  s = Director.step(s, rooms, null, 29000);
+  assert.strictEqual(s.featured, 'DDD', 'the new match comes up in rotation');
 
   // A start that is still in its intro when the card ends plays the remaining part.
-  rooms = { ...rooms, AAA: finished(rooms.AAA), DDD: waiting('DDD') };
-  s = Director.step(s, rooms, null, 10000); // winner AAA until 18000
-  rooms = { ...rooms, DDD: live('DDD', { startedAt: 20000 }) };
-  s = Director.step(s, rooms, null, 15000);
-  s = Director.step(s, rooms, null, 18000);
+  rooms = { ...rooms, AAA: finished(rooms.AAA), EEE: waiting('EEE') };
+  s = Director.step(s, rooms, null, 30000); // winner AAA until 38000
+  rooms = { ...rooms, EEE: live('EEE', { startedAt: 40000 }) };
+  s = Director.step(s, rooms, null, 35000);
+  s = Director.step(s, rooms, null, 38000);
   assert.strictEqual(s.scene, 'intro');
-  assert.strictEqual(s.featured, 'DDD');
-  assert.strictEqual(s.sceneUntil, 20000);
+  assert.strictEqual(s.featured, 'EEE');
+  assert.strictEqual(s.sceneUntil, 40000);
+});
+
+test('a queued start goes ahead of queued highlights (an intro cannot wait)', () => {
+  let rooms = { AAA: live('AAA'), BBB: live('BBB'), CCC: waiting('CCC') };
+  let s = Director.step(Director.init(), rooms, null, 0);
+  rooms = { ...rooms, AAA: played(rooms.AAA, 40) };
+  s = Director.step(s, rooms, null, 1000); // highlight AAA until 4300
+  rooms = { ...rooms, BBB: played(rooms.BBB, 40) };
+  s = Director.step(s, rooms, null, 1500);
+  rooms = { ...rooms, CCC: live('CCC', { startedAt: 7000 }) };
+  s = Director.step(s, rooms, null, 2000);
+  assert.deepStrictEqual(s.queue.map(e => e.type + ':' + e.code), ['start:CCC', 'highlight:BBB']);
+  s = Director.step(s, rooms, null, 1000 + HL3);
+  assert.strictEqual(s.scene, 'intro');
+  assert.strictEqual(s.featured, 'CCC');
+  assert.strictEqual(s.sceneUntil, 7000);
+  s = Director.step(s, rooms, null, 7000);
+  assert.strictEqual(s.scene, 'highlight', 'the highlight waited, it was not dropped');
+  assert.strictEqual(s.featured, 'BBB');
+});
+
+test('a paused room is not drama, so rotation moves on', () => {
+  const pause = { by: 'host', matchRemainingMs: 30000, turnRemainingMs: 1000 };
+  const rooms = {
+    AAA: live('AAA'),
+    BBB: live('BBB'),
+    CCC: live('CCC', { status: 'suddenDeath', paused: pause })
+  };
+  assert.strictEqual(Director.isDrama(rooms.CCC, 0), false);
+  assert.strictEqual(Director.isDrama(live('DDD', { paused: { ...pause, by: 'appeal' } }), 0), false);
+  let s = Director.step(Director.init(), rooms, null, 0);
+  assert.strictEqual(s.featured, 'AAA', 'the paused sudden-death room is not preferred');
+  s = Director.step(s, rooms, null, 20000);
+  assert.strictEqual(s.featured, 'BBB');
+  s = Director.step(s, rooms, null, 40000);
+  assert.strictEqual(s.featured, 'CCC', 'it still takes its normal turn');
+  s = Director.step(s, rooms, null, 60000);
+  assert.strictEqual(s.featured, 'AAA', 'and the screen does not stick on it');
+});
+
+test('an expired but still live room is not drama', () => {
+  const rooms = { AAA: live('AAA'), BBB: live('BBB', { endsAt: -1000 }), CCC: live('CCC') };
+  assert.strictEqual(Director.isDrama(rooms.BBB, 0), false);
+  assert.strictEqual(Director.isDrama(live('DDD', { endsAt: 5000 }), 0), true, 'still running: drama');
+  let s = Director.step(Director.init(), rooms, null, 0);
+  assert.strictEqual(s.featured, 'AAA');
+  s = Director.step(s, rooms, null, 20000);
+  assert.strictEqual(s.featured, 'BBB');
+  s = Director.step(s, rooms, null, 40000);
+  assert.strictEqual(s.featured, 'CCC', 'rotation moves on from the abandoned room');
 });
 
 test('a start during another room\'s intro merges into one roundStart', () => {
