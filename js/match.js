@@ -128,6 +128,32 @@
     return r;
   }
 
+  // A player leaving their own seat: only before the game starts (the host uses removePlayer).
+  function leaveSeat(room, seat, clientId) {
+    if (room.status !== 'waiting') return null;
+    const cur = room.seats[seat];
+    if (!cur || cur.clientId !== clientId) return null;
+    return removePlayer(room, seat);
+  }
+
+  // Reopening the room on the same device: only if the seat is still ours. A freed seat
+  // (host Remove / own Leave) must be taken again on purpose via claimSeat.
+  function rejoinSeat(room, seat, clientId) {
+    const cur = room.seats && room.seats[seat];
+    if (!cur || cur.clientId !== clientId) return null;
+    return claimSeat(room, seat, { name: cur.name, clientId });
+  }
+
+  // Display copy with the teams' current names (renames), falling back to the snapshot.
+  function withTeamNames(room, teams) {
+    const r = clone(room);
+    if (teams && teams[r.teamA] && teams[r.teamA].name) r.teamAName = teams[r.teamA].name;
+    if (teams && teams[r.teamB] && teams[r.teamB].name) r.teamBName = teams[r.teamB].name;
+    return r;
+  }
+
+  const cleanNote = note => String(note || '').trim().slice(0, 120);
+
   // ---------- start ----------
 
   function startMatch(room, now, rng = Math.random) {
@@ -330,21 +356,24 @@
     return finalize(room, seat, 'walkover', now);
   }
 
-  function voidRoom(room, now) {
+  function voidRoom(room, now, note = '') {
     if (room.status === 'void') return null;
     const r = clone(room);
     r.status = 'void';
     r.voidedAt = now;
+    r.voidNote = cleanNote(note);
     return r;
   }
 
-  function correctResult(room, now) {
+  function correctResult(room, now, note = '') {
     if (room.status !== 'final' || !room.result) return null;
     const r = clone(room);
     const winner = other(r.result.winner);
+    r.result.originalReason = r.result.originalReason || r.result.reason;
     r.result.winner = winner;
     r.result.teamId = winner === 'A' ? r.teamA : r.teamB;
     r.result.reason = 'corrected';
+    r.result.note = cleanNote(note);
     r.result.decidedAt = now;
     return r;
   }
@@ -405,7 +434,7 @@
   return {
     CODE_ALPHABET, TURN_MS, SUDDEN_DEATH_MAX_ROUNDS,
     generateRoomCode, formatCode, normalizeCode, isRoomRecord, createRoom, normalizeRoom,
-    claimSeat, setReady, removePlayer, startMatch,
+    claimSeat, setReady, removePlayer, leaveSeat, rejoinSeat, withTeamNames, startMatch,
     prepareMove, applyPlay, applyPass, resolveTimeUp, finalize,
     requestAppeal, resolveAppeal, pauseClocks, resumeClocks,
     resign, awardWin, walkover, voidRoom, correctResult, recordScreenLeave,
