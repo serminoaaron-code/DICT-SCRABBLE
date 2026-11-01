@@ -334,6 +334,16 @@ test('bag-out with a tie enters sudden death', () => {
   assert.strictEqual(n.game.turn, n.game.firstSeat);
 });
 
+test('bag-out tie with a celebration tier keeps the delay before sudden death', () => {
+  // CAK on '7_6: C' totals 18 (tier 1), so the bag-out that ties should still
+  // delay sudden death's first turn by CELEBRATE_MS[1] = 2600ms.
+  const r = liveRoom({ game: { bag: [], board: { '7_6': 'C' }, racks: { A: ['A', 'K'], B: ['Q'] }, scores: { A: 0, B: 18 } } });
+  const n = M.applyPlay(r, 'A', [P(7, 7, 'A'), P(7, 8, 'K')], { now: 5000, expectedMoveCount: 0 });
+  assert.strictEqual(n.game.scores.A, 18);
+  assert.strictEqual(n.status, 'suddenDeath');
+  assert.strictEqual(n.clock.turnStartedAt, 7600, 'now (5000) + CELEBRATE_MS[1] (2600)');
+});
+
 // ---------- Task 5 ----------
 
 const appealOpts = (now, expectedMoveCount = 0) => ({

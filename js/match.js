@@ -226,11 +226,11 @@
     return A === B ? null : (A > B ? 'A' : 'B');
   }
 
-  function enterSuddenDeath(r, now) {
+  function enterSuddenDeath(r, now, delayMs = 0) {
     r.status = 'suddenDeath';
     r.game.suddenDeath = { startMove: r.game.moveCount, rounds: 0 };
     r.game.turn = r.game.firstSeat;
-    r.clock.turnStartedAt = now;
+    r.clock.turnStartedAt = now + delayMs;
     return r;
   }
 
@@ -244,7 +244,7 @@
 
     if (wentOut && r.status === 'live') {
       const lead = leader(r);
-      return lead ? finalize(r, lead, 'bagOut', now) : enterSuddenDeath(r, now);
+      return lead ? finalize(r, lead, 'bagOut', now) : enterSuddenDeath(r, now, delayMs);
     }
     if (r.status === 'suddenDeath' && (g.moveCount - g.suddenDeath.startMove) % 2 === 0) {
       g.suddenDeath.rounds += 1;
