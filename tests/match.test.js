@@ -163,3 +163,150 @@ test('mutators never mutate their input', () => {
   M.removePlayer(r, 'A');
   assert.strictEqual(JSON.stringify(r), snapshot);
 });
+
+// ---------- Task 4 ----------
+
+const P = (r, c, letter) => ({ r, c, letter });
+const CAT = [P(7, 6, 'C'), P(7, 7, 'A'), P(7, 8, 'T')];
+const RACK_CAT = ['C', 'A', 'T', 'S', 'R', 'N', 'O'];
+
+// Live room, firstSeat A (rng 0.2), started at 1000, endsAt 601000.
+function liveRoom(over = {}) {
+  const r = startedRoom(1000, constRng(0.2));
+  Object.assign(r.game, over.game || {});
+  if (over.status) r.status = over.status;
+  if (over.clock) Object.assign(r.clock, over.clock);
+  return r;
+}
+
+test('prepareMove rejects letters not in rack (multiset)', () => {
+  const r = liveRoom({ game: { racks: { A: ['E', 'A', 'T', 'S', 'R', 'N', 'O'], B: [] } } });
+  const m = M.prepareMove(r, 'A', [P(7, 6, 'E'), P(7, 7, 'E')]);
+  assert.strictEqual(m.ok, false);
+  assert.strictEqual(m.error, 'NOT_IN_RACK');
+});
+
+test('prepareMove rejects wrong turn and pending', () => {
+  const r = liveRoom({ game: { racks: { A: RACK_CAT, B: RACK_CAT } } });
+  assert.strictEqual(M.prepareMove(r, 'B', CAT).error, 'NOT_YOUR_TURN');
+  const pending = liveRoom({ game: { racks: { A: RACK_CAT, B: RACK_CAT }, pending: { seat: 'A' } } });
+  assert.strictEqual(M.prepareMove(pending, 'A', CAT).error, 'PENDING');
+});
+
+test('applyPlay applies score, refills rack, switches turn', () => {
+  const r = liveRoom({ game: { racks: { A: RACK_CAT.slice(), B: RACK_CAT.slice() } } });
+  const bagBefore = r.game.bag.length;
+  const n = M.applyPlay(r, 'A', CAT, { now: 5000, expectedMoveCount: 0 });
+  assert.notStrictEqual(n, null);
+  assert.strictEqual(n.game.scores.A, 10);
+  assert.strictEqual(n.game.racks.A.length, 7);
+  assert.strictEqual(n.game.bag.length, bagBefore - 3);
+  assert.strictEqual(n.game.turn, 'B');
+  assert.strictEqual(n.game.moveCount, 1);
+  assert.strictEqual(n.clock.turnStartedAt, 5000);
+  assert.deepStrictEqual(n.game.board, { '7_6': 'C', '7_7': 'A', '7_8': 'T' });
+  assert.deepStrictEqual(n.game.lastMove, { seat: 'A', type: 'play', words: [{ word: 'CAT', score: 10 }], total: 10, unverified: false, at: 5000 });
+});
+
+test('applyPlay rejected on wrong turn, stale moveCount, after endsAt, while paused, while pending', () => {
+  const racks = { A: RACK_CAT, B: RACK_CAT };
+  const r = liveRoom({ game: { racks } });
+  assert.strictEqual(M.applyPlay(r, 'B', CAT, { now: 5000, expectedMoveCount: 0 }), null, 'wrong turn');
+  assert.strictEqual(M.applyPlay(r, 'A', CAT, { now: 5000, expectedMoveCount: 3 }), null, 'stale moveCount');
+  assert.strictEqual(M.applyPlay(r, 'A', CAT, { now: 601000, expectedMoveCount: 0 }), null, 'after endsAt');
+  const paused = liveRoom({ game: { racks }, clock: { paused: { by: 'host', matchRemainingMs: 1, turnRemainingMs: 1 } } });
+  assert.strictEqual(M.applyPlay(paused, 'A', CAT, { now: 5000, expectedMoveCount: 0 }), null, 'paused');
+  const pending = liveRoom({ game: { racks, pending: { seat: 'A' } } });
+  assert.strictEqual(M.applyPlay(pending, 'A', CAT, { now: 5000, expectedMoveCount: 0 }), null, 'pending');
+  const final = liveRoom({ game: { racks }, status: 'final' });
+  assert.strictEqual(M.applyPlay(final, 'A', CAT, { now: 5000, expectedMoveCount: 0 }), null, 'final');
+});
+
+test('applyPass records a pass and switches turn', () => {
+  const n = M.applyPass(liveRoom(), 'A', { now: 2000, expectedMoveCount: 0 });
+  assert.strictEqual(n.game.lastMove.type, 'pass');
+  assert.strictEqual(n.game.turn, 'B');
+  assert.strictEqual(n.game.moveCount, 1);
+});
+
+test('applyPass timeout requires 60s and matching turnStartedAt', () => {
+  const r = liveRoom();
+  const opts = now => ({ now, expectedMoveCount: 0, timeout: true, expectedTurnStartedAt: 1000 });
+  assert.strictEqual(M.applyPass(r, 'A', opts(1000 + 59999)), null);
+  const n = M.applyPass(r, 'A', opts(1000 + 60000));
+  assert.strictEqual(n.game.lastMove.type, 'timeout');
+  assert.strictEqual(n.game.turn, 'B');
+  assert.strictEqual(M.applyPass(n, 'A', opts(1000 + 60000)), null, 'second identical timeout rejected');
+});
+
+test('resolveTimeUp picks the higher score', () => {
+  const r = liveRoom({ game: { scores: { A: 20, B: 15 } } });
+  const n = M.resolveTimeUp(r, 601000);
+  assert.strictEqual(n.status, 'final');
+  assert.deepStrictEqual(n.result, { winner: 'A', teamId: 'tA', scoreA: 20, scoreB: 15, reason: 'time', decidedAt: 601000 });
+});
+
+test('resolveTimeUp on a final room returns null', () => {
+  const n = M.resolveTimeUp(liveRoom({ game: { scores: { A: 20, B: 15 } } }), 601000);
+  assert.strictEqual(M.resolveTimeUp(n, 602000), null);
+});
+
+test('resolveTimeUp before endsAt or while paused returns null', () => {
+  assert.strictEqual(M.resolveTimeUp(liveRoom(), 600999), null);
+  const paused = liveRoom({ clock: { paused: { by: 'host', matchRemainingMs: 5, turnRemainingMs: 5 } } });
+  assert.strictEqual(M.resolveTimeUp(paused, 700000), null);
+});
+
+test('tie at time-up enters sudden death with firstSeat to move', () => {
+  const r = liveRoom({ game: { scores: { A: 10, B: 10 }, firstSeat: 'B', turn: 'A', moveCount: 4 } });
+  const n = M.resolveTimeUp(r, 601000);
+  assert.strictEqual(n.status, 'suddenDeath');
+  assert.strictEqual(n.game.turn, 'B');
+  assert.deepStrictEqual(n.game.suddenDeath, { startMove: 4, rounds: 0 });
+  assert.strictEqual(n.clock.turnStartedAt, 601000);
+  assert.strictEqual(n.result, null);
+});
+
+function suddenDeathRoom() {
+  const r = liveRoom({ game: { scores: { A: 10, B: 10 }, firstSeat: 'B', racks: { A: RACK_CAT, B: RACK_CAT } } });
+  return M.resolveTimeUp(r, 601000);
+}
+
+test('sudden death ends when a full round leaves a leader', () => {
+  let r = suddenDeathRoom();
+  r = M.applyPlay(r, 'B', CAT, { now: 602000, expectedMoveCount: 0 });
+  assert.strictEqual(r.status, 'suddenDeath', 'no result mid-round');
+  r = M.applyPass(r, 'A', { now: 603000, expectedMoveCount: 1 });
+  assert.strictEqual(r.status, 'final');
+  assert.strictEqual(r.result.winner, 'B');
+  assert.strictEqual(r.result.reason, 'suddenDeath');
+  assert.strictEqual(r.result.teamId, 'tB');
+});
+
+test('sudden death goes to hostDecision after 3 tied rounds', () => {
+  let r = suddenDeathRoom();
+  const order = ['B', 'A', 'B', 'A', 'B', 'A'];
+  order.forEach((seat, i) => {
+    r = M.applyPass(r, seat, { now: 602000 + i, expectedMoveCount: i });
+    if (i < 5) assert.strictEqual(r.status, 'suddenDeath');
+  });
+  assert.strictEqual(r.status, 'hostDecision');
+  assert.strictEqual(r.game.suddenDeath.rounds, 3);
+  assert.strictEqual(r.result, null);
+});
+
+test('bag-out ends the game', () => {
+  const r = liveRoom({ game: { bag: [], board: { '7_6': 'C' }, racks: { A: ['A', 'T'], B: ['Q'] }, scores: { A: 0, B: 5 } } });
+  const n = M.applyPlay(r, 'A', [P(7, 7, 'A'), P(7, 8, 'T')], { now: 5000, expectedMoveCount: 0 });
+  assert.strictEqual(n.game.scores.A, 10);
+  assert.strictEqual(n.status, 'final');
+  assert.strictEqual(n.result.reason, 'bagOut');
+  assert.strictEqual(n.result.winner, 'A');
+});
+
+test('bag-out with a tie enters sudden death', () => {
+  const r = liveRoom({ game: { bag: [], board: { '7_6': 'C' }, racks: { A: ['A', 'T'], B: ['Q'] }, scores: { A: 0, B: 10 } } });
+  const n = M.applyPlay(r, 'A', [P(7, 7, 'A'), P(7, 8, 'T')], { now: 5000, expectedMoveCount: 0 });
+  assert.strictEqual(n.status, 'suddenDeath');
+  assert.strictEqual(n.game.turn, n.game.firstSeat);
+});

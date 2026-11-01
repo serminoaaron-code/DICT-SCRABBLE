@@ -83,6 +83,8 @@
       if (g.pending) g.pending.rejectedWords = g.pending.rejectedWords || [];
       g.suddenDeath = g.suddenDeath || null;
       g.lastMove = g.lastMove || null;
+      if (g.lastMove) g.lastMove.words = g.lastMove.words || [];
+      if (g.pending) g.pending.words = g.pending.words || [];
     }
     return r;
   }
@@ -136,10 +138,124 @@
     return r;
   }
 
+  // ---------- turns ----------
+
+  const PLAYING = ['live', 'suddenDeath'];
+
+  // Shared guards for a player acting on their turn.
+  function canAct(room, seat, expectedMoveCount, now) {
+    if (!room.game || !room.clock) return false;
+    if (!PLAYING.includes(room.status)) return false;
+    if (room.clock.paused) return false;
+    if (room.game.pending) return false;
+    if (room.game.turn !== seat) return false;
+    if (room.game.moveCount !== expectedMoveCount) return false;
+    if (room.status === 'live' && now >= room.clock.endsAt) return false;
+    return true;
+  }
+
+  function prepareMove(room, seat, placements) {
+    const fail = error => ({ ok: false, error, words: [], total: 0, bingo: false });
+    if (!room.game || room.game.turn !== seat) return fail('NOT_YOUR_TURN');
+    if (room.game.pending) return fail('PENDING');
+    if (!Engine.rackHas(room.game.racks[seat], placements.map(p => p.letter))) return fail('NOT_IN_RACK');
+    return Engine.scoreMove(room.game.board, placements);
+  }
+
+  function finalize(room, winnerSeat, reason, now) {
+    const r = clone(room);
+    const scores = (r.game && r.game.scores) || { A: 0, B: 0 };
+    r.status = 'final';
+    r.result = {
+      winner: winnerSeat,
+      teamId: winnerSeat === 'A' ? r.teamA : r.teamB,
+      scoreA: scores.A || 0,
+      scoreB: scores.B || 0,
+      reason,
+      decidedAt: now
+    };
+    return r;
+  }
+
+  function leader(room) {
+    const { A, B } = room.game.scores;
+    return A === B ? null : (A > B ? 'A' : 'B');
+  }
+
+  function enterSuddenDeath(r, now) {
+    r.status = 'suddenDeath';
+    r.game.suddenDeath = { startMove: r.game.moveCount, rounds: 0 };
+    r.game.turn = r.game.firstSeat;
+    r.clock.turnStartedAt = now;
+    return r;
+  }
+
+  // Mutates r (already a clone): advance the turn, then apply end-of-game rules.
+  function endTurn(r, seat, now, wentOut) {
+    const g = r.game;
+    g.moveCount += 1;
+    g.turn = other(seat);
+    r.clock.turnStartedAt = now;
+
+    if (wentOut && r.status === 'live') {
+      const lead = leader(r);
+      return lead ? finalize(r, lead, 'bagOut', now) : enterSuddenDeath(r, now);
+    }
+    if (r.status === 'suddenDeath' && (g.moveCount - g.suddenDeath.startMove) % 2 === 0) {
+      g.suddenDeath.rounds += 1;
+      const lead = leader(r);
+      if (lead) return finalize(r, lead, 'suddenDeath', now);
+      if (g.suddenDeath.rounds >= SUDDEN_DEATH_MAX_ROUNDS) r.status = 'hostDecision';
+    }
+    return r;
+  }
+
+  // Applies a validated play without clock/turn-order guards (used by applyPlay and appeals).
+  function playCore(room, seat, placements, now, unverified) {
+    const m = prepareMove(room, seat, placements);
+    if (!m.ok) return null;
+    const r = clone(room);
+    const g = r.game;
+    g.board = Engine.applyPlacements(g.board, placements);
+    const rack = Engine.removeFromRack(g.racks[seat], placements.map(p => p.letter));
+    const d = Engine.drawTiles(g.bag, Engine.RACK_SIZE - rack.length);
+    g.racks[seat] = rack.concat(d.drawn);
+    g.bag = d.bag;
+    g.scores[seat] += m.total;
+    g.lastMove = { seat, type: 'play', words: m.words, total: m.total, unverified: !!unverified, at: now };
+    const wentOut = g.racks[seat].length === 0 && g.bag.length === 0;
+    return endTurn(r, seat, now, wentOut);
+  }
+
+  function applyPlay(room, seat, placements, { now, expectedMoveCount, unverified = false }) {
+    if (!canAct(room, seat, expectedMoveCount, now)) return null;
+    return playCore(room, seat, placements, now, unverified);
+  }
+
+  function applyPass(room, seat, { now, expectedMoveCount, timeout = false, expectedTurnStartedAt }) {
+    if (!canAct(room, seat, expectedMoveCount, now)) return null;
+    if (timeout) {
+      if (room.clock.turnStartedAt !== expectedTurnStartedAt) return null;
+      if (now < room.clock.turnStartedAt + TURN_MS) return null;
+    }
+    const r = clone(room);
+    r.game.lastMove = { seat, type: timeout ? 'timeout' : 'pass', words: [], total: 0, unverified: false, at: now };
+    return endTurn(r, seat, now, false);
+  }
+
+  function resolveTimeUp(room, now) {
+    if (room.status !== 'live' || room.result || !room.clock || room.clock.paused) return null;
+    if (now < room.clock.endsAt) return null;
+    const lead = leader(room);
+    if (lead) return finalize(room, lead, 'time', now);
+    return enterSuddenDeath(clone(room), now);
+  }
+
   return {
     CODE_ALPHABET, TURN_MS, SUDDEN_DEATH_MAX_ROUNDS,
     generateRoomCode, formatCode, normalizeCode, createRoom, normalizeRoom,
     claimSeat, setReady, removePlayer, startMatch,
-    _internal: { clone, other }
+    prepareMove, applyPlay, applyPass, resolveTimeUp, finalize,
+    _internal: { clone, other, playCore, enterSuddenDeath }
   };
 });
