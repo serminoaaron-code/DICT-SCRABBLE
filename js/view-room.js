@@ -54,7 +54,7 @@
       prevStatus: null,
       tossUntil: 0,
       pinned: null, // room code pinned to the big screen, or null
-      ui: {} // live-view working state (Task 10)
+      ui: { lastSeenMove: null } // live-view working state (Task 10); lastSeenMove: null until the first live render
     };
     let presenceOff = null;
     let presenceRole = null;
@@ -370,7 +370,7 @@
       </div></div>`;
     el.querySelector('#stopWatching').onclick = () => ctx.stopWatching();
     const ui = ctx.state.ui;
-    Object.assign(ui, { temp: [], selected: null, busy: false, rejected: null, seenMove: -1, tried: {}, pillKind: null, noticeHidden: null });
+    Object.assign(ui, { temp: [], selected: null, busy: false, rejected: null, seenMove: -1, tried: {}, pillKind: null, noticeHidden: null, sideHtml: {}, lastSeenMove: null });
     const $ = s => el.querySelector(s);
 
     // ⋯ menu: Leave lives here so it can't be tapped by accident.
@@ -486,8 +486,10 @@
     for (const s of SEATS) {
       const side = $('#side' + s);
       side.classList.toggle('turn', g.turn === s && PLAYING.includes(room.status));
-      side.innerHTML = `<span class="chip chip-${s.toLowerCase()} team">${esc(teamOf(room, s))}</span>
+      const html = `<span class="chip chip-${s.toLowerCase()} team">${esc(teamOf(room, s))}</span>
         <div class="who"><span class="player">${esc(playerOf(room, s))}${seat === s ? ' (you)' : ''}</span><span class="score disp">${g.scores[s]}</span></div>`;
+      // Rewrite only on change: a celebration holds the old score in this element until its points land.
+      if (ui.sideHtml[s] !== html) { side.innerHTML = html; ui.sideHtml[s] = html; }
     }
 
     const mine = myTurn(room, ctx);
@@ -599,14 +601,33 @@
     }
   }
 
+  // Word celebration when moveCount goes up with a play. The first live render (page load,
+  // refresh, joining mid-game) only sets the baseline, so nothing ever replays.
+  function celebrateNewMove(el, room, ctx) {
+    const ui = ctx.state.ui;
+    if (!room.game) return;
+    const c = Celebrate.detect(ui.lastSeenMove, room);
+    if (c) {
+      const seat = c.seat;
+      Celebrate.show(c, {
+        container: el.querySelector('#liveRoot'),
+        scoreEl: el.querySelector('#side' + seat + ' .score'),
+        mine: seat === ctx.state.mySeat
+      });
+    }
+    ui.lastSeenMove = room.game.moveCount;
+  }
+
   const RoomLive = {
     renderLive(el, room, ctx) {
       document.body.classList.add('in-game'); // collapsed header during a live game
       if (!el.querySelector('#liveRoot')) buildLive(el, ctx);
       update(el, room, ctx);
+      celebrateNewMove(el, room, ctx);
     },
 
     renderFinal(el, room, ctx) {
+      Celebrate.clear();
       if (ctx.state.ui.tossTimer) { clearTimeout(ctx.state.ui.tossTimer); ctx.state.ui.tossTimer = null; }
       detachLive(ctx.state.ui);
       let body;
@@ -760,6 +781,7 @@
     },
 
     teardown(ctx) {
+      Celebrate.clear();
       document.body.classList.remove('in-game');
       detachLive(ctx.state.ui);
       if (ctx.state.ui.tossTimer) clearTimeout(ctx.state.ui.tossTimer);
