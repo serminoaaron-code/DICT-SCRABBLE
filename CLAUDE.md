@@ -80,13 +80,29 @@ server_<1..4>/
 - **No natural game end.** A game ends only when all but one player is disqualified (3 consecutive passes or 3 tab strikes), someone resigns, or a forfeit happens. It doesn't end when the bag empties.
 - Line 1 of `index.html` is a stray `<a_file_has_been_created ...>` wrapper tag left over from AI-generated output, with no closing tag. Browsers ignore it, but it's not valid HTML.
 
-## Required workflow: think before coding
+## Required workflow: Superpowers first, code second
 
-Don't go straight from a one-line request to code changes. Every non-trivial task starts with a deliberate first step:
+This project uses the **Superpowers** plugin (`superpowers@claude-plugins-official`). It's enabled in `.claude/settings.json`, so teammates are prompted to install it. Don't go straight from a one-line request to code changes. Invoke the matching Superpowers skill **before** reading code, asking clarifying questions or editing:
 
-- **New features or changes in behaviour → brainstorm first.** Before writing code, pin down the goal, the constraints, the edge cases (2P vs 4P, spectators, several clients writing at once, all 4 servers), and 2–3 approaches with their trade-offs. Agree on a design with the user, then implement. Use the `superpowers:brainstorming` skill if it's available.
-- **Bugs → debug systematically first.** Reproduce the bug, trace it to the root cause in the code, and state the cause before proposing a fix. Don't patch symptoms by guessing. Use the `superpowers:systematic-debugging` skill if it's available.
-- **Security audit before calling the work done.** Review the change for game-level problems, such as unescaped user input in `innerHTML` (XSS), clients writing state they shouldn't (scores, other players' racks or turns), and race conditions between clients. Use `/security-review` if it's available. Findings about infrastructure (Firebase rules, auth, hosting) are out of scope: list them as a one-line handoff to DevOps.
+| Situation | Skill(s) to use, in order |
+|---|---|
+| New feature, change in game rules or behaviour, UI addition | `superpowers:brainstorming` → `superpowers:writing-plans` → `superpowers:executing-plans` (or `superpowers:subagent-driven-development` for plans whose tasks are independent of each other) |
+| Bug, unexpected behaviour, desync between clients | `superpowers:systematic-debugging`: reproduce it, find the root cause and state it before proposing a fix. No guess-and-patch. |
+| Starting a feature branch | `superpowers:using-git-worktrees` (or at least `git switch -c feat/…` off `main`) |
+| Before saying anything is done or fixed | `superpowers:verification-before-completion`: run it in the browser (2+ windows for multiplayer) and show the evidence |
+| Work is finished | `/security-review`, then `superpowers:requesting-code-review`, then `superpowers:finishing-a-development-branch` to open the PR |
+| Responding to PR feedback | `superpowers:receiving-code-review` |
+
+**Edge cases every brainstorm and plan must cover:** 2P and 4P modes, spectators, several clients writing to Firebase at the same time, a player's browser disconnecting mid-turn, and all 4 servers (data must stay separate per server through `getServerPath()`).
+
+**Scope of the security review:** game-level problems only:
+- Unescaped user input in `innerHTML` (XSS)
+- Clients writing state they shouldn't (scores, other players' racks, turn order)
+- Race conditions between clients
+
+Infrastructure findings (Firebase rules, auth, hosting) belong to DevOps. Note them as a one-line handoff.
+
+There's no automated test suite, so `superpowers:test-driven-development` only applies once test infrastructure is added. Until then, verify changes manually in the browser.
 
 ## Conventions when editing
 
