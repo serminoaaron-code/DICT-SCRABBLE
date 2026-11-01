@@ -31,6 +31,176 @@
 
   function cleanName(name) { return String(name || '').trim().replace(/\s+/g, ' ').slice(0, 40); }
 
+  // ---------- Rooms panel ----------
+
+  const PHASE_LABEL = {
+    waiting: 'Waiting', live: 'Live', paused: 'Paused', appeal: 'Appeal pending',
+    suddenDeath: 'Sudden death', hostDecision: 'Host decision', final: 'Final', void: 'Void'
+  };
+  const PHASE_ORDER = { live: 0, appeal: 0, paused: 0, suddenDeath: 0, hostDecision: 0, waiting: 1, final: 2, void: 3 };
+  const REASON_TEXT = {
+    time: 'time', suddenDeath: 'sudden death', bagOut: 'tiles out', resign: 'resigned',
+    awarded: 'awarded by host', walkover: 'walkover', corrected: 'corrected by host'
+  };
+
+  function teamName(state, room, seat) {
+    const id = seat === 'A' ? room.teamA : room.teamB;
+    return (state.teams[id] && state.teams[id].name) || (seat === 'A' ? room.teamAName : room.teamBName) || '?';
+  }
+
+  function clockText(room) {
+    const phase = Match.roomPhase(room);
+    if (!room.clock) return '';
+    if (phase === 'suddenDeath') return 'SD';
+    if (phase === 'hostDecision') return '';
+    const ms = room.clock.paused ? room.clock.paused.matchRemainingMs : room.clock.endsAt - Store.serverNow();
+    return UI.formatClock(ms);
+  }
+
+  const HostRooms = {
+    mount({ el, state }) {
+      const panel = el.querySelector('#roomsPanel');
+      panel.innerHTML = `
+        <details id="newRoomBox" open>
+          <summary style="cursor:pointer;font-weight:700;">+ New room</summary>
+          <form id="newRoom" class="stack" style="margin-top:6px;">
+            <div class="row">
+              <div style="flex:1;min-width:120px;"><label for="nrA">Team A</label><select id="nrA"></select></div>
+              <div style="flex:1;min-width:120px;"><label for="nrB">Team B</label><select id="nrB"></select></div>
+            </div>
+            <div class="row">
+              <div style="flex:1;min-width:120px;"><label for="nrLen">Match length</label>
+                <select id="nrLen"><option value="5">5 min</option><option value="10" selected>10 min</option><option value="15">15 min</option><option value="custom">Custom…</option></select></div>
+              <div style="flex:1;min-width:120px;" id="nrCustomBox" class="hidden"><label for="nrCustom">Minutes (1–60)</label><input id="nrCustom" type="number" min="1" max="60" value="10"></div>
+            </div>
+            <div><label for="nrLabel">Label (optional)</label><input id="nrLabel" maxlength="40" placeholder="e.g. Tonight 7 PM"></div>
+            <div id="nrError" class="warn-line hidden"></div>
+            <button type="submit">Create room</button>
+          </form>
+          <div id="nrCreated" class="hidden stack" style="margin-top:8px;"></div>
+        </details>
+        <div id="roomList" style="margin-top:10px;"></div>`;
+
+      const $ = s => panel.querySelector(s);
+      $('#nrLen').onchange = () => $('#nrCustomBox').classList.toggle('hidden', $('#nrLen').value !== 'custom');
+
+      function fillSelects() {
+        const ids = Object.keys(state.teams).sort((a, b) => state.teams[a].name.localeCompare(state.teams[b].name));
+        for (const sel of [$('#nrA'), $('#nrB')]) {
+          const keep = sel.value;
+          sel.innerHTML = '<option value="">— choose —</option>' + ids.map(id => `<option value="${esc(id)}">${esc(state.teams[id].name)}</option>`).join('');
+          if (ids.includes(keep)) sel.value = keep;
+        }
+      }
+
+      $('#newRoom').onsubmit = async ev => {
+        ev.preventDefault();
+        const err = $('#nrError');
+        const a = $('#nrA').value, b = $('#nrB').value;
+        const minutes = $('#nrLen').value === 'custom' ? Math.round(Number($('#nrCustom').value)) : Number($('#nrLen').value);
+        let msg = '';
+        if (!a || !b) msg = 'Choose both teams.';
+        else if (a === b) msg = 'Team A and Team B must be different.';
+        else if (!(minutes >= 1 && minutes <= 60)) msg = 'Match length must be 1–60 minutes.';
+        err.textContent = msg;
+        err.classList.toggle('hidden', !msg);
+        if (msg) return;
+        try {
+          const code = await Store.createRoom({
+            teamA: a, teamB: b, teamAName: state.teams[a].name, teamBName: state.teams[b].name,
+            label: cleanName($('#nrLabel').value), matchLengthSec: minutes * 60
+          });
+          const pretty = Match.formatCode(code);
+          const box = $('#nrCreated');
+          box.innerHTML = `<div class="small-text muted">Room created for <b>${esc(state.teams[a].name)}</b> vs <b>${esc(state.teams[b].name)}</b>. Share this code:</div>
+            <div class="code-big" id="nrCode">${esc(pretty)}</div>
+            <div class="row"><button type="button" class="secondary small" id="nrCopy">Copy code</button><a href="#room=${esc(code)}">Open room →</a></div>`;
+          box.classList.remove('hidden');
+          $('#nrCopy').onclick = async () => {
+            try { await navigator.clipboard.writeText(pretty); UI.toast('Code copied.', 'ok'); }
+            catch (e) {
+              const range = document.createRange(); range.selectNodeContents($('#nrCode'));
+              const selObj = window.getSelection(); selObj.removeAllRanges(); selObj.addRange(range);
+              UI.toast('Press Ctrl+C to copy.');
+            }
+          };
+          $('#nrLabel').value = '';
+          UI.toast(`Room ${pretty} created.`, 'ok');
+        } catch (e) {
+          UI.toast(e.message || 'Could not create room.', 'error');
+        }
+      };
+
+      function cardHtml(room) {
+        const phase = Match.roomPhase(room);
+        const nameA = teamName(state, room, 'A'), nameB = teamName(state, room, 'B');
+        const seatsTaken = ['A', 'B'].filter(s => room.seats[s]).length;
+        const warnings = ['A', 'B']
+          .filter(s => room.fairPlay[s].screenLeaves > 0 && room.seats[s])
+          .map(s => `<div class="warn-line">⚠️ ${esc(room.seats[s].name)} left the screen ${room.fairPlay[s].screenLeaves}×</div>`).join('');
+        let status = '';
+        if (room.status === 'final' && room.result) {
+          const winName = room.result.winner === 'A' ? nameA : nameB;
+          const why = room.result.reason !== 'time' ? ` <span class="muted">(${esc(REASON_TEXT[room.result.reason] || room.result.reason)})</span>` : '';
+          status = `<div class="ok-line">+1 ${esc(winName)} · ${room.result.scoreA}–${room.result.scoreB}${why}</div>`;
+        }
+        const live = ['live', 'paused', 'appeal', 'suddenDeath', 'hostDecision'].includes(phase);
+        const actions = [`<a class="small-text" href="#room=${esc(room.code)}">Open room →</a>`];
+        if (room.status === 'waiting') {
+          actions.push(`<button class="secondary small" data-walkover="A" data-code="${esc(room.code)}">Walkover → ${esc(nameA)}</button>`);
+          actions.push(`<button class="secondary small" data-walkover="B" data-code="${esc(room.code)}">Walkover → ${esc(nameB)}</button>`);
+          actions.push(`<button class="secondary small" data-void="${esc(room.code)}">Void</button>`);
+        }
+        return `<div class="room-card" data-room="${esc(room.code)}">
+          <div class="spread">
+            <span class="teams">${esc(nameA)} <span class="muted">vs</span> ${esc(nameB)}</span>
+            <span class="badge ${esc(phase)}">${live ? '● ' : ''}${esc(PHASE_LABEL[phase] || phase)}${live ? ` <span data-clock="${esc(room.code)}">${esc(clockText(room))}</span>` : ''}</span>
+          </div>
+          <div class="meta"><span class="code">${esc(Match.formatCode(room.code))}</span> · ${Math.round(room.matchLengthSec / 60)} min · seats ${seatsTaken}/2${room.label ? ' · ' + esc(room.label) : ''}</div>
+          ${phase === 'appeal' ? '<div class="warn-line">⚖️ Appeal pending: open the room to decide</div>' : ''}
+          ${phase === 'hostDecision' ? '<div class="warn-line">Still tied: open the room to award the win</div>' : ''}
+          ${warnings}${status}
+          <div class="actions">${actions.join('')}</div>
+        </div>`;
+      }
+
+      function renderList() {
+        const rooms = Object.values(state.rooms).sort((x, y) =>
+          (PHASE_ORDER[Match.roomPhase(x)] ?? 9) - (PHASE_ORDER[Match.roomPhase(y)] ?? 9) || (y.createdAt || 0) - (x.createdAt || 0));
+        $('#roomList').innerHTML = rooms.length ? rooms.map(cardHtml).join('') : '<p class="muted small-text">No rooms yet.</p>';
+      }
+
+      $('#roomList').onclick = async ev => {
+        const btn = ev.target.closest('button');
+        if (!btn) return;
+        const code = btn.dataset.code || btn.dataset.void;
+        const room = state.rooms[code];
+        if (!room) return;
+        if (btn.dataset.walkover) {
+          const seat = btn.dataset.walkover;
+          const name = teamName(state, room, seat);
+          if (!confirm(`Give ${name} a walkover win (+1)?`)) return;
+          const res = await Store.mutateRoom(code, r => Match.walkover(r, seat, Store.serverNow()));
+          UI.toast(res.committed ? `Walkover recorded: +1 ${name}.` : 'Could not record walkover (room changed).', res.committed ? 'ok' : 'error');
+        } else if (btn.dataset.void) {
+          if (!confirm(`Void room ${Match.formatCode(code)}? It will count for no one.`)) return;
+          const res = await Store.mutateRoom(code, r => Match.voidRoom(r, Store.serverNow()));
+          UI.toast(res.committed ? 'Room voided.' : 'Could not void room.', res.committed ? 'ok' : 'error');
+        }
+      };
+
+      App.onTick(() => {
+        panel.querySelectorAll('[data-clock]').forEach(span => {
+          const room = state.rooms[span.dataset.clock];
+          if (room) span.textContent = clockText(room);
+        });
+      });
+
+      return { render() { fillSelects(); renderList(); } };
+    }
+  };
+  root.HostRooms = HostRooms;
+
   function show(el) {
     if (!App.isHost()) return showLogin(el);
 
@@ -121,7 +291,7 @@
       UI.toast('Tournament reset.', 'ok');
     };
 
-    const roomsPanel = root.HostRooms ? root.HostRooms.mount(ctx) : null;
+    const roomsPanel = HostRooms.mount(ctx);
 
     const unsubTeams = Store.watchTeams(t => {
       state.teams = t;
@@ -133,7 +303,6 @@
       renderTeams(); renderStandings();
       if (roomsPanel) roomsPanel.render();
     });
-    if (!roomsPanel) el.querySelector('#roomsPanel').innerHTML = '<p class="muted small-text">Rooms panel coming next.</p>';
 
     return () => { unsubTeams(); unsubRooms(); };
   }
