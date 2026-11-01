@@ -185,7 +185,14 @@
         const room = state.rooms[code];
         if (!room) return;
         if (btn.dataset.pin) {
-          await Store.setPinned(state.pinned === code ? null : code);
+          btn.disabled = true;
+          try {
+            await Store.setPinned(state.pinned === code ? null : code);
+          } catch (e) {
+            UI.toast('Could not update the big-screen pin.', 'error');
+          } finally {
+            btn.disabled = false;
+          }
         } else if (btn.dataset.correct) {
           const other = teamName(state, room, room.result.winner === 'A' ? 'B' : 'A');
           const note = prompt('Reason for the correction (kept in the record):', '');

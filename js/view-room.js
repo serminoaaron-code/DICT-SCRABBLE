@@ -699,8 +699,13 @@
         const act = b.dataset.host;
         if (act === 'pin') {
           b.disabled = true;
-          await Store.setPinned(ctx.state.pinned === ctx.code ? null : ctx.code);
-          b.disabled = false;
+          try {
+            await Store.setPinned(ctx.state.pinned === ctx.code ? null : ctx.code);
+          } catch (e) {
+            UI.toast('Could not update the big-screen pin.', 'error');
+          } finally {
+            b.disabled = false;
+          }
           return;
         }
         const now = () => Store.serverNow();
