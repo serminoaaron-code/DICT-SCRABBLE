@@ -64,7 +64,7 @@ Script load order (in `index.html`): `engine.js → match.js → dictionary.js �
 Store.mutateRoom(code, r => Match.applyPlay(r, seat, placements, { now: Store.serverNow(), expectedMoveCount }))
 ```
 
-`mutateRoom` runs a Firebase `transaction()`. The `Match` function's guards (status, turn, `moveCount`, `turnStartedAt`, `result === null`) make every write idempotent and race-safe. Several browsers may try the same automatic transition (turn timeout, time-up) and only one wins. **Results are recorded exactly once.** Put new game logic in `match.js` with a unit test, then call it through `mutateRoom`. Don't write room data any other way.
+`mutateRoom` runs a Firebase `transaction()`. It never throws: if the SDK aborts the transaction (Error `set`/`maxretry`, which happens when this same client writes an overlapping path while a transaction is in flight), it retries once and then resolves `{ committed: false }`. The `Match` function's guards (status, turn, `moveCount`, `turnStartedAt`, `result === null`) make every write idempotent and race-safe. Several browsers may try the same automatic transition (turn timeout, time-up) and only one wins. **Results are recorded exactly once.** Put new game logic in `match.js` with a unit test, then call it through `mutateRoom`. Don't write room data any other way.
 
 Automatic transitions (turn timeout → pass, match time-up → result or sudden death) are attempted by **seated players and the host**, never spectators, from the ticker in `view-room.js`.
 

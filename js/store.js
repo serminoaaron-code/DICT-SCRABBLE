@@ -81,7 +81,12 @@
 
   // Returning null for a not-yet-cached value lets Firebase retry with the
   // server value; returning undefined aborts the transaction.
-  function mutateRoom(code, fn) {
+  //
+  // The SDK rejects a transaction (Error 'set' / 'maxretry') when this same client writes to an
+  // overlapping path (presence, reset) while the transaction is in flight and the server reports a
+  // concurrent change. Retry once, then report it as not committed instead of throwing, so callers'
+  // "not committed" handling (toasts, automatic retries) covers it and nothing goes unhandled.
+  function mutateRoom(code, fn, attempt = 0) {
     return db.ref(`${ROOT}/rooms/${code}`).transaction(cur => {
       if (cur === null) return null;
       const next = fn(Match.normalizeRoom(cur));
@@ -89,7 +94,11 @@
     }).then(r => ({
       committed: r.committed && r.snapshot.exists(),
       room: r.snapshot.exists() ? Match.normalizeRoom(r.snapshot.val()) : null
-    }));
+    }), err => {
+      if (attempt < 1) return mutateRoom(code, fn, attempt + 1);
+      console.warn('Room update aborted:', err && err.message);
+      return { committed: false, room: null, error: err && err.message };
+    });
   }
 
   async function createRoom(opts) {
