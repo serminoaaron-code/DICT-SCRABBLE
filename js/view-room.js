@@ -43,6 +43,8 @@
     const state = {
       code,
       room: undefined,
+      rawRoom: undefined,
+      teams: {},
       mySeat: Store.local.get(seatKey(code)), // 'A' | 'B' | 'watch' | null
       loaded: false,
       prevStatus: null,
@@ -87,9 +89,9 @@
       const s = state.mySeat;
       if (s === 'A' || s === 'B') {
         if (room.status === 'final' || room.status === 'void') return; // read-only result
-        const existing = room.seats[s];
-        const name = (existing && existing.name) || Store.local.get('scrabble.name') || 'Player';
-        if (!(await claim(s, name))) forgetSeat('Your seat is no longer available.');
+        const res = await Store.mutateRoom(code, r => Match.rejoinSeat(r, s, me));
+        if (res.committed) setRole(s);
+        else { forgetSeat(); UI.toast('Your seat was freed. If you are still playing, take it again below.'); }
       } else if (s === 'watch') {
         setRole('watch');
       } else if (App.isHost()) {
@@ -97,7 +99,9 @@
       }
     }
 
-    function onRoom(room) {
+    function onRoom(raw) {
+      state.rawRoom = raw;
+      const room = raw ? Match.withTeamNames(raw, state.teams) : raw;
       const first = !state.loaded;
       state.loaded = true;
       if (room && state.prevStatus === 'waiting' && room.status === 'live') state.tossUntil = Date.now() + 3000;
@@ -234,7 +238,7 @@
       if ($('#leaveSeat')) $('#leaveSeat').onclick = async () => {
         const seat = state.mySeat;
         forgetSeat();
-        await Store.mutateRoom(code, r => (r.seats[seat] && r.seats[seat].clientId === me ? Match.removePlayer(r, seat) : null));
+        await Store.mutateRoom(code, r => Match.leaveSeat(r, seat, me));
         render();
       };
       el.querySelectorAll('[data-remove]').forEach(b => {
@@ -259,8 +263,14 @@
     };
     document.addEventListener('visibilitychange', onVisibility);
 
+    render(); // "Loading room…" right away instead of the previous view
+    const unsubTeams = Store.watchTeams(t => {
+      state.teams = t;
+      if (state.rawRoom) { state.room = Match.withTeamNames(state.rawRoom, t); render(); }
+    });
     const unsub = Store.watchRoom(code, onRoom);
     return () => {
+      unsubTeams();
       document.removeEventListener('visibilitychange', onVisibility);
       unsub();
       if (presenceOff) presenceOff();
@@ -528,7 +538,8 @@
       if (ctx.state.ui.tossTimer) { clearTimeout(ctx.state.ui.tossTimer); ctx.state.ui.tossTimer = null; }
       let body;
       if (room.status === 'void' || !room.result) {
-        body = '<div class="final-banner"><div class="win" style="color:var(--text-muted)">This room was voided</div><p class="muted">It does not count for either team.</p></div>';
+        body = '<div class="final-banner"><div class="win" style="color:var(--text-muted)">This room was voided</div><p class="muted">It does not count for either team.' +
+          (room.voidNote ? `<br>Reason: ${esc(room.voidNote)}` : '') + '</p></div>';
       } else {
         const res = room.result;
         const winTeam = teamOf(room, res.winner);
@@ -538,7 +549,7 @@
           <div class="win">🏆 ${esc(winTeam)} wins</div>
           <div>${esc(playerOf(room, 'A'))} <b>${res.scoreA}</b> – <b>${res.scoreB}</b> ${esc(playerOf(room, 'B'))}</div>
           <div><span class="badge live">+1 ${esc(winTeam)}</span></div>
-          <div class="muted small-text">${esc(reason)}</div>
+          <div class="muted small-text">${esc(reason)}${res.note ? ': ' + esc(res.note) : ''}</div>
         </div>`;
       }
       el.innerHTML = `<div class="panel narrow stack">
@@ -615,8 +626,9 @@
           if (!confirm(`Award the win to ${teamOf(ctx.state.room, seat)}?`)) return;
           fn = r => Match.awardWin(r, seat, now());
         } else if (act === 'void') {
-          if (!confirm('Void this room? It will count for no one.')) return;
-          fn = r => Match.voidRoom(r, now());
+          const note = prompt('Reason for voiding (kept in the record):', '');
+          if (note === null || !confirm('Void this room? It will count for no one.')) return;
+          fn = r => Match.voidRoom(r, now(), note);
         } else if (act === 'remove') {
           const seat = b.dataset.seat;
           const s = ctx.state.room.seats[seat];
@@ -639,12 +651,14 @@
         <button class="small secondary" id="correctBtn">Give the win to ${esc(teamOf(room, otherSeat))}</button>
         <button class="small danger" id="voidFinalBtn">Void</button></div></div>`;
       box.querySelector('#correctBtn').onclick = async () => {
-        if (!confirm(`Give the win to ${teamOf(room, otherSeat)} instead?`)) return;
-        await Store.mutateRoom(ctx.code, r => Match.correctResult(r, Store.serverNow()));
+        const note = prompt('Reason for the correction (kept in the record):', '');
+        if (note === null || !confirm(`Give the win to ${teamOf(room, otherSeat)} instead?`)) return;
+        await Store.mutateRoom(ctx.code, r => Match.correctResult(r, Store.serverNow(), note));
       };
       box.querySelector('#voidFinalBtn').onclick = async () => {
-        if (!confirm('Void this result? It will count for no one.')) return;
-        await Store.mutateRoom(ctx.code, r => Match.voidRoom(r, Store.serverNow()));
+        const note = prompt('Reason for voiding (kept in the record):', '');
+        if (note === null || !confirm('Void this result? It will count for no one.')) return;
+        await Store.mutateRoom(ctx.code, r => Match.voidRoom(r, Store.serverNow(), note));
       };
     },
 

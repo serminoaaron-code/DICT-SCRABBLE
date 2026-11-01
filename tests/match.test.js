@@ -476,3 +476,49 @@ test('isRoomRecord rejects ghost rooms made only of presence', () => {
   assert.strictEqual(M.isRoomRecord({ presence: { c1: 'A' } }), false);
   assert.strictEqual(M.isRoomRecord(null), false);
 });
+
+// ---------- Post-review minors ----------
+
+test('leaveSeat only lets the holder leave while waiting', () => {
+  const r = M.leaveSeat(readyRoom(), 'A', 'c1');
+  assert.strictEqual(r.seats.A, null);
+  assert.strictEqual(M.leaveSeat(readyRoom(), 'A', 'c2'), null, 'not the holder');
+  assert.strictEqual(M.leaveSeat(startedRoom(), 'A', 'c1'), null, 'game already started');
+});
+
+test('rejoinSeat only re-takes a seat still held by the same device', () => {
+  const live = startedRoom();
+  const back = M.rejoinSeat(live, 'A', 'c1');
+  assert.strictEqual(back.seats.A.clientId, 'c1');
+  assert.strictEqual(back.seats.A.online, true);
+  assert.strictEqual(M.rejoinSeat(M.removePlayer(live, 'A'), 'A', 'c1'), null, 'seat was freed by the host');
+  assert.strictEqual(M.rejoinSeat(live, 'A', 'c2'), null, 'someone else holds it');
+});
+
+test('withTeamNames shows current team names, falling back to the snapshot', () => {
+  const r = baseRoom();
+  const shown = M.withTeamNames(r, { tA: { name: 'NCR (renamed)' } });
+  assert.strictEqual(shown.teamAName, 'NCR (renamed)');
+  assert.strictEqual(shown.teamBName, 'Region IV-A');
+  assert.strictEqual(r.teamAName, 'NCR', 'input not mutated');
+  assert.strictEqual(M.withTeamNames(r, null).teamAName, 'NCR');
+});
+
+test('correctResult keeps the original reason and a note', () => {
+  const fin = M.walkover(baseRoom(), 'A', 5);
+  const n = M.correctResult(fin, 9, 'Wrong team pressed');
+  assert.strictEqual(n.result.winner, 'B');
+  assert.strictEqual(n.result.reason, 'corrected');
+  assert.strictEqual(n.result.originalReason, 'walkover');
+  assert.strictEqual(n.result.note, 'Wrong team pressed');
+  const twice = M.correctResult(n, 10, '');
+  assert.strictEqual(twice.result.originalReason, 'walkover', 'first reason is kept across corrections');
+  assert.strictEqual(twice.result.note, '');
+});
+
+test('voidRoom records a note', () => {
+  const v = M.voidRoom(baseRoom(), 3, 'No-show, rescheduled');
+  assert.strictEqual(v.voidNote, 'No-show, rescheduled');
+  assert.strictEqual(M.voidRoom(baseRoom(), 3).voidNote, '');
+  assert.strictEqual(M.voidRoom(baseRoom(), 3, 'x'.repeat(200)).voidNote.length, 120);
+});

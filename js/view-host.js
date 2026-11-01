@@ -141,7 +141,8 @@
         let status = '';
         if (room.status === 'final' && room.result) {
           const winName = room.result.winner === 'A' ? nameA : nameB;
-          const why = room.result.reason !== 'time' ? ` <span class="muted">(${esc(REASON_TEXT[room.result.reason] || room.result.reason)})</span>` : '';
+          const note = room.result.note ? ': ' + esc(room.result.note) : '';
+          const why = room.result.reason !== 'time' ? ` <span class="muted">(${esc(REASON_TEXT[room.result.reason] || room.result.reason)}${note})</span>` : '';
           status = `<div class="ok-line">+1 ${esc(winName)} · ${room.result.scoreA}–${room.result.scoreB}${why}</div>`;
         }
         const live = ['live', 'paused', 'appeal', 'suddenDeath', 'hostDecision'].includes(phase);
@@ -162,7 +163,7 @@
           <div class="meta"><span class="code">${esc(Match.formatCode(room.code))}</span> · ${Math.round(room.matchLengthSec / 60)} min · seats ${seatsTaken}/2${room.label ? ' · ' + esc(room.label) : ''}</div>
           ${phase === 'appeal' ? '<div class="warn-line">⚖️ Appeal pending: open the room to decide</div>' : ''}
           ${phase === 'hostDecision' ? '<div class="warn-line">Still tied: open the room to award the win</div>' : ''}
-          ${warnings}${status}
+          ${warnings}${status}${room.status === 'void' && room.voidNote ? `<div class="meta">Void: ${esc(room.voidNote)}</div>` : ''}
           <div class="actions">${actions.join('')}</div>
         </div>`;
       }
@@ -181,8 +182,9 @@
         if (!room) return;
         if (btn.dataset.correct) {
           const other = teamName(state, room, room.result.winner === 'A' ? 'B' : 'A');
-          if (!confirm(`Give the win to ${other} instead?`)) return;
-          const res = await Store.mutateRoom(code, r => Match.correctResult(r, Store.serverNow()));
+          const note = prompt('Reason for the correction (kept in the record):', '');
+          if (note === null || !confirm(`Give the win to ${other} instead?`)) return;
+          const res = await Store.mutateRoom(code, r => Match.correctResult(r, Store.serverNow(), note));
           UI.toast(res.committed ? `Result corrected: +1 ${other}.` : 'Could not correct the result.', res.committed ? 'ok' : 'error');
         } else if (btn.dataset.walkover) {
           const seat = btn.dataset.walkover;
@@ -191,8 +193,9 @@
           const res = await Store.mutateRoom(code, r => Match.walkover(r, seat, Store.serverNow()));
           UI.toast(res.committed ? `Walkover recorded: +1 ${name}.` : 'Could not record walkover (room changed).', res.committed ? 'ok' : 'error');
         } else if (btn.dataset.void) {
-          if (!confirm(`Void room ${Match.formatCode(code)}? It will count for no one.`)) return;
-          const res = await Store.mutateRoom(code, r => Match.voidRoom(r, Store.serverNow()));
+          const note = prompt('Reason for voiding (kept in the record):', '');
+          if (note === null || !confirm(`Void room ${Match.formatCode(code)}? It will count for no one.`)) return;
+          const res = await Store.mutateRoom(code, r => Match.voidRoom(r, Store.serverNow(), note));
           UI.toast(res.committed ? 'Room voided.' : 'Could not void room.', res.committed ? 'ok' : 'error');
         }
       };

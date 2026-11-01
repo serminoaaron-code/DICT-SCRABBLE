@@ -64,7 +64,7 @@ Script load order (in `index.html`): `engine.js → match.js → dictionary.js �
 Store.mutateRoom(code, r => Match.applyPlay(r, seat, placements, { now: Store.serverNow(), expectedMoveCount }))
 ```
 
-`mutateRoom` runs a Firebase `transaction()`. The `Match` function's guards (status, turn, `moveCount`, `turnStartedAt`, `result === null`) make every write idempotent and race-safe. Several browsers may try the same automatic transition (turn timeout, time-up) and only one wins. **Results are recorded exactly once.** Put new game logic in `match.js` with a unit test, then call it through `mutateRoom`. Don't write room data any other way.
+`mutateRoom` runs a Firebase `transaction()`. It never throws: if the SDK aborts the transaction (Error `set`/`maxretry`, which happens when this same client writes an overlapping path while a transaction is in flight), it retries once and then resolves `{ committed: false }`. The `Match` function's guards (status, turn, `moveCount`, `turnStartedAt`, `result === null`) make every write idempotent and race-safe. Several browsers may try the same automatic transition (turn timeout, time-up) and only one wins. **Results are recorded exactly once.** Put new game logic in `match.js` with a unit test, then call it through `mutateRoom`. Don't write room data any other way.
 
 Automatic transitions (turn timeout → pass, match time-up → result or sudden death) are attempted by **seated players and the host**, never spectators, from the ticker in `view-room.js`.
 
@@ -100,7 +100,7 @@ This project uses the **Superpowers** plugin (`superpowers@claude-plugins-offici
 | Situation | Skill(s) to use, in order |
 |---|---|
 | New feature, change in game rules or behaviour, UI addition | `superpowers:brainstorming` → `superpowers:writing-plans` → `superpowers:executing-plans` (or `superpowers:subagent-driven-development` for plans whose tasks are independent of each other) |
-| Bug, unexpected behaviour, desync between clients | `superpowers:systematic-debugging`: reproduce it, find the root cause and state it before proposing a fix. No guess-and-patch. |
+| Bug, unexpected behaviour, desync between clients | `superpowers:systematic-debugging`: reproduce it, find the root cause and state it before proposing a fix. No guess-and-patch. **After the fix, add a QA re-test entry to `docs/important-docs/bugs-fixed.md`** (template at the end of that file; plain-language steps a playtester can follow). |
 | Starting a feature branch | `superpowers:using-git-worktrees` (or at least `git switch -c feat/…` off `main`) |
 | Rules or room logic (`engine.js`, `match.js`, `dictionary.js`) | `superpowers:test-driven-development`: write the failing test in `tests/` first |
 | Before saying anything is done or fixed | `superpowers:verification-before-completion`: unit tests, plus the browser (2+ windows for multiplayer). Show the evidence. |
