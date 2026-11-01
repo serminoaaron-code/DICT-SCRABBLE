@@ -21,6 +21,38 @@
   function isHost() { return Store.local.get('scrabble.host') === '1'; }
   function setHost(on) { if (on) Store.local.set('scrabble.host', '1'); else Store.local.remove('scrabble.host'); }
 
+  // ---------- header switches ----------
+  const SOUND_KEY = 'scrabble.sound';
+
+  function isSoundOn() { return Store.local.get(SOUND_KEY) === '1'; }
+
+  function updateThemeIcon() {
+    const btn = document.getElementById('themeToggle');
+    if (btn) btn.textContent = Theme.current() === 'dark' ? '🌙' : '☀️';
+  }
+
+  function updateSoundIcon() {
+    const btn = document.getElementById('soundToggle');
+    if (btn) btn.textContent = isSoundOn() ? '🔊' : '🔇';
+  }
+
+  // Placeholder until Task 7 adds the Sound module: only flips the stored
+  // preference and its icon. Kept as one small function so it's a one-line
+  // swap to call into Sound instead.
+  function toggleSoundPlaceholder() {
+    if (isSoundOn()) Store.local.remove(SOUND_KEY); else Store.local.set(SOUND_KEY, '1');
+    updateSoundIcon();
+  }
+
+  function wireHeaderToggles() {
+    const themeBtn = document.getElementById('themeToggle');
+    if (themeBtn) themeBtn.onclick = () => { Theme.toggle(); updateThemeIcon(); };
+    const soundBtn = document.getElementById('soundToggle');
+    if (soundBtn) soundBtn.onclick = toggleSoundPlaceholder;
+    updateThemeIcon();
+    updateSoundIcon();
+  }
+
   function go(route) { location.hash = route; }
 
   function el() { return document.getElementById('app'); }
@@ -68,8 +100,10 @@
   }
 
   document.addEventListener('DOMContentLoaded', () => {
+    Theme.init();
     Store.init();
     playgroundBanner();
+    wireHeaderToggles();
     window.addEventListener('hashchange', route);
     route();
   });
