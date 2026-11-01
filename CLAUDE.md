@@ -10,7 +10,9 @@ Design and plan: `docs/superpowers/specs/2026-11-01-tournament-rooms-design.md`,
 
 **Scope:** work in this repo means improving the game: gameplay, rules, scoring and UI. Infrastructure is out of scope: Firebase rules and project setup, auth, hosting, environment and secrets belong to a separate DevOps owner. If a game change depends on infrastructure, mention it in one line as a handoff.
 
-Upstream: `https://github.com/serminoaaron-code/DICT-SCRABBLE`, served by GitHub Pages. There is no CI. **Git workflow:** don't commit to `main` directly. Create a feature branch (`feat/…`, `fix/…`, `docs/…`) and merge into `main` through a pull request. Don't add `Co-Authored-By` trailers to commits.
+Upstream: `https://github.com/serminoaaron-code/DICT-SCRABBLE`. There is no CI.
+
+> 🚀 **Merging into `main` deploys to production.** GitHub Pages auto-deploys `main` to https://serminoaaron-code.github.io/DICT-SCRABBLE/ within a minute or two. That site uses the **real** tournament data (`scrabble/`). Before merging, run the unit tests and test in the local playground. Never test on the live site. To roll back, revert the PR on GitHub, which redeploys the previous version. **Git workflow:** don't commit to `main` directly. Create a feature branch (`feat/…`, `fix/…`, `docs/…`) and merge into `main` through a pull request. Don't add `Co-Authored-By` trailers to commits.
 
 ## Tech stack
 
