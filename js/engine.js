@@ -226,9 +226,19 @@
     return { ok: true, words, total, bingo };
   }
 
+  // Celebration tier for a scored play: 0 (none) through 4 (IMPOSSIBLE!!!).
+  // Thresholds are 15/25/40/60, or any bingo is always tier 4.
+  function celebrationTier(total, bingo) {
+    if (bingo || total >= 60) return 4;
+    if (total >= 40) return 3;
+    if (total >= 25) return 2;
+    if (total >= 15) return 1;
+    return 0;
+  }
+
   return {
     LETTER_VALUES, TILE_DISTRIBUTION, PREMIUM_GRID, BOARD_SIZE, CENTER, RACK_SIZE, BINGO_BONUS, ERROR_TEXT,
     createBag, drawTiles, key, getTile, applyPlacements, rackHas, removeFromRack,
-    validatePlacement, findWords, scoreMove
+    validatePlacement, findWords, scoreMove, celebrationTier
   };
 });

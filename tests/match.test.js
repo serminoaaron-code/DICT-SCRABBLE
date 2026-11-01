@@ -228,7 +228,7 @@ test('applyPlay applies score, refills rack, switches turn', () => {
   assert.strictEqual(n.game.moveCount, 1);
   assert.strictEqual(n.clock.turnStartedAt, 5000);
   assert.deepStrictEqual(n.game.board, { '7_6': 'C', '7_7': 'A', '7_8': 'T' });
-  assert.deepStrictEqual(n.game.lastMove, { seat: 'A', type: 'play', words: [{ word: 'CAT', score: 10 }], total: 10, unverified: false, at: 5000 });
+  assert.deepStrictEqual(n.game.lastMove, { seat: 'A', type: 'play', words: [{ word: 'CAT', score: 10 }], total: 10, bingo: false, unverified: false, at: 5000 });
 });
 
 test('applyPlay rejected on wrong turn, stale moveCount, after endsAt, while paused, while pending', () => {
@@ -401,6 +401,54 @@ test('pausing during the intro keeps the remaining start delay on resume', () =>
   assert.strictEqual(n.clock.endsAt, 613000);
   assert.strictEqual(M.applyPass(n, 'A', { now: 12999, expectedMoveCount: 0 }), null);
   assert.notStrictEqual(M.applyPass(n, 'A', { now: 13000, expectedMoveCount: 0 }), null);
+});
+
+test('turn delay follows the tier', () => {
+  const r = liveRoom({ game: { racks: { A: RACK_CAT.slice(), B: RACK_CAT.slice() } } });
+  const n = M.applyPlay(r, 'A', CAT, { now: 5000, expectedMoveCount: 0 });
+  assert.strictEqual(n.clock.turnStartedAt, 5000, 'tier 0 (10 pts) has no delay');
+
+  const CQZ = [P(7, 6, 'C'), P(7, 7, 'Q'), P(7, 8, 'Z')];
+  const RACK_CQZ = ['C', 'Q', 'Z', 'S', 'R', 'N', 'O'];
+  const r2 = liveRoom({ game: { racks: { A: RACK_CQZ.slice(), B: RACK_CQZ.slice() } } });
+  const n2 = M.applyPlay(r2, 'A', CQZ, { now: 5000, expectedMoveCount: 0 });
+  assert.strictEqual(n2.game.scores.A, 46);
+  assert.strictEqual(n2.clock.turnStartedAt, 8000, 'tier 3 (46 pts) delays the next turn by 3000ms');
+});
+
+test('lastMove records bingo', () => {
+  const RETAINS = ['R', 'E', 'T', 'A', 'I', 'N', 'S'].map((l, i) => P(7, 4 + i, l));
+  const r = liveRoom({ game: { racks: { A: ['R', 'E', 'T', 'A', 'I', 'N', 'S'], B: RACK_CAT.slice() } } });
+  const n = M.applyPlay(r, 'A', RETAINS, { now: 5000, expectedMoveCount: 0 });
+  assert.strictEqual(n.game.lastMove.bingo, true);
+  assert.strictEqual(n.clock.turnStartedAt, 9500, 'tier 4 (bingo) delays the next turn by 4500ms');
+});
+
+test('bestMove keeps the highest and the earlier tie', () => {
+  let r = liveRoom({ game: { racks: { A: RACK_CAT.slice(), B: RACK_CAT.slice() } } });
+  r = M.applyPlay(r, 'A', CAT, { now: 1000, expectedMoveCount: 0 }); // 10 points
+  assert.strictEqual(r.game.bestMove.total, 10);
+  assert.strictEqual(r.game.bestMove.seat, 'A');
+
+  r.game.racks.B = ['B', 'Q', 'X', 'X', 'X', 'X', 'X'];
+  const BQ = [P(6, 5, 'B'), P(6, 6, 'Q')];
+  r = M.applyPlay(r, 'B', BQ, { now: 2000, expectedMoveCount: 1 }); // 46 points
+  assert.strictEqual(r.game.scores.B, 46);
+  assert.strictEqual(r.game.bestMove.total, 46);
+  assert.strictEqual(r.game.bestMove.seat, 'B');
+
+  r.game.racks.A = ['F', 'M', 'X', 'X', 'X', 'X', 'X'];
+  const FM = [P(5, 5, 'F'), P(5, 6, 'M')];
+  r = M.applyPlay(r, 'A', FM, { now: 3000, expectedMoveCount: 2 }); // 46 points too (tie)
+  assert.strictEqual(r.game.scores.A, 10 + 46);
+  assert.strictEqual(r.game.bestMove.total, 46);
+  assert.strictEqual(r.game.bestMove.seat, 'B', 'ties keep the earlier bestMove');
+});
+
+test('pause during a celebration delay keeps at most a full turn', () => {
+  const r = liveRoom({ clock: { turnStartedAt: 11000 } }); // turnStartedAt = now + 3000 (a pending celebration)
+  const p = M.pauseClocks(r, 8000);
+  assert.strictEqual(p.clock.paused.turnRemainingMs, 60000);
 });
 
 test('walkover only from waiting', () => {
