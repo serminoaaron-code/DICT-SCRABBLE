@@ -324,3 +324,38 @@ body.fx-scene #hostBar, body.fx-active #hostBar { position: relative; z-index: 9
   .fx-shake, .fx-rays, .fx-flash, .confetti, .res-rays { display: none; }
   .res-trophy, .res-team, .res-plus { animation-name: fx-in-fade; }
 }
+
+/* ==========================================================================
+   Projector broadcast (Task 12, spec 5.7, mockup projector-broadcast.html):
+   the swipe between rooms and the broadcast scale of the shared scenes.
+   The layout itself lives in style.css (big screen section).
+   ========================================================================== */
+/* swipe between rooms: three Pop bands sweep across; the room is swapped while they cover it */
+.bp-wipe { position: absolute; inset: 0; z-index: 8; pointer-events: none; transform: translateX(-110%);
+  background: linear-gradient(100deg, var(--red) 0 30%, var(--yellow) 30% 55%, var(--blue) 55% 100%); }
+.bp-wipe.go { animation: bp-wipe .7s cubic-bezier(.7,0,.3,1); }
+@keyframes bp-wipe { 0% { transform: translateX(-110%); } 45%, 55% { transform: translateX(0); } 100% { transform: translateX(110%); } }
+@keyframes bp-fade { 0%, 100% { opacity: 0; } 45%, 55% { opacity: 1; } }
+
+/* broadcast scale for the shared scenes (intro, round start, word celebrations); no Skip on a projector,
+   and the score bar stays above a celebration so its points land in it */
+body.bigscreen .fx-overlay { --k: min(0.45vw, 0.4vh); }
+body.bigscreen .fx-tier-4 { --k: min(0.4vw, 0.32vh); } /* its tall column (tiles, title, points, BINGO stamp, credit) */
+body.bigscreen .fx-intro, body.bigscreen .fx-round { --k: min(0.4vw, 0.26vh); }
+/* celebration text starts under the broadcast score bar (the stage is centred below the PLAYGROUND bar) */
+body.bigscreen .fx-overlay { --fx-top: calc(var(--pgh) + (100vh - var(--pgh) - var(--u) * 56.25) / 2 + var(--u) * 9.4) !important; }
+body.bigscreen .fx-skip { display: none; }
+/* landscape: Awesome!'s title, points and word need more room between them than on a phone */
+body.bigscreen .fx-tier-3 .fx-title { top: 22%; }
+body.bigscreen .fx-tier-3 .fx-pts { top: 49%; }
+body.bigscreen .fx-tier-3 .fx-word { top: 69%; }
+body.bigscreen.fx-active .bp-top { z-index: 9600; }
+
+@media (prefers-reduced-motion: reduce) {
+  .bp-wipe { transform: none; opacity: 0; background: var(--navy); }
+  .bp-wipe.go { animation: bp-fade .7s ease; }
+  .bp-board .tile.bp-new { animation: none; }
+  .bp-corner.in { animation: bp-corner-fade .4s ease both; }
+  .bp-items.scroll { animation: none; }
+}
+@keyframes bp-corner-fade { from { opacity: 0; } }
