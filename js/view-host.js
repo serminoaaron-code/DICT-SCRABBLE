@@ -147,6 +147,10 @@
         }
         const live = ['live', 'paused', 'appeal', 'suddenDeath', 'hostDecision'].includes(phase);
         const actions = [`<a class="small-text" href="#room=${esc(room.code)}">Open room →</a>`];
+        if (room.status === 'waiting' || live) {
+          const pinned = state.pinned === room.code;
+          actions.push(`<button class="btn-secondary small" data-pin="${esc(room.code)}">${pinned ? 'Unpin' : '📌 Pin to big screen'}</button>`);
+        }
         if (room.status === 'waiting') {
           actions.push(`<button class="btn-secondary small" data-walkover="A" data-code="${esc(room.code)}">Walkover → ${esc(nameA)}</button>`);
           actions.push(`<button class="btn-secondary small" data-walkover="B" data-code="${esc(room.code)}">Walkover → ${esc(nameB)}</button>`);
@@ -177,10 +181,12 @@
       $('#roomList').onclick = async ev => {
         const btn = ev.target.closest('button');
         if (!btn) return;
-        const code = btn.dataset.code || btn.dataset.void || btn.dataset.correct;
+        const code = btn.dataset.code || btn.dataset.void || btn.dataset.correct || btn.dataset.pin;
         const room = state.rooms[code];
         if (!room) return;
-        if (btn.dataset.correct) {
+        if (btn.dataset.pin) {
+          await Store.setPinned(state.pinned === code ? null : code);
+        } else if (btn.dataset.correct) {
           const other = teamName(state, room, room.result.winner === 'A' ? 'B' : 'A');
           const note = prompt('Reason for the correction (kept in the record):', '');
           if (note === null || !confirm(`Give the win to ${other} instead?`)) return;
@@ -253,7 +259,7 @@
         </section>
       </div>`;
 
-    const state = { teams: {}, rooms: {} };
+    const state = { teams: {}, rooms: {}, pinned: null };
     const ctx = { el, state };
 
     function renderTeams() {
@@ -326,8 +332,12 @@
       renderTeams(); renderStandings();
       if (roomsPanel) roomsPanel.render();
     });
+    const unsubPinned = Store.watchPinned(p => {
+      state.pinned = p;
+      if (roomsPanel) roomsPanel.render();
+    });
 
-    return () => { unsubTeams(); unsubRooms(); };
+    return () => { unsubTeams(); unsubRooms(); unsubPinned(); };
   }
 
   root.HostView = { show };

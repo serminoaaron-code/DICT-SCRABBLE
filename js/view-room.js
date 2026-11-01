@@ -53,6 +53,7 @@
       loaded: false,
       prevStatus: null,
       tossUntil: 0,
+      pinned: null, // room code pinned to the big screen, or null
       ui: {} // live-view working state (Task 10)
     };
     let presenceOff = null;
@@ -275,8 +276,10 @@
       if (state.rawRoom) { state.room = Match.withTeamNames(state.rawRoom, t); render(); }
     });
     const unsub = Store.watchRoom(code, onRoom);
+    const unsubPinned = Store.watchPinned(p => { state.pinned = p; render(); });
     return () => {
       unsubTeams();
+      unsubPinned();
       document.removeEventListener('visibilitychange', onVisibility);
       unsub();
       if (presenceOff) presenceOff();
@@ -675,12 +678,14 @@
           <div class="row">${SEATS.map(s => `<button class="small" data-host="award" data-seat="${s}">🏆 ${esc(teamOf(room, s))}</button>`).join('')}</div></div>`;
       }
       const canPause = PLAYING.includes(room.status) && !room.clock.paused;
+      const pinned = ctx.state.pinned === ctx.code;
       bar.innerHTML = `<div class="hostbar">
         <h4>⚙ Host controls</h4>
         ${warnings}${decision}
         <div class="row">
           ${phase === 'paused' ? '<button class="small" data-host="resume">▶ Resume</button>' : `<button class="small secondary" data-host="pause" ${canPause ? '' : 'disabled'}>⏸ Pause</button>`}
           ${SEATS.map(s => `<button class="small secondary" data-host="award" data-seat="${s}">Award win → ${esc(teamOf(room, s))}</button>`).join('')}
+          <button class="small secondary" data-host="pin">${pinned ? 'Unpin' : '📌 Pin to big screen'}</button>
           <button class="small danger" data-host="void">Void</button>
         </div>
         <div class="row small-text">
@@ -692,6 +697,12 @@
         const b = ev.target.closest('button[data-host]');
         if (!b || b.disabled) return;
         const act = b.dataset.host;
+        if (act === 'pin') {
+          b.disabled = true;
+          await Store.setPinned(ctx.state.pinned === ctx.code ? null : ctx.code);
+          b.disabled = false;
+          return;
+        }
         const now = () => Store.serverNow();
         let fn = null;
         if (act === 'pause') fn = r => Match.pauseClocks(r, now(), 'host');

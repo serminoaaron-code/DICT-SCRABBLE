@@ -134,11 +134,17 @@
 
   function resetTournament() { return db.ref(ROOT).remove(); }
 
+  // Host pin for the big screen: a plain value (room code, or null), not a room transaction.
+  // Only one room is pinned at a time; setting it replaces whatever was pinned before.
+  function setPinned(code) { return db.ref(`${ROOT}/broadcast/pinned`).set(code); }
+  function watchPinned(cb) { return watch(`${ROOT}/broadcast/pinned`, s => s.val() || null, cb); }
+
   root.Store = {
     ROOT, playground: ENV.playground,
     init, serverNow, clientId, local,
     watchTeams, watchRooms, watchRoom,
     addTeam, renameTeam, deleteTeam,
-    mutateRoom, createRoom, setPresence, resetTournament
+    mutateRoom, createRoom, setPresence, resetTournament,
+    setPinned, watchPinned
   };
 })(window);
