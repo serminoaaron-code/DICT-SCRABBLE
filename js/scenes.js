@@ -48,14 +48,16 @@
     return run;
   }
 
-  function stopRun(run) {
+  // Ends a scene: cancels every timer and animation, removes its nodes. skipped = the viewer pressed Skip.
+  function stopRun(run, skipped = false) {
     if (!run || run.done) return;
     run.done = true;
+    run.skipped = skipped;
     run.timers.forEach(clearTimeout);
     run.anims.forEach(a => { try { a.cancel(); } catch (e) { /* ignore */ } });
     run.nodes.forEach(n => n.remove());
     syncBody();
-    if (run.onEnd) run.onEnd();
+    if (run.onEnd) run.onEnd(skipped);
   }
 
   // While a scene shows, lift the game area above the sticky PLAYGROUND bar (like body.fx-active).
@@ -68,7 +70,7 @@
     const skip = el('button', 'fx-skip', '✕ Skip');
     skip.type = 'button';
     skip.setAttribute('aria-label', label);
-    skip.onclick = ev => { ev.stopPropagation(); run.nodes.forEach(n => n.remove()); syncBody(); };
+    skip.onclick = ev => { ev.stopPropagation(); stopRun(run, true); };
     return skip;
   }
 
@@ -117,9 +119,11 @@
     intro = run;
     const line = container.querySelector('#tossLine');
     setTossLine(line, firstTeam);
-    run.onEnd = () => {
-      if (line && line.isConnected) line.textContent = '';
-      if (intro === run) intro = null;
+    // The caption stays until the clocks start, even when this viewer skips the scene.
+    run.clearLine = () => { clearTimeout(run.lineTimer); if (line && line.isConnected) line.textContent = ''; };
+    run.lineTimer = setTimeout(run.clearLine, remaining);
+    run.onEnd = skipped => {
+      if (!skipped) { run.clearLine(); if (intro === run) intro = null; }
       if (opts.onDone) opts.onDone();
     };
 
@@ -151,8 +155,29 @@
   }
 
   function clearIntro() {
-    if (intro) stopRun(intro);
+    const run = intro;
     intro = null;
+    if (!run) return;
+    stopRun(run);
+    run.clearLine();
+  }
+
+  // True when this viewer pressed Skip on the current intro (callers then don't re-mount it).
+  function introSkipped() {
+    return !!(intro && intro.skipped);
+  }
+
+  // Freezes the playing intro where it is (host pause during the intro): no timers, no sounds,
+  // animations held, caption kept. A later playIntro (after the resume) replaces it.
+  function holdIntro() {
+    const run = intro;
+    if (!run || run.done || run.held) return;
+    run.held = true;
+    run.timers.forEach(clearTimeout);
+    run.timers = [];
+    clearTimeout(run.lineTimer);
+    run.anims.forEach(a => { try { a.pause(); } catch (e) { /* ignore */ } });
+    run.nodes.forEach(n => { n.classList.add('fx-hold'); n.appendChild(el('div', 'in-paused', '⏸ Paused')); });
   }
 
   function buildVs(room) {
@@ -265,5 +290,5 @@
     round = null;
   }
 
-  return { INTRO_VS_MS, ROUND_MS, introRemaining, playIntro, clearIntro, roundStart, clearRound };
+  return { INTRO_VS_MS, ROUND_MS, introRemaining, playIntro, clearIntro, introSkipped, holdIntro, roundStart, clearRound };
 });

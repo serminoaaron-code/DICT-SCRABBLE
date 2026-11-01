@@ -608,16 +608,35 @@
     ui.lastSeenMove = room.game.moveCount;
   }
 
+  // VS intro + coin toss. The first live render (page load, refresh, or the waiting -> live
+  // transition) plays it for whatever is left before clock.startedAt (nothing once it passed).
+  // The scene owns #tossLine ("🪙 Coin toss: <TEAM> goes first") until the clocks start.
+  // A host pause during the intro freezes the scene; the resume shifts startedAt, so the scene
+  // is re-mounted at the matching point for the new schedule. ui.introKey names the schedule the
+  // mounted scene follows (null = no intro mounted on this view).
+  function syncIntro(el, room, ctx, fresh) {
+    const ui = ctx.state.ui;
+    const c = room.clock;
+    if (fresh) ui.introKey = null;
+    if (!c || !room.game) return;
+    const frozen = c.paused && c.paused.introRemainingMs > 0 ? c.paused.introRemainingMs : 0;
+    const key = frozen ? 'paused:' + frozen : 'at:' + c.startedAt;
+    if (!fresh && (ui.introKey === null || ui.introKey === key || Scenes.introSkipped())) return;
+    const now = Store.serverNow();
+    // While paused, play as if the clocks start after the frozen intro time, then hold it there.
+    const sched = frozen ? Object.assign({}, room, { clock: Object.assign({}, c, { startedAt: now + frozen }) }) : room;
+    const played = Scenes.playIntro(el.querySelector('#liveRoot'), sched, now);
+    if (played && frozen) Scenes.holdIntro();
+    ui.introKey = played ? key : null;
+  }
+
   const RoomLive = {
     renderLive(el, room, ctx) {
       document.body.classList.add('in-game'); // collapsed header during a live game
       const fresh = !el.querySelector('#liveRoot');
       if (fresh) buildLive(el, ctx);
       update(el, room, ctx);
-      // First live render (page load, refresh, or the waiting -> live transition): the VS intro
-      // and coin toss play for whatever is left before clock.startedAt (nothing once it passed).
-      // The scene owns #tossLine ("🪙 Coin toss: <TEAM> goes first") until the clocks start.
-      if (fresh) Scenes.playIntro(el.querySelector('#liveRoot'), room, Store.serverNow());
+      syncIntro(el, room, ctx, fresh);
       celebrateNewMove(el, room, ctx);
     },
 
