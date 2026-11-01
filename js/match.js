@@ -12,6 +12,7 @@
 
   const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
   const TURN_MS = 60000;
+  const INTRO_MS = 5000;
   const SUDDEN_DEATH_MAX_ROUNDS = 3;
   const SEATS = ['A', 'B'];
 
@@ -156,7 +157,7 @@
 
   // ---------- start ----------
 
-  function startMatch(room, now, rng = Math.random) {
+  function startMatch(room, now, rng = Math.random, introMs = 0) {
     if (room.status !== 'waiting') return null;
     if (!SEATS.every(s => room.seats[s] && room.seats[s].ready)) return null;
     const r = clone(room);
@@ -168,7 +169,8 @@
       board: {}, bag, racks: { A: a.drawn, B: b.drawn }, scores: { A: 0, B: 0 },
       firstSeat, turn: firstSeat, moveCount: 0, pending: null, suddenDeath: null, lastMove: null
     };
-    r.clock = { startedAt: now, endsAt: now + room.matchLengthSec * 1000, turnStartedAt: now, paused: null };
+    const startedAt = now + introMs;
+    r.clock = { startedAt, endsAt: startedAt + room.matchLengthSec * 1000, turnStartedAt: startedAt, paused: null };
     r.status = 'live';
     return r;
   }
@@ -181,6 +183,7 @@
   function canAct(room, seat, expectedMoveCount, now) {
     if (!room.game || !room.clock) return false;
     if (!PLAYING.includes(room.status)) return false;
+    if (now < room.clock.startedAt) return false;
     if (room.clock.paused) return false;
     if (room.game.pending) return false;
     if (room.game.turn !== seat) return false;
@@ -291,16 +294,21 @@
   function pausedSnapshot(room, now, by) {
     return {
       by,
+      introRemainingMs: Math.max(0, room.clock.startedAt - now),
       matchRemainingMs: room.clock.endsAt - now,
       turnRemainingMs: Math.max(0, TURN_MS - (now - room.clock.turnStartedAt))
     };
   }
 
   // Mutates r (a clone): restart both clocks from the stored remaining times.
+  // A pause taken during the intro keeps the remaining "Get ready" time frozen
+  // too, so the clocks and the start guard resume in lockstep.
   function resumeInPlace(r, now) {
     const p = r.clock.paused;
+    const startedAt = now + (p.introRemainingMs || 0);
+    r.clock.startedAt = startedAt;
     r.clock.endsAt = now + p.matchRemainingMs;
-    r.clock.turnStartedAt = now - (TURN_MS - p.turnRemainingMs);
+    r.clock.turnStartedAt = p.introRemainingMs ? startedAt : now - (TURN_MS - p.turnRemainingMs);
     r.clock.paused = null;
     return r;
   }
@@ -432,7 +440,7 @@
   }
 
   return {
-    CODE_ALPHABET, TURN_MS, SUDDEN_DEATH_MAX_ROUNDS,
+    CODE_ALPHABET, TURN_MS, INTRO_MS, SUDDEN_DEATH_MAX_ROUNDS,
     generateRoomCode, formatCode, normalizeCode, isRoomRecord, createRoom, normalizeRoom,
     claimSeat, setReady, removePlayer, leaveSeat, rejoinSeat, withTeamNames, startMatch,
     prepareMove, applyPlay, applyPass, resolveTimeUp, finalize,

@@ -237,7 +237,7 @@
         Store.mutateRoom(code, r => Match.setReady(r, state.mySeat, me, !mine.ready));
       if ($('#startBtn')) $('#startBtn').onclick = async () => {
         $('#startBtn').disabled = true;
-        const res = await Store.mutateRoom(code, r => Match.startMatch(r, Store.serverNow(), Math.random));
+        const res = await Store.mutateRoom(code, r => Match.startMatch(r, Store.serverNow(), Math.random, Match.INTRO_MS));
         if (!res.committed) UI.toast('Could not start: both players must be ready.', 'error');
       };
       if ($('#stopWatching')) $('#stopWatching').onclick = stopWatching;

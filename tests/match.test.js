@@ -170,6 +170,29 @@ const P = (r, c, letter) => ({ r, c, letter });
 const CAT = [P(7, 6, 'C'), P(7, 7, 'A'), P(7, 8, 'T')];
 const RACK_CAT = ['C', 'A', 'T', 'S', 'R', 'N', 'O'];
 
+test('startMatch with intro offsets all clocks', () => {
+  const r = M.startMatch(readyRoom(), 1000, constRng(0.2), 5000);
+  assert.strictEqual(r.clock.startedAt, 6000);
+  assert.strictEqual(r.clock.endsAt, 606000);
+  assert.strictEqual(r.clock.turnStartedAt, 6000);
+});
+
+test('moves are rejected during the intro', () => {
+  const r = M.startMatch(readyRoom(), 1000, constRng(0.2), 5000);
+  r.game.racks.A = RACK_CAT.slice();
+  r.game.racks.B = RACK_CAT.slice();
+  assert.strictEqual(M.applyPlay(r, 'A', CAT, { now: 5999, expectedMoveCount: 0 }), null);
+  assert.notStrictEqual(M.applyPlay(r, 'A', CAT, { now: 6000, expectedMoveCount: 0 }), null);
+  assert.strictEqual(M.applyPass(r, 'A', { now: 5999, expectedMoveCount: 0 }), null);
+});
+
+test('timeout counts from startedAt', () => {
+  const r = M.startMatch(readyRoom(), 1000, constRng(0.2), 5000);
+  const opts = now => ({ now, expectedMoveCount: 0, timeout: true, expectedTurnStartedAt: 6000 });
+  assert.strictEqual(M.applyPass(r, 'A', opts(6000 + 59999)), null);
+  assert.notStrictEqual(M.applyPass(r, 'A', opts(6000 + 60000)), null);
+});
+
 // Live room, firstSeat A (rng 0.2), started at 1000, endsAt 601000.
 function liveRoom(over = {}) {
   const r = startedRoom(1000, constRng(0.2));
@@ -321,7 +344,7 @@ test('appeal pauses clocks and blocks other moves', () => {
   const r = liveRoom({ game: { racks: { A: RACK_CAT, B: RACK_CAT } } });
   const n = M.requestAppeal(r, 'A', CAT, appealOpts(21000));
   assert.strictEqual(M.roomPhase(n), 'appeal');
-  assert.deepStrictEqual(n.clock.paused, { by: 'appeal', matchRemainingMs: 580000, turnRemainingMs: 40000 });
+  assert.deepStrictEqual(n.clock.paused, { by: 'appeal', introRemainingMs: 0, matchRemainingMs: 580000, turnRemainingMs: 40000 });
   assert.deepStrictEqual(n.game.pending, {
     seat: 'A', placements: CAT, words: [{ word: 'CAT', score: 10 }], rejectedWords: ['CAT'], total: 10, requestedAt: 21000
   });
@@ -365,6 +388,17 @@ test('host pause and resume shift endsAt', () => {
   assert.strictEqual(n.clock.paused, null);
   assert.strictEqual(M.roomPhase(n), 'live');
   assert.strictEqual(M.resumeClocks(n, 102000), null, 'not paused');
+});
+
+test('pausing during the intro keeps the remaining start delay on resume', () => {
+  const r = M.startMatch(readyRoom(), 1000, constRng(0.2), 5000);
+  const p = M.pauseClocks(r, 3000);
+  const n = M.resumeClocks(p, 10000);
+  assert.strictEqual(n.clock.startedAt, 13000);
+  assert.strictEqual(n.clock.turnStartedAt, 13000);
+  assert.strictEqual(n.clock.endsAt, 613000);
+  assert.strictEqual(M.applyPass(n, 'A', { now: 12999, expectedMoveCount: 0 }), null);
+  assert.notStrictEqual(M.applyPass(n, 'A', { now: 13000, expectedMoveCount: 0 }), null);
 });
 
 test('walkover only from waiting', () => {
