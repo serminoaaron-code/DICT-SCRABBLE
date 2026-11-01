@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Scope:** work in this repo means improving the game: gameplay, rules, scoring and UI. Infrastructure is out of scope: Firebase rules and project setup, auth, hosting, environment and secrets belong to a separate DevOps owner. If a game change depends on infrastructure, mention it in one line as a handoff.
 
-Upstream: `https://github.com/serminoaaron-code/DICT-SCRABBLE`. Commits so far were made through GitHub's web uploader ("Add files via upload"). There is no CI.
+Upstream: `https://github.com/serminoaaron-code/DICT-SCRABBLE`. There is no CI. **Git workflow:** don't commit to `main` directly. Create a feature branch (`feat/…`, `fix/…`, `docs/…`) and merge into `main` through a pull request. Don't add `Co-Authored-By` trailers to commits.
 
 ## Tech stack
 
