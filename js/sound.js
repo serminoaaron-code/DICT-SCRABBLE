@@ -28,9 +28,12 @@
 
   function enabled() { return readStored() === '1'; }
 
-  // The AudioContext is created lazily, on the first toggle() call, so its
-  // creation always happens inside a user gesture (click) and never trips
-  // browser autoplay restrictions.
+  // The AudioContext is created lazily, on a user gesture, so its creation
+  // never trips browser autoplay restrictions. Two gestures can trigger it:
+  // turning sound on with toggle() (the click is itself a gesture), or — for
+  // a returning player who already has sound on from a previous session —
+  // the first pointerdown/keydown of the new page load (see bindFirstGesture
+  // below).
   let ctx = null;
   function ensureCtx() {
     if (ctx) return ctx;
@@ -46,13 +49,31 @@
     return ctx;
   }
 
-  // Flips the stored preference and returns the new state.
+  function ready() { return !!ctx; }
+
+  // Flips the stored preference and returns the new state. Only creates the
+  // context when turning sound on (nothing to play for, or vibrate, once off).
   function toggle() {
-    ensureCtx();
     const next = !enabled();
+    if (next) ensureCtx();
     writeStored(next);
     return next;
   }
+
+  // A returning player whose device already has sound on (scrabble.sound =
+  // '1' from an earlier session) gets no AudioContext until some gesture
+  // happens on the new page — toggle() isn't called again. Catch the very
+  // first pointerdown or keydown of the page instead so sound "just works"
+  // without re-toggling. Each listener removes itself after it runs.
+  function onFirstGesture() {
+    if (enabled()) ensureCtx();
+  }
+  try {
+    if (root.document && root.document.addEventListener) {
+      root.document.addEventListener('pointerdown', onFirstGesture, { once: true });
+      root.document.addEventListener('keydown', onFirstGesture, { once: true });
+    }
+  } catch (e) { /* no document (Node, etc.) */ }
 
   // Short, quiet note sequences. Each note is well under 1s and gain stays
   // <= 0.2; total length per preset also stays under 1s.
@@ -121,7 +142,9 @@
   // name: 'turn' | 'place' | 'accept' | 'tier1'..'tier4' | 'vs' | 'coin' | 'win'.
   // Silent no-op when sound is off or no AudioContext is available; never throws.
   function play(name) {
-    if (!enabled() || !ctx) return;
+    if (!enabled()) return;
+    if (!ctx) ensureCtx(); // fallback: a gesture may not have fired yet
+    if (!ctx) return;
     try { playPreset(name); } catch (e) { /* never throw */ }
   }
 
@@ -133,5 +156,5 @@
     } catch (e) { /* ignore */ }
   }
 
-  return { enabled, toggle, play, buzz };
+  return { enabled, toggle, play, buzz, ready };
 });
