@@ -305,10 +305,13 @@
   // too, so the clocks and the start guard resume in lockstep.
   function resumeInPlace(r, now) {
     const p = r.clock.paused;
-    const startedAt = now + (p.introRemainingMs || 0);
-    r.clock.startedAt = startedAt;
+    if (p.introRemainingMs) {
+      r.clock.startedAt = now + p.introRemainingMs;
+      r.clock.turnStartedAt = r.clock.startedAt;
+    } else {
+      r.clock.turnStartedAt = now - (TURN_MS - p.turnRemainingMs);
+    }
     r.clock.endsAt = now + p.matchRemainingMs;
-    r.clock.turnStartedAt = p.introRemainingMs ? startedAt : now - (TURN_MS - p.turnRemainingMs);
     r.clock.paused = null;
     return r;
   }

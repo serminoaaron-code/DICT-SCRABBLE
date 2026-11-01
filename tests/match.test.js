@@ -360,6 +360,7 @@ test('approve applies the pending move after resuming', () => {
   assert.strictEqual(n.game.scores.A, 10);
   assert.strictEqual(n.game.turn, 'B');
   assert.strictEqual(n.clock.endsAt, 460000);
+  assert.strictEqual(n.clock.startedAt, 1000, 'resolveAppeal leaves the real start time alone');
   assert.strictEqual(n.clock.paused, null);
   assert.strictEqual(n.game.pending, null);
   assert.strictEqual(n.game.lastMove.type, 'play');
@@ -385,6 +386,7 @@ test('host pause and resume shift endsAt', () => {
   const n = M.resumeClocks(p, 101000);
   assert.strictEqual(n.clock.endsAt, 691000);
   assert.strictEqual(n.clock.turnStartedAt, 91000);
+  assert.strictEqual(n.clock.startedAt, 1000, 'a normal (post-intro) pause/resume leaves the real start time alone');
   assert.strictEqual(n.clock.paused, null);
   assert.strictEqual(M.roomPhase(n), 'live');
   assert.strictEqual(M.resumeClocks(n, 102000), null, 'not paused');
