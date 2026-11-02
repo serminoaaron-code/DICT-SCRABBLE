@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-**DICT Digital Scrabble Sportsfest 2026** is the Scrabble event of an intramurals-style DICT sportsfest. Each team sends one representative. The host creates **fixture rooms**: Team A vs Team B, one timed game, joined with a short code. The winner's team gets **+1** and the loser **0**, and team standings update live. Spectators can watch any room, and `?view=scoreboard` shows a big-screen standings view for a projector.
+**DICT Digital Scrabble Sportsfest 2026** is the Scrabble event of an intramurals-style DICT sportsfest. Each team sends one representative. The host creates **fixture rooms**: Team A vs Team B, one timed game, joined with a short code. The winner's team gets **+1** and the loser **0**, and team standings update live. Spectators can watch any room, and `?view=scoreboard` is a big-screen broadcast view for a projector: an auto-director features live rooms, plays the same scenes and celebrations at broadcast scale, and respects a host pin.
 
 Design and plan: `docs/superpowers/specs/2026-11-01-tournament-rooms-design.md`, `docs/superpowers/plans/2026-11-01-tournament-rooms.md`.
 
@@ -12,7 +12,7 @@ Design and plan: `docs/superpowers/specs/2026-11-01-tournament-rooms-design.md`,
 
 Upstream: `https://github.com/serminoaaron-code/DICT-SCRABBLE`. There is no CI.
 
-> 🚀 **Merging into `main` deploys to GitHub Pages.** `main` auto-deploys to https://serminoaaron-code.github.io/DICT-SCRABBLE/ within a minute or two. That site isn't the final tournament page yet, so merges to `main` are safe during ongoing development — but it does use the **real** tournament data (`scrabble/`), so before merging, run the unit tests and test in the local playground. Never test on the live site with `?db=live` unless asked. To roll back, revert the PR on GitHub, which redeploys the previous version. Once a tournament is actually running from this deploy, merge only when no rooms are live, and have everyone refresh afterwards (there's no build step or hot-reload, so a tab left open keeps running the old JS against the new data). **Git workflow:** don't commit to `main` directly. Create a feature branch (`feat/…`, `fix/…`, `docs/…`) and merge into `main` through a pull request. Don't add `Co-Authored-By` trailers to commits.
+> 🚀 **Merging into `main` deploys to GitHub Pages.** `main` auto-deploys to https://serminoaaron-code.github.io/DICT-SCRABBLE/ within a minute or two. That site isn't the final tournament page yet, so merges to `main` are safe during ongoing development — but it does use the **real** tournament data (`scrabble/`), so before merging, run the unit tests and test in the local playground. Never open the deployed site to test: it always uses the real tournament data. Locally, never add `?db=live` unless the user asks. To roll back, revert the PR on GitHub, which redeploys the previous version. Once a tournament is actually running from this deploy, merge only when no rooms are live, and have everyone refresh afterwards (there's no build step or hot-reload, so a tab left open keeps running the old JS against the new data). **Git workflow:** don't commit to `main` directly. Create a feature branch (`feat/…`, `fix/…`, `docs/…`) and merge into `main` through a pull request. Don't add `Co-Authored-By` trailers to commits.
 
 ## Tech stack
 
