@@ -330,12 +330,12 @@
     if (ui.onResize) window.removeEventListener('resize', ui.onResize);
     if (ui.onKey) document.removeEventListener('keydown', ui.onKey);
     if (ui.onTauntKey) document.removeEventListener('keydown', ui.onTauntKey);
-    if (ui.dragDetach) ui.dragDetach();
+    if (ui.dragApi) ui.dragApi.detach();
     ui.onDocClick = null;
     ui.onResize = null;
     ui.onKey = null;
     ui.onTauntKey = null;
-    ui.dragDetach = null;
+    ui.dragApi = null;
     ui.drag = null;
   }
 
@@ -465,7 +465,7 @@
     document.addEventListener('keydown', ui.onKey);
 
     // Drag-and-drop tiles (feature #5), mouse and touch; tap-to-place keeps working.
-    ui.dragDetach = Drag.attach($('#liveRoot'), dragHooks(el, ctx));
+    ui.dragApi = Drag.attach($('#liveRoot'), dragHooks(el, ctx)); // { detach, refresh }
 
     // Test hook for the browser checks, in the playground only (never on the real tournament data).
     if (/_playground$/.test(Store.ROOT)) root.__room = { ui };
@@ -487,7 +487,7 @@
     $('#playBtn').onclick = async () => {
       const room = ctx.state.room;
       const seat = ctx.state.mySeat;
-      if (!myTurn(room, ctx) || ui.busy) return;
+      if (!myTurn(room, ctx) || ui.busy || ui.drag) return; // never mid-drag: the dragged tile is not placed yet
       const placements = ui.temp.map(t => ({ r: t.r, c: t.c, letter: t.letter }));
       const m = Match.prepareMove(room, seat, placements);
       if (!m.ok) return UI.toast(ScrabbleEngine.ERROR_TEXT[m.error] || 'Invalid move.', 'error');
@@ -717,6 +717,8 @@
     if (RoomLive.updateHost) RoomLive.updateHost(el, room, ctx);
     tick(el, ctx);
     fitBoard(el, ctx);
+    // A drag in progress keeps its target ring and the rack's make-room shift across this redraw.
+    if (ui.drag && ui.dragApi) ui.dragApi.refresh();
   }
 
   // Seated players see the whole game screen without scrolling: if the action row would end

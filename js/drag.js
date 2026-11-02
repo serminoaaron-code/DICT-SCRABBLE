@@ -52,6 +52,7 @@
     const point = ev => ({ x: ev.clientX, y: ev.clientY });
 
     function onDown(ev) {
+      swallowClick = false; // a new press: any click from it is a real tap (not the drag's stray click)
       if (press || drag || settling || !ev.isPrimary) return;
       if (ev.pointerType === 'mouse' && ev.button !== 0) return;
       const from = hooks.source(ev.target);
@@ -101,7 +102,7 @@
       ghost.style.height = p.rect.height + 'px';
       ghost.style.fontSize = p.fontSize;
       // A finger would hide the tile: it floats above the touch point, and lands where it is seen.
-      const lift = p.type === 'mouse' ? 0 : Math.round(p.rect.height * 0.8 + 16);
+      const lift = p.type === 'mouse' ? 0 : liftPx(p.rect.height);
       drag = { from: p.from, id: p.id, ghost, lift, w: p.rect.width, last: point(ev) };
       press = null;
       doc.body.appendChild(ghost);
@@ -207,8 +208,8 @@
       const d = drag;
       drag = null;
       doc.body.classList.remove('tile-dragging');
-      swallowClick = true;
-      setTimeout(() => { swallowClick = false; }, 60);
+      swallowClick = true; // cleared by the next press, or after 500 ms (a keyboard Enter has no press)
+      setTimeout(() => { swallowClick = false; }, 500);
       const back = action.type === 'return' || action.type === 'unplace';
       const dest = back ? hooks.returnRect(d.from, action) : null;
       if (!back || !dest || reduced() || !d.ghost.animate) {
@@ -234,14 +235,26 @@
 
     rootEl.addEventListener('pointerdown', onDown);
     rootEl.addEventListener('click', onClick, true);
-    return function detach() {
+    // refresh(): after the room redraws mid-drag (an opponent's move, someone joining), re-draw the
+    // target ring and the rack's make-room shift for where the finger is now.
+    function refresh() {
+      if (drag) highlight(target(drag.last.x, drag.last.y - drag.lift));
+    }
+
+    function detach() {
       rootEl.removeEventListener('pointerdown', onDown);
       rootEl.removeEventListener('click', onClick, true);
       stopListening();
-      if (drag) { drag.ghost.remove(); doc.body.classList.remove('tile-dragging'); }
+      if (drag) { drag.ghost.remove(); doc.body.classList.remove('tile-dragging'); drag = null; }
       if (settling) settling.remove();
-    };
+      settling = null; // a fly-back still running never calls finish() on a view that has gone
+    }
+    return { detach, refresh };
   }
 
-  return { THRESHOLD_PX, decide, attach };
+  // How far a touch-dragged tile floats above the finger: at least 48px, so a small board tile
+  // (about 20px on a 360px phone) is never under the fingertip.
+  const liftPx = h => Math.max(48, Math.round(h * 0.8 + 16));
+
+  return { THRESHOLD_PX, decide, attach, liftPx };
 });

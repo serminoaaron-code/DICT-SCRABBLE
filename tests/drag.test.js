@@ -46,3 +46,9 @@ test('dropped nowhere (off the board and rack): back to the rack', () => {
   assert.deepStrictEqual(Drag.decide(Object.assign({ from: rack(1), to: { kind: 'none' } }, ctx())), { type: 'return' });
   assert.deepStrictEqual(Drag.decide(Object.assign({ from: board(1, 1), to: { kind: 'none' } }, ctx())), { type: 'return' });
 });
+
+test('liftPx: a dragged tile floats at least 48px above the finger', () => {
+  assert.strictEqual(Drag.liftPx(20), 48, 'a placed board tile on a 360px phone');
+  assert.strictEqual(Drag.liftPx(44), 51, 'a rack tile: as before');
+  assert.strictEqual(Drag.liftPx(60), 64);
+});
