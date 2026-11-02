@@ -269,6 +269,8 @@ tests/engine.test.js  # node --test (Node's built-in test runner, no packages)
 
 ## 13. Delivery plan (deadline Tue 2026-11-03)
 
+> **Update 2026-11-02:** Tue 2026-11-03 turned out to be a **game test day**, not the tournament, and the tournament date isn't set yet. The plan below is kept as history; the freeze no longer applies.
+
 The work started on Sun 2026-11-01 evening, which leaves about 2 days. The scope is cut into slices so there is always something usable. `main` (the current app on GitHub Pages) stays untouched until the merge.
 
 | Slice | Contents | Target |
