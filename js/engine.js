@@ -227,17 +227,17 @@
   }
 
   // Celebration tier for a scored play: 0 (none) through 4 (IMPOSSIBLE!!!).
-  // Thresholds are 8/15/25/40 (easy to hit on purpose, batch 5), or any bingo is always tier 4.
+  // The fewest points for each tier, 0-4: 8/15/25/40 (easy to hit on purpose, batch 5); any bingo is
+  // always tier 4. The How to play page reads it too, so its numbers never drift from the game.
+  const TIER_MIN = [0, 8, 15, 25, 40];
   function celebrationTier(total, bingo) {
-    if (bingo || total >= 40) return 4;
-    if (total >= 25) return 3;
-    if (total >= 15) return 2;
-    if (total >= 8) return 1;
+    if (bingo) return 4;
+    for (let t = TIER_MIN.length - 1; t > 0; t--) if (total >= TIER_MIN[t]) return t;
     return 0;
   }
 
   return {
-    LETTER_VALUES, TILE_DISTRIBUTION, PREMIUM_GRID, BOARD_SIZE, CENTER, RACK_SIZE, BINGO_BONUS, ERROR_TEXT,
+    LETTER_VALUES, TILE_DISTRIBUTION, PREMIUM_GRID, BOARD_SIZE, CENTER, RACK_SIZE, BINGO_BONUS, ERROR_TEXT, TIER_MIN,
     createBag, drawTiles, key, getTile, applyPlacements, rackHas, removeFromRack,
     validatePlacement, findWords, scoreMove, celebrationTier
   };

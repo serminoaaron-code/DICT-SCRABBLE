@@ -209,7 +209,12 @@
             : `<button type="button" data-page="${p}"${p === v.page ? ' class="on" aria-current="page"' : ''}>${p}</button>`),
           `<button type="button" data-page="${v.page + 1}" aria-label="Next page" ${v.page === v.pages ? 'disabled' : ''}>›</button>`
         ].join('');
-        if (keep) { const el = document.querySelector('#roomTabs ' + keep) || document.querySelector('#roomPager ' + keep); if (el) el.focus(); }
+        if (keep) {
+          let el = document.querySelector('#roomTabs ' + keep) || document.querySelector('#roomPager ' + keep);
+          // Next / Previous at the last / first page is disabled now: focus the current page's button instead
+          if ((!el || el.disabled) && !keep.startsWith('[data-tab')) el = document.querySelector('#roomPager [aria-current="page"]');
+          if (el && !el.disabled) el.focus({ preventScroll: true });
+        }
       }
 
       // Arrow keys / Home / End move focus between the tabs; Enter or Space switches (manual activation).

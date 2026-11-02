@@ -177,3 +177,11 @@ test('scoreMove reports validation errors', () => {
   assert.strictEqual(m.error, 'FIRST_MOVE_CENTER');
   assert.ok(E.ERROR_TEXT.FIRST_MOVE_CENTER.includes('centre'));
 });
+
+test('TIER_MIN drives celebrationTier', () => {
+  assert.deepStrictEqual(E.TIER_MIN, [0, 8, 15, 25, 40]);
+  for (let i = 1; i <= 4; i++) {
+    assert.strictEqual(E.celebrationTier(E.TIER_MIN[i], false), i, `${E.TIER_MIN[i]} points`);
+    assert.strictEqual(E.celebrationTier(E.TIER_MIN[i] - 1, false), i - 1, `${E.TIER_MIN[i] - 1} points`);
+  }
+});

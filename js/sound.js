@@ -8,7 +8,11 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function (root) {
   'use strict';
 
-  const STORAGE_KEY = 'scrabble.sound';
+  // Which setting this page uses: the game pages keep scrabble.sound (off by default); the big screen
+  // has its own, on by default (useKey). Stored '1' = on, '0' = off, nothing = the page's default.
+  let STORAGE_KEY = 'scrabble.sound';
+  let defaultOn = false;
+  function useKey(key, on) { STORAGE_KEY = key; defaultOn = !!on; }
 
   function readStored() {
     try {
@@ -21,12 +25,11 @@
   function writeStored(on) {
     try {
       if (!root.localStorage) return;
-      if (on) root.localStorage.setItem(STORAGE_KEY, '1');
-      else root.localStorage.removeItem(STORAGE_KEY);
+      root.localStorage.setItem(STORAGE_KEY, on ? '1' : '0');
     } catch (e) { /* storage unavailable (private mode, etc.) */ }
   }
 
-  function enabled() { return readStored() === '1'; }
+  function enabled() { const v = readStored(); return v === null ? defaultOn : v === '1'; }
 
   // The AudioContext is created lazily, and only after a user gesture, so it
   // never trips browser autoplay restrictions. Chrome starts a context made
@@ -53,6 +56,10 @@
     } catch (e) { /* ignore */ }
     return ctx;
   }
+
+  // The page's one AudioContext, shared with the match music (js/music.js): made (or resumed) on demand,
+  // whether sound effects are on or not. Only called from a user gesture.
+  function sharedContext() { return ensureCtx(); }
 
   function ready() { return !!ctx; }
 
@@ -124,6 +131,9 @@
       { f: 1200, t: 0, d: 0.06, type: 'sine', g: 0.12 },
       { f: 1600, t: 0.06, d: 0.1, type: 'sine', g: 0.12 }
     ],
+    // the match-end ringside bell: three struck-bell rings (a few overtones each), ringing out
+    bell: [0, 0.32, 0.64].flatMap(t => [[1, 0.18], [2.76, 0.09], [5.4, 0.05], [8.93, 0.025]]
+      .map(([ratio, g]) => ({ f: 880 * ratio, t, d: 1.4 / Math.sqrt(ratio), type: 'sine', g, decay: 'exp' }))),
     win: [
       { f: 523, t: 0, d: 0.12, type: 'sine', g: 0.18 },
       { f: 659, t: 0.12, d: 0.12, type: 'sine', g: 0.18 },
@@ -145,8 +155,13 @@
         const t0 = now + n.t;
         const t1 = t0 + n.d;
         gain.gain.setValueAtTime(0, t0);
-        gain.gain.linearRampToValueAtTime(n.g, t0 + 0.01);
-        gain.gain.linearRampToValueAtTime(0, t1);
+        if (n.decay === 'exp') { // a struck sound: a sharp attack, then it rings out
+          gain.gain.linearRampToValueAtTime(n.g, t0 + 0.004);
+          gain.gain.exponentialRampToValueAtTime(0.0001, t1);
+        } else {
+          gain.gain.linearRampToValueAtTime(n.g, t0 + 0.01);
+          gain.gain.linearRampToValueAtTime(0, t1);
+        }
         osc.connect(gain);
         gain.connect(ctx.destination);
         osc.start(t0);
@@ -155,7 +170,7 @@
     }
   }
 
-  // name: 'turn' | 'place' | 'accept' | 'tier1'..'tier4' | 'vs' | 'coin' | 'win'.
+  // name: 'turn' | 'place' | 'accept' | 'tier1'..'tier4' | 'vs' | 'coin' | 'win' | 'bell'.
   // Silent no-op when sound is off, before the page's first gesture, or while
   // the context isn't running (notes queued on a suspended context would all
   // burst out at once on resume); never throws.
@@ -174,5 +189,5 @@
     } catch (e) { /* ignore */ }
   }
 
-  return { enabled, toggle, play, buzz, ready, state };
+  return { enabled, toggle, play, buzz, ready, state, useKey, PRESETS, sharedContext };
 });

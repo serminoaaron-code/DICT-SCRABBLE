@@ -229,6 +229,21 @@ Every bug we've fixed is listed here with steps to **try to make it happen again
   5. Tap just above or below "? Bonuses": it still opens. With a keyboard, open it with Enter: focus is on ✕; Tab stays inside; Escape closes it and focus returns to "? Bonuses".
 - **Expected now:** all of the above, with nothing else looking or working differently.
 
+### BF-29: Keyboard focus, second-finger Play, pager focus and small jumps
+- **Area:** live game / host · **Fixed in:** the How-to-play PR · **Found by:** the polish-pass review
+- **Used to happen:**
+  - with a keyboard, you couldn't see which button was focused;
+  - a second finger landing on Play while you dragged a tile could play the word;
+  - on the host's Finished/Void pages, pressing Next to the last page lost your place;
+  - closing the "? Bonuses" card could jump the page up;
+  - while dragging a rack tile, the gap jiggled each time the other player moved.
+- **Try to trigger it:**
+  1. On a laptop, press **Tab** a few times in a game: a clear ring shows on the focused button (navy in the light theme, yellow in the dark). Clicking with the mouse shows no ring.
+  2. On a phone, drag one of your placed tiles and touch **Play word** with a second finger: nothing is played.
+  3. As host, with more than 5 finished rooms, use Tab and Enter on "›": focus stays on the page buttons.
+  4. As a spectator on a phone, scroll down, open "? Bonuses" with a keyboard and close it: the page doesn't move.
+- **Expected now:** all of the above.
+
 ## Turn moments and the big screen
 
 ### BF-23: "Whose turn" ribbon stuck on the left of a laptop screen

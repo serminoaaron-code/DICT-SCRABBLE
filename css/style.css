@@ -34,6 +34,13 @@
 
   /* ---- semantic tokens: light theme values, also the fallback before
      Theme.init() sets data-theme on <html> ---- */
+  --focus: #0b1f4d; /* the keyboard focus ring: navy on light, yellow on dark (3:1 against the page) */
+  /* fixed pieces that look the same in both themes (tiles, tier chips, the How to play pictures) */
+  --tile-edge: #c9b78a;
+  --tier-1: #9fd3ff; --tier-2: #7ee0a6; --tier-3: var(--yellow); --tier-4: #ff8a80;
+  --btn-muted: #24397a;
+  --sky-soft: #6fb0ff;
+  --coin-hi: #ffe28a; --coin-lo: #c79300; --coin-edge: #9b7300;
   --bg: #ffffff;
   --surface: #f2f5fc;
   --text: #0b1f4d;
@@ -46,6 +53,7 @@
 }
 
 html[data-theme="light"] {
+  --focus: #0b1f4d;
   --bg: #ffffff;
   --surface: #f2f5fc;
   --text: #0b1f4d;
@@ -58,6 +66,7 @@ html[data-theme="light"] {
 }
 
 html[data-theme="dark"] {
+  --focus: var(--yellow);
   --bg: #0a1430;
   --surface: #13224a;
   --text: #eef2ff;
@@ -84,6 +93,12 @@ body::after { width: 240px; height: 240px; left: -90px; bottom: -90px; backgroun
 html[data-theme="dark"] body::before, html[data-theme="dark"] body::after { opacity: .35; }
 
 button, input, select { font: inherit; padding: 11px 16px; border-radius: 12px; border: 0; outline: none; }
+/* 🎵 off: the same note, faded and struck through (the header and the big screen) */
+.icon-toggle.is-off, .bp .bp-theme.is-off { opacity: .45; text-decoration: line-through; }
+/* a clear ring for keyboard users only (never after a mouse click or a tap) */
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, [role="tab"]:focus-visible, [tabindex]:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+/* on the result heroes' fixed gradients and the yellow playground bar: a navy ring with a white halo, so one of the two always shows */
+.res-hero :focus-visible, .playground-bar :focus-visible { outline-color: #0b1f4d; box-shadow: 0 0 0 8px #fff; }
 select { max-width: 100%; text-overflow: ellipsis; } /* a long team name in the list never widens the form */
 /* Buttons: break-word (not the page's "anywhere") keeps a button at least as wide as its longest word,
    so a long name beside it can't squeeze "Rename" into "Rena/me"; a button holding a long name is
@@ -524,6 +539,9 @@ html[data-theme="dark"] .bp-shape { opacity: .35; }
   padding: calc(var(--u) * .5) calc(var(--u) * 1.2); font-weight: 800; font-size: calc(var(--u) * 1.2); }
 .bp-dot { color: #ff6b61; }
 .bp-badges { position: absolute; right: calc(var(--u) * 2); bottom: calc(var(--u) * 7.3); z-index: 3; display: flex; align-items: center; gap: calc(var(--u) * .6); }
+/* the big screen's "Click to start music" (browsers need one click before any sound) */
+.bp-start { position: absolute; right: calc(var(--u) * 2); bottom: calc(var(--u) * 11); /* above the 🎵 / 🔊 buttons, never on them */ z-index: 30; padding: calc(var(--u) * .5) calc(var(--u) * 1.2);
+  border-radius: 999px; background: var(--navy); color: #fff; border: 2px solid var(--yellow); font-weight: 800; font-size: calc(var(--u) * 1.1); pointer-events: none; }
 .bp-mode { border-radius: 99px; padding: calc(var(--u) * .4) calc(var(--u) * 1); font-weight: 800; font-size: calc(var(--u) * 1.1);
   background: var(--surface); color: var(--text); border: 2px solid var(--line); white-space: nowrap; }
 .bp-mode.pinned { background: var(--yellow); color: var(--navy); border-color: var(--yellow); }

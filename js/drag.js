@@ -7,7 +7,8 @@
 //     to:   { kind: 'square', r, c } | { kind: 'rack', pos } | { kind: 'none' }
 //     -> { type: 'place', index, r, c } | { type: 'move', from: { r, c }, r, c }
 //        | { type: 'unplace', r, c } | { type: 'reorder', index, pos } | { type: 'return' }
-//   attach(rootEl, hooks)             -> pointer controller (browser only); returns detach()
+//   attach(rootEl, hooks)             -> pointer controller (browser only); returns { detach(), refresh() }
+//   liftPx(h)                         -> how far a touch-dragged tile floats above the finger (>= 48px)
 // Loads as a browser global (Drag) or a Node module.
 (function (root, factory) {
   const api = factory(root);
@@ -238,7 +239,13 @@
     // refresh(): after the room redraws mid-drag (an opponent's move, someone joining), re-draw the
     // target ring and the rack's make-room shift for where the finger is now.
     function refresh() {
-      if (drag) highlight(target(drag.last.x, drag.last.y - drag.lift));
+      if (!drag) return;
+      // the redrawn tiles get their make-room shift at once (no slide back in): transitions off for this frame
+      const tiles = [...rootEl.querySelectorAll('#rack .tile')];
+      tiles.forEach(t => { t.style.transition = 'none'; });
+      highlight(target(drag.last.x, drag.last.y - drag.lift));
+      void rootEl.offsetWidth;
+      tiles.forEach(t => { t.style.transition = ''; });
     }
 
     function detach() {

@@ -391,6 +391,8 @@ body.fx-scene #hostBar, body.fx-active #hostBar { position: relative; z-index: 9
 .res-hero .res-btns button { flex: 1 1 0; min-width: 0; padding: 11px 10px; border-radius: 12px; font-size: 14px; font-weight: 800;
   background: #0b1f4d; color: #fff; border: 2px solid #0b1f4d; box-shadow: 0 3px 0 rgba(0,0,0,.25); }
 .res-hero .res-btns .res-alt { background: #fff; color: #0b1f4d; }
+/* keyboard focus on the hero's fixed gradients: a navy ring with a white halo, so one of the two always shows */
+.res-hero .res-btns button:focus-visible { outline: 3px solid #0b1f4d; outline-offset: 2px; box-shadow: 0 0 0 8px #fff; }
 .res-other .res-btns .res-main { border-color: rgba(255,255,255,.85); }
 .res-confetti { top: -14px; pointer-events: none; }
 .res-stand-title { margin: 6px 0 0; }

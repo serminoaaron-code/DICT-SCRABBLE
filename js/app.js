@@ -1,5 +1,5 @@
 // Boot, routing and the shared clock ticker.
-// Routes: ?view=scoreboard | #host | #room=CODE | (default) join page.
+// Routes: ?view=scoreboard | #gamehelp[=player|host|watch] | #host | #room=CODE | (default) join page.
 (function (root) {
   'use strict';
 
@@ -32,13 +32,26 @@
     if (btn) btn.textContent = Sound.enabled() ? '🔊' : '🔇';
   }
 
+  // 🎵 match music (music only; sound effects stay on 🔇/🔊). On by default, remembered per device.
+  function updateMusicIcon() {
+    const btn = document.getElementById('musicToggle');
+    if (!btn) return;
+    const on = Music.enabled();
+    btn.classList.toggle('is-off', !on);
+    btn.setAttribute('aria-pressed', String(on));
+    btn.setAttribute('aria-label', on ? 'Music: on' : 'Music: off');
+  }
+
   function wireHeaderToggles() {
     const themeBtn = document.getElementById('themeToggle');
     if (themeBtn) themeBtn.onclick = () => { Theme.toggle(); updateThemeIcon(); };
     const soundBtn = document.getElementById('soundToggle');
     if (soundBtn) soundBtn.onclick = () => { Sound.toggle(); updateSoundIcon(); };
+    const musicBtn = document.getElementById('musicToggle');
+    if (musicBtn) musicBtn.onclick = () => { Music.toggle(); updateMusicIcon(); };
     updateThemeIcon();
     updateSoundIcon();
+    updateMusicIcon();
   }
 
   function go(route) { location.hash = route; }
@@ -59,7 +72,12 @@
       return;
     }
     document.body.classList.remove('bigscreen');
-    if (hash === 'host') {
+    const help = root.Help ? Help.roleOf(hash) : null; // #gamehelp, #gamehelp=player|host|watch
+    const helpLink = document.getElementById('helpLink');
+    if (helpLink) { if (help) helpLink.setAttribute('aria-current', 'page'); else helpLink.removeAttribute('aria-current'); }
+    if (help) {
+      cleanup = HelpView.show(el(), help);
+    } else if (hash === 'host') {
       cleanup = HostView.show(el());
     } else if (hash.startsWith('room=')) {
       let raw = hash.slice(5);
@@ -71,7 +89,21 @@
     }
   }
 
-  root.App = { go, isHost, setHost, onTick, route };
+  // The header's "How to play": during a seated player's own live game (App.inLiveSeat, set by the room
+  // view) it opens in a new tab, so the game stays open and connected; otherwise a normal link.
+  function wireHelpLink() {
+    const a = document.getElementById('helpLink');
+    if (!a) return;
+    a.addEventListener('click', ev => {
+      // already on the page: keep the open guide (no new history entry), just go back to the top
+      if (root.Help && Help.roleOf(location.hash.replace(/^#/, ''))) { ev.preventDefault(); root.scrollTo(0, 0); return; }
+      if (!root.App.inLiveSeat) return;
+      ev.preventDefault();
+      root.open(location.pathname + location.search + '#gamehelp', '_blank', 'noopener');
+    });
+  }
+
+  root.App = { go, isHost, setHost, onTick, route, inLiveSeat: false };
 
   function playgroundBanner() {
     if (!Store.playground) return;
@@ -94,6 +126,7 @@
     Store.init();
     playgroundBanner();
     wireHeaderToggles();
+    wireHelpLink();
     window.addEventListener('hashchange', route);
     route();
   });

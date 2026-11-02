@@ -43,12 +43,18 @@
       <div class="bp-lower" id="bigLower"></div>
       <div class="bp-badges">
         <button type="button" class="bp-theme" id="bigTheme" aria-label="Switch light/dark theme" title="Switch theme">☀️</button>
+        <button type="button" class="bp-theme" id="bigMusic" aria-pressed="true" aria-label="Music: on" title="Match music on/off">🎵</button>
+        <button type="button" class="bp-theme" id="bigSound" aria-pressed="true" aria-label="Sound effects: on" title="Sound effects on/off (the match-end bell)">🔊</button>
         <div class="bp-mode" id="bigMode">🔁 AUTO</div>
       </div>
       <div class="bp-ticker"><div class="bp-lbl disp">LIVE</div><div class="bp-items-wrap"><div class="bp-items" id="bigLive"></div></div></div>
       <div class="bp-winner hidden" id="bigWinner"></div>
+      <div class="bp-start hidden" id="bigStart" role="status">🔊 Click to start music</div>
       <div class="bp-wipe" id="bigWipe" aria-hidden="true"></div>
     </div>`;
+
+  // The page has had its first click (sound may play): kept across re-shows of the view, so the chip never comes back.
+  let bigGestured = false;
 
   function show(el) {
     el.innerHTML = TEMPLATE;
@@ -408,6 +414,12 @@
     function mountScene() {
       const d = st.dir;
       const room = d.featured ? st.rooms[d.featured] : null;
+      // the match is over: the ringside bell, once per result (a sound effect: the big screen's 🔊)
+      if (d.scene === 'winner' && room && room.result) {
+        const k = room.code + '@' + room.result.decidedAt;
+        if (st.bellFor !== k) { st.bellFor = k; Music.stop(); Sound.play('bell'); }
+      }
+      if (d.scene === 'highlight' && d.move && room) Music.dip(Music.dipFor(d.move.tier)); // the same rule as the room view
       if (d.scene === 'highlight' && d.move && room) {
         const seat = d.move.seat;
         st.hlCode = d.featured;
@@ -483,6 +495,30 @@
       step();
     }
 
+    // 🎵 / 🔊: the big screen's own settings (muting a room view on the host's laptop never silences it), both on
+    // by default. Browsers only allow sound after a click: until then a small chip asks for one.
+    Music.useKey('scrabble.music.bigscreen');
+    Sound.useKey('scrabble.sound.bigscreen', true);
+    const musicBtn = $('#bigMusic'), soundBtn = $('#bigSound'), startChip = $('#bigStart');
+    const paintAudio = () => {
+      const m = Music.enabled(), s = Sound.enabled();
+      musicBtn.classList.toggle('is-off', !m); musicBtn.setAttribute('aria-pressed', String(m)); musicBtn.setAttribute('aria-label', m ? 'Music: on' : 'Music: off');
+      soundBtn.textContent = s ? '🔊' : '🔇'; soundBtn.setAttribute('aria-pressed', String(s)); soundBtn.setAttribute('aria-label', s ? 'Sound effects: on' : 'Sound effects: off');
+      startChip.classList.toggle('hidden', bigGestured || !m);
+    };
+    musicBtn.onclick = () => { Music.toggle(); paintAudio(); };
+    soundBtn.onclick = () => { Sound.toggle(); paintAudio(); };
+    const onFirstGesture = () => { bigGestured = true; paintAudio(); document.removeEventListener('pointerdown', onFirstGesture, true); document.removeEventListener('keydown', onFirstGesture, true); };
+    document.addEventListener('pointerdown', onFirstGesture, true);
+    document.addEventListener('keydown', onFirstGesture, true);
+    paintAudio();
+    // the featured room's track while it is on screen (room view or a highlight); quiet for intros, rounds, winners, idle
+    function tickMusic() {
+      const d = st.dir, room = st.shown ? st.rooms[st.shown] : null, now = Store.serverNow();
+      if (room && d.featured === st.shown && (d.scene === 'room' || d.scene === 'highlight') && Music.enabled()) Music.set(Music.trackFor(room, now), Music.levelFor(room, now));
+      else Music.stop();
+    }
+
     const themeBtn = $('#bigTheme');
     const themeIcon = () => { themeBtn.textContent = Theme.current() === 'dark' ? '🌙' : '☀️'; };
     themeBtn.onclick = () => { Theme.toggle(); themeIcon(); };
@@ -494,6 +530,7 @@
     App.onTick(() => {
       step();
       tickRibbon();
+      tickMusic();
       const room = st.shown ? st.rooms[st.shown] : null;
       el.querySelectorAll('.bp-ticker [data-bigclock]').forEach(n => {
         const r = st.rooms[n.dataset.bigclock];
@@ -512,6 +549,11 @@
       Scenes.clearResult();
       Scenes.clearRibbon();
       Taunt.clear();
+      Music.stop();
+      document.removeEventListener('pointerdown', onFirstGesture, true);
+      document.removeEventListener('keydown', onFirstGesture, true);
+      Music.useKey('scrabble.music'); // back to the game pages' settings
+      Sound.useKey('scrabble.sound', false);
     };
   }
 
