@@ -81,6 +81,8 @@
       r.fairPlay[s].screenLeaves = r.fairPlay[s].screenLeaves || 0;
     }
     r.result = r.result || null;
+    r.taunts = r.taunts || {};
+    for (const s of SEATS) r.taunts[s] = r.taunts[s] || null;
     r.clock = r.clock || null;
     if (r.clock) r.clock.paused = r.clock.paused || null;
     r.game = r.game || null;
@@ -412,6 +414,26 @@
     return r;
   }
 
+  // ---- emoji taunts (batch 5): live only, each seat's LATEST taunt, overwritten, no history ----
+  const TAUNTS = ['angry', 'lol', 'cry'];
+  const TAUNT_COOLDOWN_MS = 10000;
+  const TAUNT_STATUSES = ['live', 'suddenDeath', 'hostDecision']; // the game screen (paused / appeal included)
+
+  // A seated player sends taunt `id`. Rejected (null) outside the game screen, during the VS intro,
+  // for a bad seat or id, and within TAUNT_COOLDOWN_MS of this seat's previous taunt. Only `taunts`
+  // changes, so a taunt's transaction racing with a play or a pass never loses the move.
+  function taunt(room, seat, id, { now }) {
+    if (!room || !TAUNT_STATUSES.includes(room.status) || !room.clock) return null;
+    if (!SEATS.includes(seat) || !TAUNTS.includes(id) || typeof now !== 'number') return null;
+    if (now < room.clock.startedAt) return null;
+    const last = room.taunts && room.taunts[seat];
+    if (last && now - last.at < TAUNT_COOLDOWN_MS) return null;
+    const r = clone(room);
+    r.taunts = Object.assign({ A: null, B: null }, r.taunts || {});
+    r.taunts[seat] = { e: id, at: now };
+    return r;
+  }
+
   // presence/<clientId> = 'A' | 'B' | 'watch' | 'host' (removed on disconnect)
   function isSeatOnline(room, seat) {
     const s = room.seats && room.seats[seat];
@@ -465,6 +487,7 @@
     prepareMove, applyPlay, applyPass, resolveTimeUp, finalize,
     requestAppeal, resolveAppeal, pauseClocks, resumeClocks,
     resign, awardWin, walkover, voidRoom, correctResult, recordScreenLeave,
+    TAUNTS, TAUNT_COOLDOWN_MS, taunt,
     roomPhase, computeStandings, isSeatOnline, watcherCount,
     _internal: { clone, other, playCore, enterSuddenDeath }
   };

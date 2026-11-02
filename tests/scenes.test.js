@@ -60,10 +60,10 @@ test('bestWordText: word, points and tier title; no parenthesis for tier 0; empt
   const g = bm => ({ game: { bestMove: bm } });
   assert.strictEqual(Scenes.bestWordText(finalRoom('A', g({ seat: 'A', words: [{ word: 'QUIZZED', score: 74 }], total: 74, bingo: false }))),
     '⭐ Best word: QUIZZED · 74 pts (IMPOSSIBLE!!!)');
-  assert.strictEqual(Scenes.bestWordText(finalRoom('A', g({ seat: 'A', words: [{ word: 'QUIZ', score: 44 }], total: 44, bingo: false }))),
-    '⭐ Best word: QUIZ · 44 pts (Awesome!)');
-  assert.strictEqual(Scenes.bestWordText(finalRoom('A', g({ seat: 'B', words: [{ word: 'CAT', score: 10 }], total: 10, bingo: false }))),
-    '⭐ Best word: CAT · 10 pts');
+  assert.strictEqual(Scenes.bestWordText(finalRoom('A', g({ seat: 'A', words: [{ word: 'QUIZ', score: 30 }], total: 30, bingo: false }))),
+    '⭐ Best word: QUIZ · 30 pts (Awesome!)');
+  assert.strictEqual(Scenes.bestWordText(finalRoom('A', g({ seat: 'B', words: [{ word: 'CAT', score: 5 }], total: 5, bingo: false }))),
+    '⭐ Best word: CAT · 5 pts');
   assert.strictEqual(Scenes.bestWordText(finalRoom('A', g(null))), '');
   assert.strictEqual(Scenes.bestWordText(finalRoom('A', { game: {} })), '');
   assert.strictEqual(Scenes.bestWordText(finalRoom('A', { game: null })), '');
@@ -82,11 +82,11 @@ test('endingCelebration: the play that ended the game (bag out / sudden death) s
     result: { winner: 'A', scoreA: 300, scoreB: 200, reason, decidedAt: 1000 },
     game: { moveCount, lastMove, bestMove: null }
   });
-  const c = Scenes.endingCelebration(11, ended('bagOut', play(44)));
-  assert.ok(c && c.tier === 3 && c.total === 44 && c.seat === 'A');
-  assert.strictEqual(Scenes.endingCelebration(11, ended('suddenDeath', play(20))).tier, 1);
+  const c = Scenes.endingCelebration(11, ended('bagOut', play(30)));
+  assert.ok(c && c.tier === 3 && c.total === 30 && c.seat === 'A');
+  assert.strictEqual(Scenes.endingCelebration(11, ended('suddenDeath', play(10))).tier, 1);
   // tier 0, not a play, another reason, a page load (no baseline) or an already-seen move: nothing
-  assert.strictEqual(Scenes.endingCelebration(11, ended('bagOut', play(9))), null);
+  assert.strictEqual(Scenes.endingCelebration(11, ended('bagOut', play(7))), null);
   assert.strictEqual(Scenes.endingCelebration(11, ended('suddenDeath', { seat: 'B', type: 'pass', words: [], total: 0 })), null);
   assert.strictEqual(Scenes.endingCelebration(11, ended('time', play(44))), null);
   assert.strictEqual(Scenes.endingCelebration(null, ended('bagOut', play(44))), null);

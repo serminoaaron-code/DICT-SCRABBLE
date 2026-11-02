@@ -59,7 +59,8 @@
       dir: Director.init(), sceneId: -1, target: null, shown: null,
       swapTimer: null, wipeTimer: null, roundKey: '', hlCode: null,
       keys: {}, scores: {},
-      boardSeen: null, drop: null, shownAt: 0, ribbonKey: null // turn moments: word drop + ribbon
+      boardSeen: null, drop: null, shownAt: 0, ribbonKey: null, // turn moments: word drop + ribbon
+      tauntSeen: null // emoji taunts: last taunt time per seat for the room on screen (null = baseline)
     };
 
     // ---------- data helpers ----------
@@ -300,8 +301,21 @@
       Scenes.ribbon(stage, keyed);
     }
     function showRoom(code) {
-      if (st.shown !== code) { st.shownAt = Store.serverNow(); Scenes.clearRibbon(); }
+      if (st.shown !== code) { st.shownAt = Store.serverNow(); Scenes.clearRibbon(); Taunt.clear(); st.tauntSeen = null; }
       st.shown = code;
+    }
+
+    // Emoji taunts (batch 5) for the room on screen only, under the sender's team name, and only on the
+    // normal room view (and its highlights): never over the intro, round-start or winner scenes. Other
+    // rooms' taunts are ignored. A room the screen cuts to starts from a baseline, so nothing replays.
+    function showTaunts(room) {
+      if (!room) return;
+      const a = Taunt.arrivals(st.tauntSeen, room, Store.serverNow());
+      st.tauntSeen = a.seen;
+      if (!['room', 'highlight'].includes(st.dir.scene)) return;
+      for (const t of a.show) {
+        Taunt.show($(`.bp-side[data-side="${t.seat}"]`), $('#bigTop'), { seat: t.seat, e: t.e, name: teamName(room, t.seat) }, { scale: 0.9 });
+      }
     }
 
     function renderLastMove(room) {
@@ -345,6 +359,7 @@
       renderBoard(room);
       renderLastMove(room);
       renderLower(room);
+      showTaunts(room);
     }
 
     // Mode badge and the corner card follow the director's state on every step.
@@ -423,6 +438,7 @@
         st.hlCode = null;
       }
       stage.classList.toggle('is-idle', d.scene === 'idle');
+      if (!['room', 'highlight'].includes(d.scene)) Taunt.clear(); // never over the intro, round start or winner card
       const target = d.featured;
       const changed = target !== st.target;
       st.target = target;
@@ -493,6 +509,7 @@
       Scenes.clearRound();
       Scenes.clearResult();
       Scenes.clearRibbon();
+      Taunt.clear();
     };
   }
 

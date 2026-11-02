@@ -326,10 +326,12 @@
     if (ui.onDocClick) document.removeEventListener('click', ui.onDocClick);
     if (ui.onResize) window.removeEventListener('resize', ui.onResize);
     if (ui.onKey) document.removeEventListener('keydown', ui.onKey);
+    if (ui.onTauntKey) document.removeEventListener('keydown', ui.onTauntKey);
     if (ui.dragDetach) ui.dragDetach();
     ui.onDocClick = null;
     ui.onResize = null;
     ui.onKey = null;
+    ui.onTauntKey = null;
     ui.dragDetach = null;
     ui.drag = null;
   }
@@ -355,8 +357,12 @@
         <div class="rack-row"><span class="rack-bag" aria-hidden="true">👜</span><div class="rack hidden" id="rack"></div><button type="button" id="shuffleBtn" class="rack-shuffle hidden" aria-label="Shuffle tiles" title="Shuffle tiles">🔀</button></div>
         <div class="actions-row hidden" id="actions">
           <button id="playBtn" class="btn-primary">✅ Play word</button>
-          <button id="recallBtn" class="secondary">↩ Recall</button>
+          <button id="recallBtn" class="secondary" aria-label="Recall">↩<span class="btn-label"> Recall</span></button>
           <button id="passBtn" class="secondary">⏭ Pass</button>
+          <div class="taunt-wrap hidden" id="tauntWrap">
+            <button id="tauntBtn" class="secondary taunt-btn" aria-label="Send a taunt" aria-haspopup="true" aria-expanded="false">😀<span class="taunt-cd hidden" id="tauntCd" aria-hidden="true"></span></button>
+            <div class="taunt-pop hidden" id="tauntPop" role="menu" aria-label="Taunts"></div>
+          </div>
           <div class="more-wrap">
             <button id="moreBtn" class="secondary" aria-label="More options" aria-haspopup="true" aria-expanded="false">⋯</button>
             <div class="more-menu hidden" id="moreMenu">
@@ -370,6 +376,7 @@
           <button class="link small-text hidden" id="stopWatching">Stop watching / take a seat</button></div>
         </div>
         <div id="board-container"></div>
+        <div id="tauntLive" class="fx-sr" aria-live="polite"></div>
         <div id="noticeBox" class="sheet sheet-notice"></div>
         <div id="rejectBox" class="sheet sheet-reject"></div>
         <div class="bonus-backdrop hidden" id="bonusBackdrop"><div class="card bonus-card" id="bonusCard" role="dialog" aria-label="Bonus squares">
@@ -378,7 +385,7 @@
       </div></div>`;
     el.querySelector('#stopWatching').onclick = () => ctx.stopWatching();
     const ui = ctx.state.ui;
-    Object.assign(ui, { temp: [], selected: null, busy: false, rejected: null, seenMove: -1, tried: {}, pillKind: null, noticeHidden: null, sideHtml: {}, lastSeenMove: null, rackOrder: null, drag: null, dragMove: null });
+    Object.assign(ui, { temp: [], selected: null, busy: false, rejected: null, seenMove: -1, tried: {}, pillKind: null, noticeHidden: null, sideHtml: {}, lastSeenMove: null, rackOrder: null, drag: null, dragMove: null, tauntSeen: null });
     const $ = s => el.querySelector(s);
 
     // ⋯ menu: Leave lives here so it can't be tapped by accident.
@@ -388,8 +395,39 @@
     const setMenu = open => { menu.classList.toggle('hidden', !open); moreBtn.setAttribute('aria-expanded', String(open)); };
     moreBtn.onclick = ev => { ev.stopPropagation(); setMenu(menu.classList.contains('hidden')); };
     menu.onclick = () => setMenu(false);
-    ui.onDocClick = ev => { if (!ev.target.closest || !ev.target.closest('.more-wrap')) setMenu(false); };
+    // 😀 taunts (batch 5): the button opens the three faces; tapping one sends it (Match.taunt in a
+    // transaction, which also enforces the 10 s cooldown) and closes the pop-up. Live only, no toast.
+    const tauntPop = $('#tauntPop');
+    const tauntBtn = $('#tauntBtn');
+    for (const id of Taunt.IDS) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'taunt-item';
+      b.dataset.taunt = id;
+      b.setAttribute('role', 'menuitem');
+      b.setAttribute('aria-label', 'Send ' + Taunt.LABELS[id]);
+      b.title = Taunt.LABELS[id];
+      b.appendChild(Taunt.face(id));
+      tauntPop.appendChild(b);
+    }
+    const setTaunt = open => { tauntPop.classList.toggle('hidden', !open); tauntBtn.setAttribute('aria-expanded', String(open)); };
+    ui.setTauntPop = setTaunt;
+    tauntBtn.onclick = ev => { ev.stopPropagation(); if (!tauntBtn.disabled) setTaunt(tauntPop.classList.contains('hidden')); };
+    tauntPop.onclick = ev => {
+      ev.stopPropagation();
+      const b = ev.target.closest && ev.target.closest('[data-taunt]');
+      if (!b) return;
+      setTaunt(false);
+      const seat = ctx.state.mySeat, id = b.dataset.taunt;
+      Store.mutateRoom(ctx.code, r => Match.taunt(r, seat, id, { now: Store.serverNow() }));
+    };
+    ui.onDocClick = ev => {
+      if (!ev.target.closest || !ev.target.closest('.more-wrap')) setMenu(false);
+      if (!ev.target.closest || !ev.target.closest('.taunt-wrap')) setTaunt(false);
+    };
     document.addEventListener('click', ui.onDocClick);
+    ui.onTauntKey = ev => { if (ev.key === 'Escape') setTaunt(false); };
+    document.addEventListener('keydown', ui.onTauntKey);
 
     // Seated players: shrink the board so the whole game screen fits the visible window.
     ui.onResize = () => fitBoard(el, ctx);
@@ -657,6 +695,7 @@
 
     $('#actions').classList.toggle('hidden', !isSeat(seat));
     for (const id of ['#playBtn', '#recallBtn', '#passBtn']) $(id).disabled = !mine || ui.busy || !!ui.rejected;
+    syncTaunt(el, room, ctx);
     $('#resignBtn').disabled = !isSeat(seat) || !['live', 'suddenDeath', 'hostDecision'].includes(room.status);
 
     // Bottom sheet (empty = hidden): the recall / ask-host choice, or my appeal waiting for the host.
@@ -725,10 +764,31 @@
     if (clockEl.textContent !== clock) clockEl.textContent = clock;
   }
 
+  // The 😀 button: seated players only, on the game screen once the VS intro is over. During the
+  // 10 s cooldown (from the room data, so a refresh keeps it) it is disabled and shows the seconds left.
+  const TAUNT_STATUSES = ['live', 'suddenDeath', 'hostDecision'];
+  function syncTaunt(el, room, ctx) {
+    const wrap = el.querySelector('#tauntWrap');
+    if (!wrap) return;
+    const seat = ctx.state.mySeat, now = Store.serverNow();
+    const on = isSeat(seat) && !!room && !!room.clock && TAUNT_STATUSES.includes(room.status) && now >= room.clock.startedAt;
+    wrap.classList.toggle('hidden', !on);
+    const can = on && Taunt.canSend(room, seat, now);
+    const btn = el.querySelector('#tauntBtn');
+    if (btn.disabled !== !can) btn.disabled = !can;
+    const left = on ? Taunt.cooldownLeft(room, seat, now) : 0;
+    const cd = el.querySelector('#tauntCd');
+    const text = left > 0 ? String(Math.ceil(left / 1000)) : '';
+    if (cd.textContent !== text) cd.textContent = text;
+    cd.classList.toggle('hidden', !text);
+    if (!can && ctx.state.ui.setTauntPop) ctx.state.ui.setTauntPop(false);
+  }
+
   function tick(el, ctx) {
     const room = ctx.state.room;
     if (!room || !room.clock || !el.querySelector('#liveRoot')) return;
     const now = Store.serverNow();
+    syncTaunt(el, room, ctx); // the cooldown countdown, and the button showing once the VS intro ends
     // Turn moments #4: the whose-turn ribbon, once per turn, when its clock starts (not on a refresh).
     const ribbon = Pill.ribbon(room, ctx.state.mySeat);
     if (Pill.ribbonDue(ribbon, ctx.state.ui.ribbonKey, now)) {
@@ -767,6 +827,24 @@
         const expectedMoveCount = room.game.moveCount, expectedTurnStartedAt = c.turnStartedAt, seat = room.game.turn;
         Store.mutateRoom(ctx.code, r => Match.applyPass(r, seat, { now: Store.serverNow(), expectedMoveCount, timeout: true, expectedTurnStartedAt }));
       }
+    }
+  }
+
+  // Emoji taunts (batch 5): a taunt shows on every room view (players, spectators, host) when it
+  // ARRIVES, popping out of the sender's side of the score bar. The first render after building the
+  // view only sets the baseline, so a refresh or late join never replays one (live only).
+  function showTaunts(el, room, ctx) {
+    const ui = ctx.state.ui;
+    const a = Taunt.arrivals(ui.tauntSeen, room, Store.serverNow());
+    ui.tauntSeen = a.seen;
+    for (const t of a.show) {
+      const s = room.seats && room.seats[t.seat];
+      const name = Names.short((s && s.name) || (t.seat === 'A' ? room.teamAName : room.teamBName) || '');
+      Taunt.show(el.querySelector('#side' + t.seat), el.querySelector('.scorebar'), { seat: t.seat, e: t.e, name });
+      // Screen readers: a lasting polite live region whose text changes (an inserted, already-filled
+      // region is often not announced). The floating face is aria-hidden.
+      const live = el.querySelector('#tauntLive');
+      if (live) { const msg = Taunt.text(name, t.e); live.textContent = ''; setTimeout(() => { live.textContent = msg; }, 60); } // the same text twice still announces
     }
   }
 
@@ -881,6 +959,7 @@
       update(el, room, ctx);
       syncIntro(el, room, ctx, fresh);
       celebrateNewMove(el, room, ctx);
+      showTaunts(el, room, ctx);
     },
 
     // Result screen (Scenes.renderResult): winner / other player / neutral (spectators, host) / void.
@@ -903,6 +982,7 @@
       Celebrate.clear();
       Scenes.clearIntro();
       Scenes.clearRibbon();
+      Taunt.clear();
       detachLive(ui);
       const ending = Scenes.endingCelebration(ui.lastSeenMove, room);
       if (room.game) ui.lastSeenMove = room.game.moveCount; // nothing replays on a later rebuild
@@ -1039,6 +1119,7 @@
       detachLive(ctx.state.ui);
       Scenes.clearIntro();
       Scenes.clearRibbon();
+      Taunt.clear();
       Scenes.clearResult();
       if (ctx.state.ui.standings) ctx.state.ui.standings.off();
     }

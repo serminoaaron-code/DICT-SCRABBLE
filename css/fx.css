@@ -45,6 +45,42 @@
 .turn-ribbon.fx-reduced .tr-band { animation: tr-fade 1200ms ease both; }
 @media (prefers-reduced-motion: reduce) { .tr-band { animation: tr-fade 1200ms ease both; } }
 
+/* Emoji taunts (batch 5, js/taunt.js): our own animated faces. .taunt sits on the sender's side of the
+   score bar for 2.5 s: above the bar's 9600 lift during a celebration, under the flying points (9700).
+   It never takes taps. Reduced motion: a plain fade, the faces stand still. */
+.taunt { position: fixed; z-index: 9650; pointer-events: none; animation: taunt-life 2500ms ease both; }
+.taunt .tf { display: block; width: 100%; height: 100%; overflow: visible; filter: drop-shadow(0 3px 4px rgba(0,0,0,.35)); }
+.taunt-tag { position: absolute; left: 50%; bottom: -8px; transform: translateX(-50%); max-width: 160px; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; background: var(--navy); color: #fff; font-weight: 800; font-size: 11px; line-height: 1.4; padding: 1px 8px; border-radius: 9px; }
+@keyframes taunt-life { 0% { transform: scale(.3); opacity: 0; } 12% { transform: scale(1.15); opacity: 1; } 20% { transform: scale(1); }
+  85% { transform: none; opacity: 1; } 100% { transform: translateY(-8px); opacity: 0; } }
+@keyframes taunt-fade { 0%, 100% { opacity: 0; } 12%, 85% { opacity: 1; } }
+.tf-an-face { animation: tf-shake .35s ease-in-out infinite; transform-origin: 50% 60%; }
+@keyframes tf-shake { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-6deg); } 75% { transform: rotate(6deg); } }
+.tf-an-steam { opacity: 0; animation: tf-puff 1.1s ease-out infinite; transform-box: fill-box; transform-origin: center; }
+.tf-an-steam.tf-s2 { animation-delay: .55s; }
+@keyframes tf-puff { 0% { transform: translateY(0) scale(.5); opacity: .9; } 100% { transform: translateY(-26px) scale(1.4); opacity: 0; } }
+.tf-an-red { animation: tf-flush 1.4s ease-in-out infinite; }
+@keyframes tf-flush { 50% { fill: #ff3b2f; } }
+.tf-lol-face { animation: tf-rock .5s ease-in-out infinite; transform-origin: 50% 90%; }
+@keyframes tf-rock { 0%, 100% { transform: rotate(-8deg) translateY(0); } 50% { transform: rotate(8deg) translateY(-6px); } }
+.tf-lol-tear { animation: tf-squirt .5s ease-out infinite; transform-box: fill-box; transform-origin: center; }
+.tf-lol-tear.tf-r { animation-delay: .25s; }
+@keyframes tf-squirt { 0% { transform: translate(0, 0) scale(.6); opacity: 1; } 100% { transform: translate(var(--dx), 14px) scale(1); opacity: 0; } }
+.tf-cry-face { animation: tf-sob .9s ease-in-out infinite; transform-origin: 50% 100%; }
+@keyframes tf-sob { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(.95) translateY(2px); } }
+.tf-cry-stream { stroke-dasharray: 6 6; animation: tf-run .4s linear infinite; }
+@keyframes tf-run { to { stroke-dashoffset: -12; } }
+.tf-cry-drop { animation: tf-drip 1s ease-in infinite; }
+.tf-cry-drop.tf-r { animation-delay: .5s; }
+@keyframes tf-drip { 0% { transform: translateY(0); opacity: 1; } 100% { transform: translateY(22px); opacity: 0; } }
+.taunt.fx-reduced { animation-name: taunt-fade; }
+.taunt.fx-reduced .tf * { animation: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  .taunt { animation-name: taunt-fade; }
+  .tf * { animation: none !important; }
+}
+
 /* Desktop landscape (Layout.fitStage): the whole stage sits over the board, at board scale (--k inline). */
 .fx-on-board > .fx-stage { left: var(--fx-left); top: var(--fx-top); width: var(--fx-w); height: var(--fx-h); right: auto; bottom: auto; }
 .fx-on-board .fx-stage > .fx-content { top: 0; }
