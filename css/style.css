@@ -280,15 +280,17 @@ table.standings tr:first-child td { font-weight: 700; }
 .rack-row .rack { flex: 1; min-width: 0; }
 /* Drag-and-drop (feature #5): draggable tiles don't scroll the page on touch; the floating copy
    follows the pointer; the square under it shows green (drop here) or red (not allowed). */
-#rack .tile, #board-container .tile.temp { touch-action: none; cursor: grab; }
+#rack .tile, #board-container .tile.temp { touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 #rack .tile.used { cursor: default; }
 #rack .tile { transition: transform .15s ease; }
 #rack .tile.room-l { transform: translateX(-10px); }
 #rack .tile.room-r { transform: translateX(10px); }
 .drag-ghost { position: fixed; left: 0; top: 0; z-index: 9800; pointer-events: none; margin: 0; box-shadow: 0 12px 24px rgba(0,0,0,.4); will-change: transform; }
 body.tile-dragging, body.tile-dragging * { cursor: grabbing !important; user-select: none; -webkit-user-select: none; }
-.sq.drop-ok { outline: 3px solid var(--green); outline-offset: 1px; z-index: 2; }
-.sq.drop-bad { outline: 3px solid var(--red); outline-offset: 1px; z-index: 2; }
+/* Two-tone rings drawn inside the square (edge squares aren't clipped by the board's rounded frame):
+   one band always contrasts with the square, and "not allowed" is dashed, so it isn't colour alone. */
+.sq.drop-ok { outline: 3px solid #fff; outline-offset: -3px; box-shadow: inset 0 0 0 6px var(--green); z-index: 2; }
+.sq.drop-bad { outline: 3px dashed var(--red); outline-offset: -3px; box-shadow: inset 0 0 0 6px #fff; z-index: 2; }
 .tile.drop-in { animation: tile-drop-in .22s cubic-bezier(.2,1.6,.4,1); }
 @keyframes tile-drop-in { from { transform: scale(1.25); } to { transform: none; } }
 @media (prefers-reduced-motion: reduce) {

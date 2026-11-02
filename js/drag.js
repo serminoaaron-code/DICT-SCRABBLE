@@ -69,8 +69,24 @@
       root.addEventListener('pointermove', onMove, true);
       root.addEventListener('pointerup', onUp, true);
       root.addEventListener('pointercancel', onCancel, true);
+      root.addEventListener('pointerdown', onOtherDown, true);
+      root.addEventListener('blur', onLeave);
+      doc.addEventListener('visibilitychange', onLeave);
       doc.addEventListener('keydown', onKey, true);
     }
+
+    // A drag must never get stuck waiting for a release that won't come (the window lost focus,
+    // the tab was hidden, the release was lost): any of these, or a new press, sends the tile back.
+    function abandon() {
+      if (drag) return drop(BACK);
+      press = null;
+      stopListening();
+    }
+    function onOtherDown(ev) {
+      const id = drag ? drag.id : press && press.id;
+      if (ev.pointerId !== id) abandon();
+    }
+    function onLeave() { abandon(); } // window blur, or the tab hidden / shown again
 
     function begin(ev) {
       const p = press;
@@ -90,6 +106,9 @@
       press = null;
       doc.body.appendChild(ghost);
       doc.body.classList.add('tile-dragging');
+      // The game area holds the pointer: start() redraws the rack / board, which removes the pressed
+      // tile, and some browsers would keep sending the touch's events to that removed node.
+      try { rootEl.setPointerCapture(drag.id); } catch (e) { /* pointer already gone */ }
       hooks.start(drag.from);
       place(ev);
     }
@@ -98,14 +117,21 @@
       const { x, y } = point(ev);
       drag.last = { x, y };
       const to = target(x, y - drag.lift);
-      // Over the board it shrinks to the square, so the green / red ring around the square shows.
-      const scale = to.kind === 'square' ? Math.max(0.5, to.el.getBoundingClientRect().width / drag.w) : 1.15;
+      // Over the board it shrinks inside the square, so the ring drawn in the square's edge shows.
+      const scale = to.kind === 'square' ? Math.max(0.3, 0.6 * to.el.getBoundingClientRect().width / drag.w) : 1.15;
       drag.ghost.style.transform = `translate(${x}px, ${y - drag.lift}px) translate(-50%, -50%) scale(${scale})`;
       highlight(to);
     }
 
-    // What lies under (x, y): a board square, the rack (with the insertion position), or nothing.
+    // What the drop goes to. The finger itself on the rack means the rack (sliding along the rack
+    // rearranges it, even though the lifted tile floats over the board's bottom row); otherwise
+    // whatever lies under the floating tile: a board square, the rack, or nothing.
     function target(x, y) {
+      if (drag && drag.lift) {
+        const under = doc.elementFromPoint(x, y + drag.lift);
+        const rack = under && rootEl.contains(under) ? under.closest('#rack') : null;
+        if (rack) return { kind: 'rack', pos: rackPos(rack, x), el: rack };
+      }
       const el = doc.elementFromPoint(x, y);
       if (!el || !rootEl.contains(el)) return { kind: 'none' };
       const sq = el.closest('#board-container .sq[data-r]');
@@ -152,6 +178,9 @@
       root.removeEventListener('pointermove', onMove, true);
       root.removeEventListener('pointerup', onUp, true);
       root.removeEventListener('pointercancel', onCancel, true);
+      root.removeEventListener('pointerdown', onOtherDown, true);
+      root.removeEventListener('blur', onLeave);
+      doc.removeEventListener('visibilitychange', onLeave);
       doc.removeEventListener('keydown', onKey, true);
     }
 
@@ -181,7 +210,7 @@
       swallowClick = true;
       setTimeout(() => { swallowClick = false; }, 60);
       const back = action.type === 'return' || action.type === 'unplace';
-      const dest = back ? hooks.returnRect(d.from) : null;
+      const dest = back ? hooks.returnRect(d.from, action) : null;
       if (!back || !dest || reduced() || !d.ghost.animate) {
         d.ghost.remove();
         hooks.finish(action);

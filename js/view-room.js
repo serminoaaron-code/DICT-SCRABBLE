@@ -532,7 +532,13 @@
         ui.selected = null;
         update(el, room(), ctx);
       },
-      returnRect(from) {
+      // Where the floating tile flies back to: a placed tile dropped somewhere invalid stays on its own
+      // square, so it goes there; a rack tile, or a placed tile taken back, goes to its rack slot.
+      returnRect(from, action) {
+        if (from.kind === 'board' && action && action.type === 'return') {
+          const s = el.querySelector(`#board-container .sq[data-r="${from.r}"][data-c="${from.c}"]`);
+          return s ? s.getBoundingClientRect() : null;
+        }
         const idx = from.kind === 'rack' ? from.index : (ui.temp.find(t => t.r === from.r && t.c === from.c) || {}).rackIndex;
         const t = idx === undefined ? null : el.querySelector(`#rack .tile[data-i="${idx}"]`);
         return t ? t.getBoundingClientRect() : null;
