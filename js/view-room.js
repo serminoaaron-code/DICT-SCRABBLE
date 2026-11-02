@@ -769,12 +769,11 @@
 
   // The 😀 button: seated players only, on the game screen once the VS intro is over. During the
   // 10 s cooldown (from the room data, so a refresh keeps it) it is disabled and shows the seconds left.
-  const TAUNT_STATUSES = ['live', 'suddenDeath', 'hostDecision'];
   function syncTaunt(el, room, ctx) {
     const wrap = el.querySelector('#tauntWrap');
     if (!wrap) return;
     const seat = ctx.state.mySeat, now = Store.serverNow();
-    const on = isSeat(seat) && !!room && !!room.clock && TAUNT_STATUSES.includes(room.status) && now >= room.clock.startedAt;
+    const on = isSeat(seat) && !!room && !!room.clock && Match.TAUNT_STATUSES.includes(room.status) && now >= room.clock.startedAt && !(room.clock.paused && room.clock.paused.introRemainingMs > 0);
     wrap.classList.toggle('hidden', !on);
     const can = on && Taunt.canSend(room, seat, now);
     const btn = el.querySelector('#tauntBtn');
