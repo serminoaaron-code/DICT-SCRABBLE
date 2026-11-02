@@ -93,6 +93,8 @@ body::after { width: 240px; height: 240px; left: -90px; bottom: -90px; backgroun
 html[data-theme="dark"] body::before, html[data-theme="dark"] body::after { opacity: .35; }
 
 button, input, select { font: inherit; padding: 11px 16px; border-radius: 12px; border: 0; outline: none; }
+/* 🎵 off: the same note, faded and struck through */
+.icon-toggle.is-off { opacity: .55; text-decoration: line-through; }
 /* a clear ring for keyboard users only (never after a mouse click or a tap) */
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, [role="tab"]:focus-visible, [tabindex]:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 /* on the result heroes' fixed gradients and the yellow playground bar: a navy ring with a white halo, so one of the two always shows */

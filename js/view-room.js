@@ -128,6 +128,10 @@
     function render() {
       const room = state.room;
       App.inLiveSeat = false; // set again by the live view's update() while I'm seated in a live game
+      // music only on the live match screen (the lobby, choices, results and "not found" are quiet)
+      const watchingLive = !!room && ['live', 'suddenDeath', 'hostDecision'].includes(room.status) &&
+        (state.mySeat === 'A' || state.mySeat === 'B' || state.mySeat === 'watch' || App.isHost());
+      if (!watchingLive) Music.stop();
       document.body.classList.remove('in-game'); // RoomLive.renderLive / renderFinal put it back
 
       if (room === null) {
@@ -280,6 +284,7 @@
     const unsubPinned = Store.watchPinned(p => { state.pinned = p; render(); });
     return () => {
       App.inLiveSeat = false;
+      Music.stop(); // leaving the room
       unsubTeams();
       unsubPinned();
       document.removeEventListener('visibilitychange', onVisibility);
@@ -823,6 +828,8 @@
     if (!room || !room.clock || !el.querySelector('#liveRoot')) return;
     const now = Store.serverNow();
     syncTaunt(el, room, ctx); // the cooldown countdown, and the button showing once the VS intro ends
+    // 🎵 match music: Tile Rush, then Last Minute for the final 60 s and sudden death; low while on hold
+    Music.set(Music.enabled() ? Music.trackFor(room, now) : null, Music.levelFor(room, now));
     // Turn moments #4: the whose-turn ribbon, once per turn, when its clock starts (not on a refresh).
     const ribbon = Pill.ribbon(room, ctx.state.mySeat);
     if (Pill.ribbonDue(ribbon, ctx.state.ui.ribbonKey, now)) {
@@ -907,6 +914,7 @@
     }
     if (c) {
       const seat = c.seat;
+      if (c.tier >= 1) Music.dip(Celebrate.durationFor(c.tier)); // the celebration stands out over the music
       Celebrate.show(c, {
         container: el.querySelector('#liveRoot'),
         scoreEl: el.querySelector('#side' + seat + ' .score'),
@@ -1005,6 +1013,15 @@
     // word celebration on the live screen: it plays here over the result, whose entrance waits for it.
     renderFinal(el, room, ctx) {
       App.inLiveSeat = false; // the game is over: How to play opens in the same tab again
+      // The match is over: the music stops, and a result seen happening live rings the ringside bell once
+      // (a sound effect, so it follows 🔇/🔊). Never on a void, a refresh or a late join.
+      Music.stop();
+      let bellRang = false;
+      if (el.querySelector('#liveRoot') && room.status === 'final' && room.result && ctx.state.bellAt !== room.result.decidedAt) {
+        ctx.state.bellAt = room.result.decidedAt;
+        Sound.play('bell');
+        bellRang = true;
+      }
       document.body.classList.add('in-game'); // collapsed header, so the result scene fills a phone like the mockup
       const ui = ctx.state.ui;
       const viewer = Scenes.resultViewer(room, ctx.state.mySeat);
@@ -1025,7 +1042,7 @@
       const ending = Scenes.endingCelebration(ui.lastSeenMove, room);
       if (room.game) ui.lastSeenMove = room.game.moveCount; // nothing replays on a later rebuild
       const delayMs = ending ? (Match.CELEBRATE_MS[ending.tier] || 0) : 0;
-      Scenes.renderResult(el, room, viewer, { animate: Scenes.resultFresh(room, Store.serverNow()), delayMs });
+      Scenes.renderResult(el, room, viewer, { animate: Scenes.resultFresh(room, Store.serverNow()), delayMs, winSoundDelayMs: bellRang ? 1200 : 0 });
       if (room.game) UI.renderBoard(el.querySelector('#board-container'), room.game.board, {});
       if (!ui.standings) ui.standings = UI.mountStandings(() => el.querySelector('#finalStandings'));
       else ui.standings.render();

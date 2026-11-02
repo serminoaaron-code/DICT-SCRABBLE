@@ -505,7 +505,8 @@
       run.later(delay + RS_COUNT_MS, () => nums.forEach(([n, v]) => countTo(run, n, v, RS_COUNT_DUR)));
       if (kind !== 'other') run.later(delay + RS_CONFETTI_MS, () => resultConfetti(run, hero));
     }
-    if (animate && kind === 'winner') run.later(delay + RS_SLAM_MS, () => root.Sound && root.Sound.play('win'));
+    // the win fanfare (after the ringside bell, when it rang: opts.winSoundDelayMs)
+    if (animate && kind === 'winner') run.later(delay + RS_SLAM_MS + (opts.winSoundDelayMs || 0), () => root.Sound && root.Sound.play('win'));
     return hero;
   }
 

@@ -32,13 +32,26 @@
     if (btn) btn.textContent = Sound.enabled() ? '🔊' : '🔇';
   }
 
+  // 🎵 match music (music only; sound effects stay on 🔇/🔊). On by default, remembered per device.
+  function updateMusicIcon() {
+    const btn = document.getElementById('musicToggle');
+    if (!btn) return;
+    const on = Music.enabled();
+    btn.classList.toggle('is-off', !on);
+    btn.setAttribute('aria-pressed', String(on));
+    btn.setAttribute('aria-label', on ? 'Music: on' : 'Music: off');
+  }
+
   function wireHeaderToggles() {
     const themeBtn = document.getElementById('themeToggle');
     if (themeBtn) themeBtn.onclick = () => { Theme.toggle(); updateThemeIcon(); };
     const soundBtn = document.getElementById('soundToggle');
     if (soundBtn) soundBtn.onclick = () => { Sound.toggle(); updateSoundIcon(); };
+    const musicBtn = document.getElementById('musicToggle');
+    if (musicBtn) musicBtn.onclick = () => { Music.toggle(); updateMusicIcon(); };
     updateThemeIcon();
     updateSoundIcon();
+    updateMusicIcon();
   }
 
   function go(route) { location.hash = route; }
