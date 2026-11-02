@@ -616,3 +616,53 @@ test('voidRoom records a note', () => {
   assert.strictEqual(M.voidRoom(baseRoom(), 3).voidNote, '');
   assert.strictEqual(M.voidRoom(baseRoom(), 3, 'x'.repeat(200)).voidNote.length, 120);
 });
+
+// ---------- batch 5: emoji taunts ----------
+const deepFreeze2 = o => { if (o && typeof o === 'object') { Object.freeze(o); Object.values(o).forEach(deepFreeze2); } return o; };
+const T0 = 20000; // well after the VS intro of liveRoom()
+
+test('taunt: sets the seat\'s latest taunt and nothing else', () => {
+  const r = deepFreeze2(M.normalizeRoom(liveRoom()));
+  const n = M.taunt(r, 'A', 'lol', { now: T0 });
+  assert.deepStrictEqual(n.taunts.A, { e: 'lol', at: T0 });
+  assert.strictEqual(n.taunts.B, null);
+  const strip = x => { const c = JSON.parse(JSON.stringify(x)); delete c.taunts; return c; };
+  assert.deepStrictEqual(strip(n), strip(r), 'only taunts changes: a move racing with a taunt is never lost');
+});
+
+test('taunt: the next one from the same seat overwrites (no history)', () => {
+  const r = M.taunt(M.normalizeRoom(liveRoom()), 'A', 'angry', { now: T0 });
+  const n = M.taunt(r, 'A', 'cry', { now: T0 + 10000 });
+  assert.deepStrictEqual(n.taunts, { A: { e: 'cry', at: T0 + 10000 }, B: null });
+});
+
+test('taunt: 10 s cooldown per seat', () => {
+  assert.strictEqual(M.TAUNT_COOLDOWN_MS, 10000);
+  const r = M.taunt(M.normalizeRoom(liveRoom()), 'A', 'lol', { now: T0 });
+  assert.strictEqual(M.taunt(r, 'A', 'lol', { now: T0 + 9999 }), null);
+  assert.notStrictEqual(M.taunt(r, 'A', 'lol', { now: T0 + 10000 }), null);
+  assert.notStrictEqual(M.taunt(r, 'B', 'cry', { now: T0 + 1 }), null, 'the other seat has its own cooldown');
+});
+
+test('taunt: rejected outside the game screen', () => {
+  const live = () => M.normalizeRoom(liveRoom());
+  for (const status of ['waiting', 'final', 'void']) assert.strictEqual(M.taunt(Object.assign(live(), { status }), 'A', 'lol', { now: T0 }), null, status);
+  const r = live();
+  assert.strictEqual(M.taunt(r, 'A', 'lol', { now: r.clock.startedAt - 1 }), null, 'not during the VS intro');
+  assert.notStrictEqual(M.taunt(r, 'A', 'lol', { now: r.clock.startedAt }), null, 'from the clock start');
+  assert.notStrictEqual(M.taunt(Object.assign(live(), { status: 'hostDecision' }), 'A', 'lol', { now: T0 }), null, 'hostDecision');
+  assert.notStrictEqual(M.taunt(Object.assign(live(), { status: 'suddenDeath' }), 'A', 'lol', { now: T0 }), null, 'suddenDeath');
+  assert.notStrictEqual(M.taunt(M.pauseClocks(live(), T0), 'A', 'lol', { now: T0 + 1 }), null, 'while paused');
+});
+
+test('taunt: rejects a bad seat or id', () => {
+  const r = M.normalizeRoom(liveRoom());
+  for (const seat of ['watch', 'host', 'x', undefined]) assert.strictEqual(M.taunt(r, seat, 'lol', { now: T0 }), null, String(seat));
+  for (const id of ['smile', undefined, '']) assert.strictEqual(M.taunt(r, 'A', id, { now: T0 }), null, String(id));
+  assert.deepStrictEqual(M.TAUNTS, ['angry', 'lol', 'cry']);
+});
+
+test('normalizeRoom: taunts default to { A: null, B: null }', () => {
+  assert.deepStrictEqual(M.normalizeRoom({}).taunts, { A: null, B: null });
+  assert.deepStrictEqual(M.normalizeRoom({ taunts: { A: { e: 'lol', at: 5 } } }).taunts, { A: { e: 'lol', at: 5 }, B: null });
+});
