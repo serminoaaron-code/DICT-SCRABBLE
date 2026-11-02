@@ -227,12 +227,12 @@
   }
 
   // Celebration tier for a scored play: 0 (none) through 4 (IMPOSSIBLE!!!).
-  // Thresholds are 15/25/40/60, or any bingo is always tier 4.
+  // Thresholds are 8/15/25/40 (easy to hit on purpose, batch 5), or any bingo is always tier 4.
   function celebrationTier(total, bingo) {
-    if (bingo || total >= 60) return 4;
-    if (total >= 40) return 3;
-    if (total >= 25) return 2;
-    if (total >= 15) return 1;
+    if (bingo || total >= 40) return 4;
+    if (total >= 25) return 3;
+    if (total >= 15) return 2;
+    if (total >= 8) return 1;
     return 0;
   }
 

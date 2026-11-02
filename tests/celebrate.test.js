@@ -31,13 +31,13 @@ test('TITLES are the fixed copy', () => {
 });
 
 test('tierFor delegates to the engine', () => {
-  assert.strictEqual(Celebrate.tierFor({ total: 14, bingo: false }), 0);
-  assert.strictEqual(Celebrate.tierFor({ total: 15, bingo: false }), 1);
-  assert.strictEqual(Celebrate.tierFor({ total: 25, bingo: false }), 2);
-  assert.strictEqual(Celebrate.tierFor({ total: 40, bingo: false }), 3);
-  assert.strictEqual(Celebrate.tierFor({ total: 60, bingo: false }), 4);
+  assert.strictEqual(Celebrate.tierFor({ total: 7, bingo: false }), 0);
+  assert.strictEqual(Celebrate.tierFor({ total: 8, bingo: false }), 1);
+  assert.strictEqual(Celebrate.tierFor({ total: 15, bingo: false }), 2);
+  assert.strictEqual(Celebrate.tierFor({ total: 25, bingo: false }), 3);
+  assert.strictEqual(Celebrate.tierFor({ total: 40, bingo: false }), 4);
   assert.strictEqual(Celebrate.tierFor({ total: 5, bingo: true }), 4);
-  assert.strictEqual(Celebrate.tierFor({ total: 59 }), 3); // older rooms lack bingo
+  assert.strictEqual(Celebrate.tierFor({ total: 39 }), 3); // older rooms lack bingo
 });
 
 test('detect ignores the first snapshot', () => {
@@ -47,7 +47,7 @@ test('detect ignores the first snapshot', () => {
 test('detect returns the move when moveCount increases', () => {
   const c = Celebrate.detect(0, roomAfterCAT());
   assert.ok(c);
-  assert.strictEqual(c.tier, 0);
+  assert.strictEqual(c.tier, 1); // CAT 10 = Not Bad! (tiers 8/15/25/40)
   assert.strictEqual(c.total, 10);
   assert.strictEqual(c.seat, 'A');
   assert.strictEqual(c.playerName, 'Maria');
@@ -91,7 +91,7 @@ test('queue plays moves in order', () => {
   r2.game.moveCount = 2;
   r2.game.lastMove = { seat: 'B', type: 'play', words: [{ word: 'ZEBRAS', score: 46 }], total: 46, bingo: false, unverified: false, at: 3000 };
   const second = Celebrate.detect(1, r2);
-  assert.strictEqual(second.tier, 3);
+  assert.strictEqual(second.tier, 4); // 46 = IMPOSSIBLE!!! (tiers 8/15/25/40)
   assert.strictEqual(second.playerName, 'Juan');
   q.push(first);
   q.push(second);

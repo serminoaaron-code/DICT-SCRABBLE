@@ -164,16 +164,11 @@ test('bingo adds 50', () => {
 
 // ---------- Task 5 ----------
 
-test('celebrationTier boundaries', () => {
-  assert.strictEqual(E.celebrationTier(14, false), 0);
-  assert.strictEqual(E.celebrationTier(15, false), 1);
-  assert.strictEqual(E.celebrationTier(24, false), 1);
-  assert.strictEqual(E.celebrationTier(25, false), 2);
-  assert.strictEqual(E.celebrationTier(39, false), 2);
-  assert.strictEqual(E.celebrationTier(40, false), 3);
-  assert.strictEqual(E.celebrationTier(59, false), 3);
-  assert.strictEqual(E.celebrationTier(60, false), 4);
-  assert.strictEqual(E.celebrationTier(5, true), 4);
+test('celebrationTier: easier thresholds 8 / 15 / 25 / 40', () => {
+  for (const [total, tier] of [[7, 0], [8, 1], [14, 1], [15, 2], [24, 2], [25, 3], [39, 3], [40, 4]]) {
+    assert.strictEqual(E.celebrationTier(total, false), tier, total + ' points');
+  }
+  assert.strictEqual(E.celebrationTier(3, true), 4, 'a bingo is always IMPOSSIBLE!!!');
 });
 
 test('scoreMove reports validation errors', () => {
