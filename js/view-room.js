@@ -713,12 +713,8 @@
     const ui = ctx.state.ui;
     const kind = p ? p.kind : 'none';
     if (kind !== ui.pillKind) {
-      pill.className = 'pill pill-' + kind;
-      // Pop once when it becomes this player's turn.
-      if (kind === 'you' && ui.pillKind !== null) {
-        void pill.offsetWidth; pill.classList.add('pill-pop');
-        Sound.play('turn'); Sound.buzz();
-      }
+      // Keeps a pop that is still running (the ribbon in tick() pops it when this player's turn starts).
+      pill.className = 'pill pill-' + kind + (pill.classList.contains('pill-pop') ? ' pill-pop' : '');
       ui.pillKind = kind;
     }
     const text = p ? p.text : '';
@@ -738,6 +734,14 @@
     if (Pill.ribbonDue(ribbon, ctx.state.ui.ribbonKey, now)) {
       Scenes.ribbon(el.querySelector('#liveRoot'), ribbon);
       ctx.state.ui.ribbonKey = ribbon.key;
+      // The pill pop, "turn" sound and vibration come with "YOUR TURN!" (spec), not when the move arrives.
+      const pill = el.querySelector('#statusLine');
+      if (ribbon.mine && pill) {
+        pill.classList.remove('pill-pop'); void pill.offsetWidth; pill.classList.add('pill-pop');
+        clearTimeout(ctx.state.ui.popTimer);
+        ctx.state.ui.popTimer = setTimeout(() => pill.classList.remove('pill-pop'), 450); // .pill-pop runs .38 s
+        Sound.play('turn'); Sound.buzz();
+      }
     }
     const c = room.clock;
     const phase = Match.roomPhase(room);
@@ -777,6 +781,7 @@
     const lm = room.game.lastMove;
     const isNew = ui.lastSeenMove !== null && ui.lastSeenMove !== undefined && room.game.moveCount > ui.lastSeenMove;
     let dropped = false;
+    if (isNew) Scenes.clearRibbon(); // a move during the ribbon: the newest moment wins
     if (isNew && lm && lm.type === 'play' && lm.seat !== ctx.state.mySeat) {
       const cells = Celebrate.newCells(lm);
       if (cells.length) {

@@ -559,7 +559,15 @@
     wrap.setAttribute('aria-live', 'polite');
     const band = el('div', 'tr-band');
     if (info.sudden) band.appendChild(el('div', 'tr-sd', '⚡ SUDDEN DEATH'));
-    band.appendChild(el('div', 'tr-text disp', info.text));
+    const text = el('div', 'tr-text disp');
+    if (info.name) {
+      // A narrow screen cuts the name ("…") and always keeps "'S TURN" readable.
+      text.appendChild(el('span', 'tr-name', info.name));
+      text.appendChild(el('span', 'tr-suf', "'S TURN"));
+    } else {
+      text.textContent = info.text;
+    }
+    band.appendChild(text);
     wrap.appendChild(band);
     container.appendChild(wrap);
     ribbonEl = wrap;

@@ -55,7 +55,8 @@
   const RIBBON_STATUSES = ['live', 'suddenDeath'];
 
   // The ribbon for the turn now in play, or null (no game, paused, appeal pending, game over).
-  // key = "<turn>@<turnStartedAt>": each new turn (sudden death's first turn included) has its own.
+  // key = "<status>:<turn>@<moveCount>": each new turn (sudden death's first turn included) has its own,
+  // and a host Resume (which moves turnStartedAt) keeps it, so the ribbon never plays twice for one turn.
   // Players see "YOUR TURN!" or the opponent's player name; spectators and the host see the team.
   function ribbon(room, mySeat) {
     if (!room || !room.game || !room.clock || !RIBBON_STATUSES.includes(room.status)) return null;
@@ -69,11 +70,13 @@
       const team = (turn === 'A' ? room.teamAName : room.teamBName) || 'Player';
       who = Names ? Names.short(team) : team;
     }
+    const name = mine ? null : who.toUpperCase();
     return {
-      key: `${turn}@${room.clock.turnStartedAt}`,
+      key: `${room.status}:${turn}@${room.game.moveCount || 0}`,
       at: room.clock.turnStartedAt,
       mine,
-      text: mine ? 'YOUR TURN!' : `${who.toUpperCase()}'S TURN`,
+      text: mine ? 'YOUR TURN!' : `${name}'S TURN`,
+      name, // shown apart from "'S TURN", so a narrow screen cuts the name and keeps the suffix
       sudden: room.status === 'suddenDeath'
     };
   }

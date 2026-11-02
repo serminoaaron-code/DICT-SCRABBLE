@@ -261,6 +261,7 @@
       const g = room && room.game;
       const prev = st.boardSeen;
       st.boardSeen = g ? { code: room.code, moveCount: g.moveCount } : null;
+      if (g && prev && prev.code === room.code && g.moveCount > prev.moveCount) Scenes.clearRibbon(); // the newest moment wins
       if (!g || !prev || prev.code !== room.code || g.moveCount !== prev.moveCount + 1) return;
       const cells = g.lastMove && g.lastMove.type === 'play' ? Celebrate.newCells(g.lastMove) : [];
       if (cells.length) st.drop = { code: room.code, moveCount: g.moveCount, cells, at: performance.now() };
@@ -391,6 +392,7 @@
       if (d.scene === 'highlight' && d.move && room) {
         const seat = d.move.seat;
         st.hlCode = d.featured;
+        Scenes.clearRibbon();
         Celebrate.show(d.move, { container: stage, scoreEl: () => stage.querySelector(`.bp-score[data-seat="${seat}"]`), mine: false,
           delayMs: d.move.dropped ? Match.DROP_MS : 0 }); // the word drops in first
       } else if (d.scene === 'winner' && room) {
