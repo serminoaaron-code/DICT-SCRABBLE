@@ -50,6 +50,26 @@
     };
   }
 
+  // The approved mockup's length of each tier's scene, in ms (tier 0 is the small "+N" float).
+  const NATURAL_MS = [1000, 2600, 2600, 2950, 4950];
+  const FALLBACK_CELEBRATE_MS = [0, 2600, 2600, 3000, 4500];
+  function celebrateMs() {
+    const M = root.Match || (typeof require === 'function' ? require('./match.js') : null);
+    return (M && M.CELEBRATE_MS) || FALLBACK_CELEBRATE_MS;
+  }
+
+  // How long a tier's scene runs, in ms. An overlay (tiers 1-4) is always fully gone by
+  // Match.CELEBRATE_MS[tier], the delay before the next turn's clock starts, so a celebration
+  // never costs the next player turn time; a timeline longer than that is compressed to fit.
+  // Tier 0 has no overlay and no turn delay: its float keeps its natural length.
+  function durationFor(tier) {
+    const natural = NATURAL_MS[tier];
+    if (!natural) return 0;
+    if (tier === 0) return natural;
+    const limit = Number(celebrateMs()[tier]);
+    return limit > 0 ? Math.min(natural, limit) : natural;
+  }
+
   // FIFO used by show(): moves that arrive during an overlay wait their turn.
   function createQueue() {
     const items = [];
@@ -69,7 +89,6 @@
   const doc = () => root.document;
   const reducedMotion = () => !!(root.matchMedia && root.matchMedia('(prefers-reduced-motion: reduce)').matches);
   const resolve = x => (typeof x === 'function' ? x() : x) || null;
-  const durations = () => (root.Match && root.Match.CELEBRATE_MS) || [0, 2600, 2600, 3000, 4500];
 
   function el(tag, cls, text) {
     const e = doc().createElement(tag);
@@ -206,8 +225,8 @@
 
   const centre = r => ({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
 
-  // "+N" flies from `from` (a point) into the score, which then bumps. Lands after 600 ms.
-  function flyToScore(run, later, pts, from, at) {
+  // "+N" flies from `from` (a point) into the score, which then bumps. Lands after `dur` ms.
+  function flyToScore(run, later, pts, from, at, dur = 600) {
     const { opts, hold } = run.item;
     later(at, () => {
       const f = el('div', 'fx-fly disp', '+' + pts);
@@ -225,9 +244,9 @@
         f.animate([
           { transform: 'translate(-50%,-50%) scale(1.4)', opacity: 1 },
           { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(.6)`, opacity: 0.3 }
-        ], { duration: 600, easing: 'ease-in', fill: 'forwards' });
+        ], { duration: dur, easing: 'ease-in', fill: 'forwards' });
       }
-      later(600, () => { f.remove(); releaseScore(hold, true, opts.scoreEl); });
+      later(dur, () => { f.remove(); releaseScore(hold, true, opts.scoreEl); });
     });
   }
 
@@ -264,7 +283,7 @@
       ], { duration: 950, easing: 'ease-in-out', fill: 'forwards' });
     }
     later(950, () => { f.remove(); releaseScore(run.item.hold, true, opts.scoreEl); });
-    end(1000);
+    end(durationFor(0));
   }
 
   function fadeOverlay(ov, total, inAt, outAt) {
@@ -321,10 +340,12 @@
     run.stage.insertBefore(el('div', 'fx-dim'), run.content);
     run.content.appendChild(el('div', 'fx-burst'));
     const { pts } = texts(run.content, c, TITLES[c.tier].toUpperCase());
-    fadeOverlay(ov, 2600, 0.08, 0.82);
-    countUp(run, pts, c.total, 900, 250);
-    later(1500, () => flyToScore(run, later, c.total, centre(pts.getBoundingClientRect()), 0));
-    end(2600);
+    const total = durationFor(c.tier);
+    const T = ms => Math.round(ms * total / NATURAL_MS[c.tier]);
+    fadeOverlay(ov, total, 0.08, 0.82);
+    countUp(run, pts, c.total, T(900), T(250));
+    later(T(1500), () => flyToScore(run, later, c.total, centre(pts.getBoundingClientRect()), 0, T(600)));
+    end(total);
   }
 
   // ---- tier 3: golden sunburst ----
@@ -341,11 +362,13 @@
       s.style.animationDelay = Math.random() + 's';
       stage.appendChild(s);
     }
-    fadeOverlay(ov, 2900, 0.07, 0.84);
-    countUp(run, pts, c.total, 950, 350);
-    later(300, () => confetti(run, 26, false));
-    later(1750, () => flyToScore(run, later, c.total, centre(pts.getBoundingClientRect()), 0));
-    end(2950);
+    const total = durationFor(3);
+    const T = ms => Math.round(ms * total / NATURAL_MS[3]);
+    fadeOverlay(ov, T(2900), 0.07, 0.84);
+    countUp(run, pts, c.total, T(950), T(350));
+    later(T(300), () => confetti(run, 26, false));
+    later(T(1750), () => flyToScore(run, later, c.total, centre(pts.getBoundingClientRect()), 0, T(600)));
+    end(total);
   }
 
   // ---- tier 4: cinematic ----
@@ -368,26 +391,29 @@
     box.appendChild(by);
     stage.appendChild(flash);
 
+    // The mockup's 4950 ms timeline, compressed proportionally to fit CELEBRATE_MS[4] (T()).
+    const total = durationFor(4);
+    const T = ms => Math.round(ms * total / NATURAL_MS[4]);
     // Tiles slam in one by one; long words go faster so the impact stays near the mockup's.
     const step = Math.min(150, Math.floor(1050 / Math.max(letters.length, 1)));
-    [...tiles.children].forEach((t, i) => later(450 + i * step, () => t.classList.add('in')));
+    [...tiles.children].forEach((t, i) => later(T(450 + i * step), () => t.classList.add('in')));
     const impact = 450 + letters.length * step + 150;
-    later(impact, () => {
+    later(T(impact), () => {
       ring.classList.add('go');
       flash.classList.add('go'); // the one flash of this scene
       stage.classList.add('fx-shake');
     });
-    later(impact + 120, () => {
+    later(T(impact + 120), () => {
       title.classList.add('go');
-      later(460, () => { title.classList.remove('go'); title.classList.add('shown', 'glitch'); });
+      later(T(460), () => { title.classList.remove('go'); title.classList.add('shown', 'glitch'); });
     });
-    later(impact + 500, () => { pts.classList.add('go'); countUp(run, pts, c.total, 700, 0); });
-    if (stamp) later(impact + 1150, () => stamp.classList.add('go'));
-    later(impact + 1400, () => by.classList.add('go'));
-    later(impact + 700, () => confetti(run, 70, true));
-    later(4400, () => { if (stage.animate) stage.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 400, fill: 'forwards' }); });
-    later(4300, () => flyToScore(run, later, c.total, centre(pts.getBoundingClientRect()), 0));
-    end(4950);
+    later(T(impact + 500), () => { pts.classList.add('go'); countUp(run, pts, c.total, T(700), 0); });
+    if (stamp) later(T(impact + 1150), () => stamp.classList.add('go'));
+    later(T(impact + 1400), () => by.classList.add('go'));
+    later(T(impact + 700), () => confetti(run, 70, true));
+    later(T(4400), () => { if (stage.animate) stage.animate([{ opacity: 1 }, { opacity: 0 }], { duration: T(400), fill: 'forwards' }); });
+    later(T(4300), () => flyToScore(run, later, c.total, centre(pts.getBoundingClientRect()), 0, T(600)));
+    end(total);
   }
 
   // ---- reduced motion: one calm fade card, no shake/flash/confetti/rays ----
@@ -399,10 +425,10 @@
       card.appendChild(el('div', 'fx-card-note', `BY ${c.playerName} · ${c.teamName}`.toUpperCase()));
     }
     run.content.appendChild(card);
-    const total = durations()[c.tier] || 2600;
+    const total = durationFor(c.tier) || 2600;
     fadeOverlay(ov, total, 0.12, 0.85);
     end(total);
   }
 
-  return { TITLES, tierFor, detect, createQueue, show, clear };
+  return { TITLES, tierFor, detect, createQueue, durationFor, show, clear };
 });

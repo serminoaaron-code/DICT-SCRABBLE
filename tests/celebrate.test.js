@@ -101,3 +101,13 @@ test('queue plays moves in order', () => {
   assert.strictEqual(q.shift(), undefined);
   assert.strictEqual(q.size(), 0);
 });
+
+test('durationFor: every overlay tier is fully gone by Match.CELEBRATE_MS[tier] (never costs turn time)', () => {
+  for (const tier of [1, 2, 3, 4]) {
+    const d = Celebrate.durationFor(tier);
+    assert.ok(Number.isFinite(d) && d > 0, `tier ${tier}: a positive duration (${d})`);
+    assert.ok(d <= M.CELEBRATE_MS[tier], `tier ${tier}: ${d} ms <= CELEBRATE_MS ${M.CELEBRATE_MS[tier]} ms`);
+  }
+  // Tier 0 is the small "+N" float: no overlay, and no turn delay (CELEBRATE_MS[0] = 0).
+  assert.ok(Celebrate.durationFor(0) <= 1000, 'tier 0 float lasts at most 1 s');
+});
