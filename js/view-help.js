@@ -98,7 +98,7 @@
           step('Answer word appeals', chip('c3', '⚖️ "QI" not found') + bt('green', 'Approve') + bt('red', 'Deny'),
             'When a player asks, the game pauses until you approve or deny the word.'),
           step('Put it on the big screen', bigBar('ROOM K7Q-42M · 4:12'),
-            `Open <a class="gh-link" href="${bigScreenHref()}" target="_blank" rel="noopener">the big screen ↗</a> on the projector. It follows the live rooms by itself; <b>📌 Pin</b> a room to keep it on screen.`),
+            `Open <a class="gh-link" href="${bigScreenHref()}" target="_blank" rel="noopener">the big screen ↗</a> on the projector. It follows the live rooms by itself; <b>📌 Pin</b> a room to keep it on screen. Click the big screen once to start its music.`),
           step('Follow the rooms', bt('ylw', 'Active') + bt('gray', 'Finished') + bt('gray', 'Void'),
             'Active rooms need you. Finished ones count in the standings automatically.')
         ],
