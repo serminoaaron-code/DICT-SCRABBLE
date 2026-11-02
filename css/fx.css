@@ -16,6 +16,9 @@
 .fx-stage > *, .fx-content > * { position: absolute; }
 /* Text and tiles live under the score bar (--fx-top, set from the score element), like the mockup. */
 .fx-stage > .fx-content { left: 0; right: 0; bottom: 0; top: var(--fx-top, 0px); }
+/* Desktop landscape (Layout.fitStage): the whole stage sits over the board, at board scale (--k inline). */
+.fx-on-board > .fx-stage { left: var(--fx-left); top: var(--fx-top); width: var(--fx-w); height: var(--fx-h); right: auto; bottom: auto; }
+.fx-on-board .fx-stage > .fx-content { top: 0; }
 
 /* While an overlay plays: lift the game area above the sticky PLAYGROUND bar, and keep
    the score bar above the dim so the points visibly land in it (as in the mockup). */

@@ -194,10 +194,14 @@
     const content = el('div', 'fx-content'); // the area under the score bar, which stays visible
     stage.appendChild(content);
     ov.appendChild(stage);
-    const sc = resolve(opts.scoreEl);
-    const vh = viewport().h;
-    const top = sc && sc.isConnected ? sc.getBoundingClientRect().bottom + 8 : 0;
-    ov.style.setProperty('--fx-top', Math.round(Math.min(Math.max(top, 0), vh * 0.35)) + 'px');
+    // Desktop landscape: the stage sits over the board at board scale (opts.areaEl, Layout.fitStage).
+    // Otherwise (phones, the projector) the content starts under the score bar, as in the mockup.
+    if (!(root.Layout && root.Layout.fitStage(ov, opts.areaEl))) {
+      const sc = resolve(opts.scoreEl);
+      const vh = viewport().h;
+      const top = sc && sc.isConnected ? sc.getBoundingClientRect().bottom + 8 : 0;
+      ov.style.setProperty('--fx-top', Math.round(Math.min(Math.max(top, 0), vh * 0.35)) + 'px');
+    }
     const skip = el('button', 'fx-skip', '✕ Skip');
     skip.type = 'button';
     skip.setAttribute('aria-label', 'Skip celebration');
@@ -258,7 +262,9 @@
   function floatPoints(run, later, end) {
     const { c, opts, reduced } = run.item;
     if (reduced) { releaseScore(run.item.hold, false); return end(0); }
-    const box = opts.container.getBoundingClientRect();
+    // From the middle of the play area: the board in the desktop landscape layout.
+    const onBoard = opts.areaEl && opts.areaEl.isConnected && root.Layout && root.Layout.landscapeNow();
+    const box = (onBoard ? opts.areaEl : opts.container).getBoundingClientRect();
     const vp = viewport();
     const from = {
       x: Math.min(vp.w - 30, Math.max(30, box.left + box.width / 2)),

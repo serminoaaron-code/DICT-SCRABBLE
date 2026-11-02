@@ -32,7 +32,26 @@
     return isLandscape(root.innerWidth || 0, root.innerHeight || 0);
   }
 
-  function fitStage() { return false; } // Task 3
+  // The stage box for a celebration / intro over the board: whole px, and k = one mockup px
+  // (the celebration and intro mockups were drawn on a 280px-wide phone).
+  function stageBox(rect) {
+    const r = v => Math.round(v);
+    return { left: r(rect.left), top: r(rect.top), width: r(rect.width), height: r(rect.height), k: rect.width / 280 };
+  }
 
-  return { QUERY, PANEL_PX, GAP_PX, MARGIN_PX, isLandscape, boardPx, landscapeNow, fitStage };
+  // Desktop landscape only: puts an .fx-overlay's stage over areaEl (the board) at board scale.
+  // Returns false, and changes nothing, on phones or without a board.
+  function fitStage(overlay, areaEl) {
+    if (!overlay || !areaEl || !areaEl.isConnected || !landscapeNow()) return false;
+    const b = stageBox(areaEl.getBoundingClientRect());
+    overlay.classList.add('fx-on-board');
+    overlay.style.setProperty('--fx-left', b.left + 'px');
+    overlay.style.setProperty('--fx-top', b.top + 'px');
+    overlay.style.setProperty('--fx-w', b.width + 'px');
+    overlay.style.setProperty('--fx-h', b.height + 'px');
+    overlay.style.setProperty('--k', b.k + 'px');
+    return true;
+  }
+
+  return { QUERY, PANEL_PX, GAP_PX, MARGIN_PX, isLandscape, boardPx, landscapeNow, stageBox, fitStage };
 });

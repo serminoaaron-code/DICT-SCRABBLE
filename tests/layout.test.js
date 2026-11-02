@@ -25,3 +25,7 @@ test('boardPx: the largest square that fits below its top edge and beside the pa
   assert.strictEqual(Layout.boardPx({ vh: 900, top: 60, width: 960 }), 520, 'width-limited: 960 - 20 gap - 420 panel');
   assert.strictEqual(Layout.boardPx({ vh: 560, top: 400, width: 960 }), 220, 'never under the floor');
 });
+
+test('stageBox: a celebration / intro stage over the board, in whole px, scaled like the 280px mockup phone', () => {
+  assert.deepStrictEqual(Layout.stageBox({ left: 30.4, top: 60, width: 568, height: 568 }), { left: 30, top: 60, width: 568, height: 568, k: 568 / 280 });
+});

@@ -654,6 +654,7 @@
       Celebrate.show(c, {
         container: el.querySelector('#liveRoot'),
         scoreEl: el.querySelector('#side' + seat + ' .score'),
+        areaEl: el.querySelector('#board-container'),
         mine: seat === ctx.state.mySeat
       });
     }
@@ -677,7 +678,7 @@
     const now = Store.serverNow();
     // While paused, play as if the clocks start after the frozen intro time, then hold it there.
     const sched = frozen ? Object.assign({}, room, { clock: Object.assign({}, c, { startedAt: now + frozen }) }) : room;
-    const played = Scenes.playIntro(el.querySelector('#liveRoot'), sched, now);
+    const played = Scenes.playIntro(el.querySelector('#liveRoot'), sched, now, { areaEl: el.querySelector('#board-container') });
     if (played && frozen) Scenes.holdIntro();
     ui.introKey = played ? key : null;
   }
