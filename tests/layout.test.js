@@ -16,9 +16,12 @@ test('isLandscape: laptops and desktops yes; phones, portrait tablets, narrow or
   assert.strictEqual(Layout.isLandscape(600, 600), false, 'not wider than tall');
 });
 
-test('boardPx: the largest square that fits below its top edge and left of the panel', () => {
-  assert.strictEqual(Layout.boardPx({ vw: 1366, vh: 640, top: 60, left: 30 }), 568, 'height-limited laptop');
-  assert.strictEqual(Layout.boardPx({ vw: 1920, vh: 950, top: 60, left: 30 }), 878, 'big screen');
-  assert.strictEqual(Layout.boardPx({ vw: 1024, vh: 900, top: 60, left: 30 }), 542, 'width-limited: 1024 - 30 - 20 - 420 - 12');
-  assert.strictEqual(Layout.boardPx({ vw: 1024, vh: 560, top: 400, left: 30 }), 220, 'never under the floor');
+// width: the game area's content width (the grid holding board + gap + panel); MARGIN_PX keeps the
+// card's bottom padding and border inside the window.
+test('boardPx: the largest square that fits below its top edge and beside the panel', () => {
+  assert.strictEqual(Layout.MARGIN_PX, 20);
+  assert.strictEqual(Layout.boardPx({ vh: 640, top: 60, width: 1300 }), 560, 'height-limited laptop: 640 - 60 - 20');
+  assert.strictEqual(Layout.boardPx({ vh: 950, top: 60, width: 1850 }), 870, 'big screen');
+  assert.strictEqual(Layout.boardPx({ vh: 900, top: 60, width: 960 }), 520, 'width-limited: 960 - 20 gap - 420 panel');
+  assert.strictEqual(Layout.boardPx({ vh: 560, top: 400, width: 960 }), 220, 'never under the floor');
 });
