@@ -79,9 +79,13 @@
           </form>
           <div id="nrCreated" class="hidden stack" style="margin-top:8px;"></div>
         </details>
-        <div id="roomList" style="margin-top:10px;"></div>`;
+        <div class="tabs" id="roomTabs" role="tablist" aria-label="Rooms"></div>
+        <div id="roomList"></div>
+        <div class="pager hidden" id="roomPager" aria-label="Pages"></div>`;
 
       const $ = s => panel.querySelector(s);
+      // Room list tabs (feature #8): Active is never paged; Finished and Void remember their page.
+      const sel = { tab: 'active', page: { finished: 1, void: 1 } };
       $('#nrLen').onchange = () => $('#nrCustomBox').classList.toggle('hidden', $('#nrLen').value !== 'custom');
 
       function fillSelects() {
@@ -125,6 +129,8 @@
             }
           };
           $('#nrLabel').value = '';
+          sel.tab = 'active'; // the new room is waiting: show it
+          renderList();
           UI.toast(`Room ${pretty} created.`, 'ok');
         } catch (e) {
           UI.toast(e.message || 'Could not create room.', 'error');
@@ -172,11 +178,39 @@
         </div>`;
       }
 
+      const TAB_LABEL = { active: 'Active', finished: 'Finished', void: 'Void' };
+      const TAB_EMPTY = { active: 'No active rooms. Create one above.', finished: 'No finished rooms yet.', void: 'No void rooms.' };
+
       function renderList() {
         const rooms = Object.values(state.rooms).sort((x, y) =>
           (PHASE_ORDER[Match.roomPhase(x)] ?? 9) - (PHASE_ORDER[Match.roomPhase(y)] ?? 9) || (y.createdAt || 0) - (x.createdAt || 0));
-        $('#roomList').innerHTML = rooms.length ? rooms.map(cardHtml).join('') : '<p class="muted small-text">No rooms yet.</p>';
+        const v = RoomList.view(rooms, { tab: sel.tab, page: sel.page[sel.tab] || 1 }, Match.roomPhase);
+        if (v.tab !== 'active') sel.page[v.tab] = v.page; // a page that emptied steps back
+        $('#roomTabs').innerHTML = Object.keys(TAB_LABEL).map(t =>
+          `<button type="button" class="tab${t === v.tab ? ' on' : ''}" role="tab" aria-selected="${t === v.tab}" data-tab="${t}">${TAB_LABEL[t]} (${v.counts[t]})</button>`).join('');
+        $('#roomList').innerHTML = v.items.length ? v.items.map(cardHtml).join('') : `<p class="muted small-text">${TAB_EMPTY[v.tab]}</p>`;
+        const pager = $('#roomPager');
+        pager.classList.toggle('hidden', v.pages <= 1);
+        pager.innerHTML = v.pages <= 1 ? '' : [
+          `<button type="button" data-page="${v.page - 1}" aria-label="Previous page" ${v.page === 1 ? 'disabled' : ''}>‹</button>`,
+          ...RoomList.pageList(v.page, v.pages).map(p => p === '…' ? '<span class="gap">…</span>'
+            : `<button type="button" data-page="${p}"${p === v.page ? ' class="on" aria-current="page"' : ''}>${p}</button>`),
+          `<button type="button" data-page="${v.page + 1}" aria-label="Next page" ${v.page === v.pages ? 'disabled' : ''}>›</button>`
+        ].join('');
       }
+
+      $('#roomTabs').onclick = ev => {
+        const b = ev.target.closest('[data-tab]');
+        if (!b) return;
+        sel.tab = b.dataset.tab;
+        renderList();
+      };
+      $('#roomPager').onclick = ev => {
+        const b = ev.target.closest('[data-page]');
+        if (!b || b.disabled || sel.tab === 'active') return;
+        sel.page[sel.tab] = Number(b.dataset.page);
+        renderList();
+      };
 
       $('#roomList').onclick = async ev => {
         const btn = ev.target.closest('button');

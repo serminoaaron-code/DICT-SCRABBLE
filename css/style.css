@@ -155,6 +155,16 @@ html[data-theme="dark"] .panel, html[data-theme="dark"] .card { box-shadow: 0 10
 .room-card .teams { font-weight: 800; overflow-wrap: anywhere; }
 .room-card .meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
 .room-card .actions { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
+/* Host room list: Active / Finished / Void tabs and the page buttons (feature #8). */
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+.tabs .tab { padding: 6px 12px; font-size: 12.5px; border-radius: 999px; background: var(--surface); color: var(--text); border: 2px solid var(--line); box-shadow: none; }
+.tabs .tab.on { background: var(--navy); color: #fff; border-color: var(--navy); }
+.pager { display: flex; gap: 4px; justify-content: center; align-items: center; flex-wrap: wrap; margin: 4px 0 8px; }
+.pager button { min-width: 34px; padding: 5px 8px; font-size: 12.5px; border-radius: 8px; background: var(--bg); color: var(--text); border: 2px solid var(--line); box-shadow: none; }
+.pager button.on { background: var(--navy); color: #fff; border-color: var(--navy); }
+.pager .gap { color: var(--muted); padding: 0 2px; }
+/* On the dark background navy would read as "less" selected: the current tab/page turns yellow. */
+html[data-theme="dark"] .tabs .tab.on, html[data-theme="dark"] .pager button.on { background: var(--yellow); color: var(--navy); border-color: var(--yellow); }
 .code { font-family: ui-monospace, Consolas, monospace; font-weight: 800; letter-spacing: 2px; }
 .code-big { font-family: 'Archivo Black', ui-monospace, Consolas, monospace; font-size: 26px; letter-spacing: 4px; text-align: center; background: var(--cream); border: 3px dashed var(--navy); border-radius: 12px; padding: 10px; color: var(--navy); }
 
