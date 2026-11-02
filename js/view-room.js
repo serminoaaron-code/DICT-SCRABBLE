@@ -384,7 +384,7 @@
       </div></div>`;
     el.querySelector('#stopWatching').onclick = () => ctx.stopWatching();
     const ui = ctx.state.ui;
-    Object.assign(ui, { temp: [], selected: null, busy: false, rejected: null, seenMove: -1, tried: {}, pillKind: null, noticeHidden: null, sideHtml: {}, lastSeenMove: null, rackOrder: null, drag: null, dragMove: null });
+    Object.assign(ui, { temp: [], selected: null, busy: false, rejected: null, seenMove: -1, tried: {}, pillKind: null, noticeHidden: null, sideHtml: {}, lastSeenMove: null, rackOrder: null, drag: null, dragMove: null, tauntSeen: null });
     const $ = s => el.querySelector(s);
 
     // ⋯ menu: Leave lives here so it can't be tapped by accident.
@@ -829,6 +829,20 @@
     }
   }
 
+  // Emoji taunts (batch 5): a taunt shows on every room view (players, spectators, host) when it
+  // ARRIVES, popping out of the sender's side of the score bar. The first render after building the
+  // view only sets the baseline, so a refresh or late join never replays one (live only).
+  function showTaunts(el, room, ctx) {
+    const ui = ctx.state.ui;
+    const a = Taunt.arrivals(ui.tauntSeen, room, Store.serverNow());
+    ui.tauntSeen = a.seen;
+    for (const t of a.show) {
+      const s = room.seats && room.seats[t.seat];
+      const name = Names.short((s && s.name) || (t.seat === 'A' ? room.teamAName : room.teamBName) || '');
+      Taunt.show(el.querySelector('#side' + t.seat), el.querySelector('.scorebar'), { seat: t.seat, e: t.e, name });
+    }
+  }
+
   // Word celebration when moveCount goes up with a play. The first live render (page load,
   // refresh, joining mid-game) only sets the baseline, so nothing ever replays.
   function celebrateNewMove(el, room, ctx) {
@@ -940,6 +954,7 @@
       update(el, room, ctx);
       syncIntro(el, room, ctx, fresh);
       celebrateNewMove(el, room, ctx);
+      showTaunts(el, room, ctx);
     },
 
     // Result screen (Scenes.renderResult): winner / other player / neutral (spectators, host) / void.
@@ -962,6 +977,7 @@
       Celebrate.clear();
       Scenes.clearIntro();
       Scenes.clearRibbon();
+      Taunt.clear();
       detachLive(ui);
       const ending = Scenes.endingCelebration(ui.lastSeenMove, room);
       if (room.game) ui.lastSeenMove = room.game.moveCount; // nothing replays on a later rebuild
@@ -1098,6 +1114,7 @@
       detachLive(ctx.state.ui);
       Scenes.clearIntro();
       Scenes.clearRibbon();
+      Taunt.clear();
       Scenes.clearResult();
       if (ctx.state.ui.standings) ctx.state.ui.standings.off();
     }
