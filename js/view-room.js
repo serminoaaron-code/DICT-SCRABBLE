@@ -396,7 +396,7 @@
     const menu = $('#moreMenu');
     const moreBtn = $('#moreBtn');
     const setMenu = open => { menu.classList.toggle('hidden', !open); moreBtn.setAttribute('aria-expanded', String(open)); };
-    moreBtn.onclick = ev => { ev.stopPropagation(); setMenu(menu.classList.contains('hidden')); };
+    moreBtn.onclick = ev => { ev.stopPropagation(); if (ui.setTauntPop) ui.setTauntPop(false); setMenu(menu.classList.contains('hidden')); }; // one pop-up at a time
     menu.onclick = () => setMenu(false);
     // 😀 taunts (batch 5): the button opens the three faces; tapping one sends it (Match.taunt in a
     // transaction, which also enforces the 10 s cooldown) and closes the pop-up. Live only, no toast.
@@ -415,7 +415,7 @@
     }
     const setTaunt = open => { tauntPop.classList.toggle('hidden', !open); tauntBtn.setAttribute('aria-expanded', String(open)); };
     ui.setTauntPop = setTaunt;
-    tauntBtn.onclick = ev => { ev.stopPropagation(); if (!tauntBtn.disabled) setTaunt(tauntPop.classList.contains('hidden')); };
+    tauntBtn.onclick = ev => { ev.stopPropagation(); setMenu(false); if (!tauntBtn.disabled) setTaunt(tauntPop.classList.contains('hidden')); };
     tauntPop.onclick = ev => {
       ev.stopPropagation();
       const b = ev.target.closest && ev.target.closest('[data-taunt]');
@@ -451,7 +451,8 @@
       if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
       rackEl.querySelectorAll('.tile').forEach(t => {
         const dx = (before[t.dataset.i] ?? 0) - t.getBoundingClientRect().left;
-        if (dx && t.animate) t.animate([{ transform: `translateX(${dx}px)` }, { transform: 'none' }], { duration: 300, easing: 'cubic-bezier(.2,.8,.2,1)' });
+        const up = t.classList.contains('selected') ? ' translateY(-5px)' : ''; // a selected tile stays lifted while it slides
+        if (dx && t.animate) t.animate([{ transform: `translateX(${dx}px)${up}` }, { transform: up.trim() || 'none' }], { duration: 300, easing: 'cubic-bezier(.2,.8,.2,1)' });
       });
     };
 
@@ -671,15 +672,22 @@
     const shuffleBtn = $('#shuffleBtn');
     rackEl.classList.toggle('hidden', !isSeat(seat));
     shuffleBtn.classList.toggle('hidden', !isSeat(seat));
+    $('.rack-row').classList.toggle('hidden', !isSeat(seat)); // no empty row (and gap) for spectators / the host
     if (isSeat(seat)) {
       // This device's tile order (Shuffle). After my own play (turn moments #3) the tiles I kept stay
       // where they were and the drawn ones go into the used slots; any other change resets the order.
       const rackNow = g.racks[seat];
+      // My appeal was turned down (the pending word is gone and my rack is unchanged): forget the play notes.
+      if (g.pending && g.pending.seat === seat) ui.sawMyAppeal = true;
+      else if (ui.sawMyAppeal) {
+        ui.sawMyAppeal = false;
+        if (ui.lastRack && rackNow.join(',') === ui.lastRack.join(',')) { ui.lastUsed = null; ui.lastRack = null; }
+      }
       if (ui.rackOrder && ui.lastUsed && ui.lastRack && ui.rackOrder.key !== rackNow.join(',')) {
         const refilled = Rack.refill(ui.rackOrder, ui.lastRack, rackNow, ui.lastUsed);
         if (refilled) {
           ui.rackOrder = refilled;
-          if (refilled.fresh.length) ui.refill = { fresh: refilled.fresh, at: performance.now(), started: false };
+          if (refilled.fresh.length) ui.refill = { fresh: refilled.fresh, at: performance.now(), started: false, key: rackNow.join(',') };
         }
         ui.lastUsed = null; ui.lastRack = null;
       }
@@ -897,10 +905,13 @@
     const bag = el.querySelector('.rack-bag');
     if (!f) return;
     const elapsed = performance.now() - f.at;
-    if (elapsed > DEAL_SHOW_MS) { ui.refill = null; if (bag) bag.classList.remove('on'); return; }
-    if (bag && !f.started) { bag.classList.remove('on'); void bag.offsetWidth; bag.classList.add('on'); }
+    const room = ctx.state.room, seat = ctx.state.mySeat;
+    const rackNow = room && room.game && room.game.racks[seat] ? room.game.racks[seat].join(',') : '';
+    // Done, or the rack is no longer the refilled one (the play failed and it went back): stop at once.
+    if (elapsed > DEAL_SHOW_MS || (f.key && rackNow !== f.key)) { ui.refill = null; if (bag) bag.classList.remove('on'); return; }
+    // The bag is never redrawn: its fade starts once (setting its delay again would make it jump ahead).
+    if (bag && !f.started) { bag.style.animationDelay = '0ms'; bag.classList.remove('on'); void bag.offsetWidth; bag.classList.add('on'); }
     f.started = true;
-    if (bag) bag.style.animationDelay = Math.round(-elapsed) + 'ms';
     const from = bag ? bag.getBoundingClientRect() : null;
     const delays = Celebrate.stagger(f.fresh.length, DEAL_TOTAL_MS, DEAL_EACH_MS);
     f.fresh.forEach((idx, i) => {
