@@ -1,5 +1,5 @@
 // Boot, routing and the shared clock ticker.
-// Routes: ?view=scoreboard | #host | #room=CODE | (default) join page.
+// Routes: ?view=scoreboard | #gamehelp[=player|host|watch] | #host | #room=CODE | (default) join page.
 (function (root) {
   'use strict';
 
@@ -59,7 +59,10 @@
       return;
     }
     document.body.classList.remove('bigscreen');
-    if (hash === 'host') {
+    const help = root.Help ? Help.roleOf(hash) : null; // #gamehelp, #gamehelp=player|host|watch
+    if (help) {
+      cleanup = HelpView.show(el(), help);
+    } else if (hash === 'host') {
       cleanup = HostView.show(el());
     } else if (hash.startsWith('room=')) {
       let raw = hash.slice(5);
