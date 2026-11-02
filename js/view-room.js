@@ -323,9 +323,12 @@
     if (ui.onDocClick) document.removeEventListener('click', ui.onDocClick);
     if (ui.onResize) window.removeEventListener('resize', ui.onResize);
     if (ui.onKey) document.removeEventListener('keydown', ui.onKey);
+    if (ui.dragDetach) ui.dragDetach();
     ui.onDocClick = null;
     ui.onResize = null;
     ui.onKey = null;
+    ui.dragDetach = null;
+    ui.drag = null;
   }
 
   function buildLive(el, ctx) {
@@ -372,7 +375,7 @@
       </div></div>`;
     el.querySelector('#stopWatching').onclick = () => ctx.stopWatching();
     const ui = ctx.state.ui;
-    Object.assign(ui, { temp: [], selected: null, busy: false, rejected: null, seenMove: -1, tried: {}, pillKind: null, noticeHidden: null, sideHtml: {}, lastSeenMove: null, rackOrder: null });
+    Object.assign(ui, { temp: [], selected: null, busy: false, rejected: null, seenMove: -1, tried: {}, pillKind: null, noticeHidden: null, sideHtml: {}, lastSeenMove: null, rackOrder: null, drag: null, dragMove: null });
     const $ = s => el.querySelector(s);
 
     // ⋯ menu: Leave lives here so it can't be tapped by accident.
@@ -416,6 +419,9 @@
     bonus.onclick = ev => { if (!ev.target.closest('.bonus-card') || ev.target.closest('.bonus-close')) setBonus(false); };
     ui.onKey = ev => { if (ev.key === 'Escape') setBonus(false); };
     document.addEventListener('keydown', ui.onKey);
+
+    // Drag-and-drop tiles (feature #5), mouse and touch; tap-to-place keeps working.
+    ui.dragDetach = Drag.attach($('#liveRoot'), dragHooks(el, ctx));
 
     $('#passBtn').onclick = async () => {
       const room = ctx.state.room;
@@ -492,6 +498,84 @@
     update(el, room, ctx);
   }
 
+  // ---- drag-and-drop (feature #5): what may be dragged, and what a drop does ----
+  // The drag lives in ui.drag ({kind:'rack', index} | {kind:'board', r, c}); while it is set,
+  // update() shows the dragged tile's rack slot empty / leaves it off the board.
+  function dragHooks(el, ctx) {
+    const ui = ctx.state.ui;
+    const room = () => ctx.state.room;
+    const locked = () => ui.busy || !!ui.rejected;
+    return {
+      source(t) {
+        if (!isSeat(ctx.state.mySeat) || !t || !t.closest || !room() || !room().game) return null;
+        const rt = t.closest('#rack .tile');
+        if (rt && !rt.classList.contains('used')) return { kind: 'rack', index: Number(rt.dataset.i) };
+        const bt = t.closest('#board-container .tile.temp');
+        if (bt && myTurn(room(), ctx) && !locked()) {
+          const sq = bt.closest('.sq');
+          return { kind: 'board', r: Number(sq.dataset.r), c: Number(sq.dataset.c) };
+        }
+        return null;
+      },
+      context() {
+        const rm = room();
+        const board = rm && rm.game ? rm.game.board : {};
+        return {
+          myTurn: !!(rm && rm.game) && myTurn(rm, ctx),
+          locked: locked(),
+          occupied: (r, c) => !!board[ScrabbleEngine.key(r, c)] || ui.temp.some(t => t.r === r && t.c === c)
+        };
+      },
+      start(from) {
+        ui.drag = from;
+        ui.dragMove = room().game.moveCount;
+        ui.selected = null;
+        update(el, room(), ctx);
+      },
+      returnRect(from) {
+        const idx = from.kind === 'rack' ? from.index : (ui.temp.find(t => t.r === from.r && t.c === from.c) || {}).rackIndex;
+        const t = idx === undefined ? null : el.querySelector(`#rack .tile[data-i="${idx}"]`);
+        return t ? t.getBoundingClientRect() : null;
+      },
+      finish(action) {
+        const rm = room();
+        // A move landed while dragging: the rack and board it was based on are gone, so it only returns.
+        const stale = !rm || !rm.game || rm.game.moveCount !== ui.dragMove;
+        ui.drag = null;
+        applyDrag(el, ctx, stale && action.type !== 'reorder' ? { type: 'return' } : action);
+      }
+    };
+  }
+
+  function applyDrag(el, ctx, a) {
+    const ui = ctx.state.ui;
+    const room = ctx.state.room;
+    if (!room || !room.game || !el.querySelector('#liveRoot')) return;
+    let landed = null;
+    if (a.type === 'place') {
+      const letter = room.game.racks[ctx.state.mySeat][a.index];
+      if (letter !== undefined && !ui.temp.some(t => t.rackIndex === a.index)) {
+        ui.temp.push({ r: a.r, c: a.c, letter, rackIndex: a.index });
+        ui.selected = null;
+        landed = a;
+      }
+    } else if (a.type === 'move') {
+      const t = ui.temp.find(x => x.r === a.from.r && x.c === a.from.c);
+      if (t) { t.r = a.r; t.c = a.c; landed = a; }
+    } else if (a.type === 'unplace') {
+      ui.temp = ui.temp.filter(t => !(t.r === a.r && t.c === a.c));
+    } else if (a.type === 'reorder' && ui.rackOrder) {
+      const fromPos = ui.rackOrder.order.indexOf(a.index);
+      if (fromPos !== -1) ui.rackOrder = { key: ui.rackOrder.key, order: Rack.move(ui.rackOrder.order, fromPos, a.pos) };
+    }
+    if (landed) Sound.play('place');
+    update(el, ctx.state.room, ctx);
+    if (landed && !(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+      const t = el.querySelector(`#board-container .sq[data-r="${landed.r}"][data-c="${landed.c}"] .tile`);
+      if (t) t.classList.add('drop-in');
+    }
+  }
+
   function update(el, room, ctx) {
     const ui = ctx.state.ui;
     // Timers and async handlers can fire after the view switched to the final screen.
@@ -516,8 +600,9 @@
     }
 
     const mine = myTurn(room, ctx);
+    const lifted = ui.drag && ui.drag.kind === 'board' ? ui.drag : null; // the placed tile being dragged
     UI.renderBoard($('#board-container'), g.board, {
-      temp: mine ? ui.temp : [],
+      temp: mine ? ui.temp.filter(t => !(lifted && t.r === lifted.r && t.c === lifted.c)) : [],
       pending: g.pending ? g.pending.placements : null,
       onSquare: (r, c) => onSquare(el, ctx, r, c)
     });
@@ -530,6 +615,7 @@
       // This device's tile order (Shuffle); back to normal when the rack's letters change.
       ui.rackOrder = Rack.sync(ui.rackOrder, g.racks[seat]);
       const used = mine ? ui.temp.map(t => t.rackIndex) : [];
+      if (ui.drag && ui.drag.kind === 'rack') used.push(ui.drag.index); // its slot stays empty while dragged
       UI.renderRack(rackEl, g.racks[seat], {
         selectedIndex: ui.selected,
         usedIndices: used,

@@ -278,6 +278,23 @@ table.standings tr:first-child td { font-weight: 700; }
 /* Rack + 🔀 Shuffle (feature #6): the button sits on the right end of the rack. */
 .rack-row { display: flex; gap: 6px; align-items: center; }
 .rack-row .rack { flex: 1; min-width: 0; }
+/* Drag-and-drop (feature #5): draggable tiles don't scroll the page on touch; the floating copy
+   follows the pointer; the square under it shows green (drop here) or red (not allowed). */
+#rack .tile, #board-container .tile.temp { touch-action: none; cursor: grab; }
+#rack .tile.used { cursor: default; }
+#rack .tile { transition: transform .15s ease; }
+#rack .tile.room-l { transform: translateX(-10px); }
+#rack .tile.room-r { transform: translateX(10px); }
+.drag-ghost { position: fixed; left: 0; top: 0; z-index: 9800; pointer-events: none; margin: 0; box-shadow: 0 12px 24px rgba(0,0,0,.4); will-change: transform; }
+body.tile-dragging, body.tile-dragging * { cursor: grabbing !important; user-select: none; -webkit-user-select: none; }
+.sq.drop-ok { outline: 3px solid var(--green); outline-offset: -3px; z-index: 1; }
+.sq.drop-bad { outline: 3px solid var(--red); outline-offset: -3px; z-index: 1; }
+.tile.drop-in { animation: tile-drop-in .22s cubic-bezier(.2,1.6,.4,1); }
+@keyframes tile-drop-in { from { transform: scale(1.25); } to { transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  #rack .tile { transition: none; }
+  .tile.drop-in { animation: none; }
+}
 .rack-shuffle { flex: none; width: 40px; height: 40px; padding: 0; border-radius: 50%; font-size: 18px; line-height: 1; background: var(--yellow); color: var(--navy); }
 .actions-row { display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 6px; }
 .actions-row button { padding: 10px 6px; font-size: 13px; white-space: nowrap; }
