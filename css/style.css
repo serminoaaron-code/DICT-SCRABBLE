@@ -70,7 +70,9 @@ html[data-theme="dark"] {
 }
 
 * { box-sizing: border-box; font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-body { margin: 0; background: var(--bg); color: var(--text); min-height: 100vh; padding-bottom: 40px; }
+/* overflow-wrap: anywhere is the safety net for long names with no spaces (e.g. "TEST-wwwwwwww…"):
+   a word that can't fit breaks instead of pushing the page wider than the screen (phones zoom out). */
+body { margin: 0; background: var(--bg); color: var(--text); min-height: 100vh; padding-bottom: 40px; overflow-wrap: anywhere; }
 a { color: var(--text); }
 
 h1, h2, h3, .disp { font-family: 'Archivo Black', Impact, sans-serif; }
@@ -82,6 +84,11 @@ body::after { width: 240px; height: 240px; left: -90px; bottom: -90px; backgroun
 html[data-theme="dark"] body::before, html[data-theme="dark"] body::after { opacity: .35; }
 
 button, input, select { font: inherit; padding: 11px 16px; border-radius: 12px; border: 0; outline: none; }
+select { max-width: 100%; text-overflow: ellipsis; } /* a long team name in the list never widens the form */
+/* Buttons: break-word (not the page's "anywhere") keeps a button at least as wide as its longest word,
+   so a long name beside it can't squeeze "Rename" into "Rena/me"; a button holding a long name is
+   capped at its row's width and wraps inside. */
+button { overflow-wrap: break-word; max-width: 100%; }
 button { background: var(--navy); color: #fff; font-weight: 800; cursor: pointer; box-shadow: 0 3px 0 rgba(0,0,0,.22); transition: filter .15s, transform .1s, box-shadow .1s; }
 button:hover { filter: brightness(1.14); }
 button:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(0,0,0,.22); }
@@ -135,7 +142,13 @@ html[data-theme="dark"] .panel, html[data-theme="dark"] .card { box-shadow: 0 10
 .warn-line .muted { color: var(--red-ink); }
 
 /* chips: team colour tags, consistent everywhere (Team A blue, Team B red) */
-.chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 11px; border-radius: 999px; font-weight: 800; font-size: 12px; letter-spacing: .2px; white-space: nowrap; line-height: 1.5; }
+/* Names (QA pass): a team or player name always stays on one line and ends in "…" when it doesn't fit
+   (the full name is in the title where there's a pointer). .nm wraps a name inside a sentence;
+   .nm-btn makes a whole button one line. The projector's scrolling ticker is the one exception. */
+.nm { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+.nm-btn { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Team chips stay one line; a long team name ends in "…" within the space it has. */
+.chip { display: inline-block; vertical-align: middle; max-width: 100%; overflow: hidden; text-overflow: ellipsis; padding: 4px 11px; border-radius: 999px; font-weight: 800; font-size: 12px; letter-spacing: .2px; white-space: nowrap; line-height: 1.5; }
 .chip-a { background: var(--blue); color: #fff; }
 .chip-b { background: var(--red); color: #fff; }
 
@@ -147,12 +160,13 @@ html[data-theme="dark"] .panel, html[data-theme="dark"] .card { box-shadow: 0 10
 .sheet { position: fixed; left: 50%; bottom: 0; transform: translateX(-50%); z-index: 9400; width: 100%; max-width: 520px; background: var(--surface); color: var(--text); border: 2px solid var(--line); border-bottom: 0; border-radius: 18px 18px 0 0; padding: 14px 16px calc(14px + env(safe-area-inset-bottom, 0px)); box-shadow: 0 -10px 26px rgba(0,0,0,.28); pointer-events: auto; }
 
 /* ---------- host dashboard ---------- */
-.dash { display: grid; grid-template-columns: 1fr 1.5fr 1fr; gap: 16px; align-items: start; }
+/* minmax(0, …): a column never grows to fit its widest content (a dropdown as long as a long team name). */
+.dash { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr) minmax(0, 1fr); gap: 16px; align-items: start; }
 .dash .panel + .panel, .dash .card + .card { margin-top: 0; }
 .list-item { display: flex; justify-content: space-between; align-items: center; gap: 8px; border: 2px solid var(--line); border-radius: 12px; padding: 8px 11px; margin: 6px 0; background: var(--bg); }
-.list-item .name { font-weight: 700; overflow-wrap: anywhere; }
+.list-item .name { font-weight: 700; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .room-card { border: 2px solid var(--line); border-radius: 14px; padding: 11px 12px; margin: 10px 0; background: var(--bg); }
-.room-card .teams { font-weight: 800; overflow-wrap: anywhere; }
+.room-card .teams { font-weight: 800; overflow-wrap: anywhere; min-width: 0; max-width: 100%; } /* long team chips end in "…" */
 .room-card .meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
 .room-card .actions { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
 /* Host room list: Active / Finished / Void tabs and the page buttons (feature #8). */
@@ -172,7 +186,10 @@ html[data-theme="dark"] .tabs .tab.on, html[data-theme="dark"] .pager button.on 
 
 table.standings { width: 100%; border-collapse: collapse; }
 table.standings th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .4px; color: var(--muted); border-bottom: 2px solid var(--line); padding: 7px 6px; }
-table.standings td { padding: 8px 6px; border-bottom: 1px solid var(--line); font-size: 14px; overflow-wrap: anywhere; }
+table.standings td { padding: 8px 6px; border-bottom: 1px solid var(--line); font-size: 14px; }
+/* Rank, W-L and points stay whole on one line; only the team name wraps (a long one breaks anywhere). */
+table.standings th, table.standings td { overflow-wrap: normal; white-space: nowrap; }
+table.standings td:nth-child(2) { width: 100%; max-width: 0; overflow: hidden; text-overflow: ellipsis; } /* team name: one line, "…" */
 table.standings td.pts { font-weight: 800; color: var(--text); }
 table.standings tr:first-child td { font-weight: 700; }
 
@@ -278,6 +295,25 @@ table.standings tr:first-child td { font-weight: 700; }
 /* Rack + 🔀 Shuffle (feature #6): the button sits on the right end of the rack. */
 .rack-row { display: flex; gap: 6px; align-items: center; }
 .rack-row .rack { flex: 1; min-width: 0; }
+/* Drag-and-drop (feature #5): draggable tiles don't scroll the page on touch; the floating copy
+   follows the pointer; the square under it shows green (drop here) or red (not allowed). */
+#rack .tile, #board-container .tile.temp { touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+#rack .tile.used { cursor: default; }
+#rack .tile { transition: transform .15s ease; }
+#rack .tile.room-l { transform: translateX(-10px); }
+#rack .tile.room-r { transform: translateX(10px); }
+.drag-ghost { position: fixed; left: 0; top: 0; z-index: 9800; pointer-events: none; margin: 0; box-shadow: 0 12px 24px rgba(0,0,0,.4); will-change: transform; }
+body.tile-dragging, body.tile-dragging * { cursor: grabbing !important; user-select: none; -webkit-user-select: none; }
+/* Two-tone rings drawn inside the square (edge squares aren't clipped by the board's rounded frame):
+   one band always contrasts with the square, and "not allowed" is dashed, so it isn't colour alone. */
+.sq.drop-ok { outline: 3px solid #fff; outline-offset: -3px; box-shadow: inset 0 0 0 6px var(--green); z-index: 2; }
+.sq.drop-bad { outline: 3px dashed var(--red); outline-offset: -3px; box-shadow: inset 0 0 0 6px #fff; z-index: 2; }
+.tile.drop-in { animation: tile-drop-in .22s cubic-bezier(.2,1.6,.4,1); }
+@keyframes tile-drop-in { from { transform: scale(1.25); } to { transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  #rack .tile { transition: none; }
+  .tile.drop-in { animation: none; }
+}
 .rack-shuffle { flex: none; width: 40px; height: 40px; padding: 0; border-radius: 50%; font-size: 18px; line-height: 1; background: var(--yellow); color: var(--navy); }
 .actions-row { display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 6px; }
 .actions-row button { padding: 10px 6px; font-size: 13px; white-space: nowrap; }
@@ -400,7 +436,8 @@ html[data-theme="dark"] .bp-shape { opacity: .35; }
 .bp-lb-side { width: 100%; padding: calc(var(--u) * .9) calc(var(--u) * 1.2); border-radius: calc(var(--u) * 1); color: #fff; }
 .bp-lb-a { background: var(--blue); }
 .bp-lb-b { background: #c41f16; }
-.bp-lb-team { font-size: calc(var(--u) * 2); overflow-wrap: anywhere; }
+.bp-lb-team { font-size: calc(var(--u) * 2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bp-lb-player { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bp-lb-player { font-size: calc(var(--u) * 1.2); font-weight: 800; }
 .bp-lb-vs { width: calc(var(--u) * 4); height: calc(var(--u) * 4); border-radius: 50%; display: flex; align-items: center; justify-content: center;
   background: var(--yellow); color: var(--navy); font-size: calc(var(--u) * 1.5); }
@@ -479,12 +516,12 @@ html[data-theme="dark"] .bp-shape { opacity: .35; }
 @keyframes bp-corner-in { from { opacity: 0; transform: translateX(calc(var(--u) * 6)); } }
 .bp-cn-head { font-weight: 800; font-size: calc(var(--u) * 1.25); color: var(--yellow); }
 .bp-nw { white-space: nowrap; }
-.bp-cn-line { font-size: calc(var(--u) * 1.15); font-weight: 600; margin-top: calc(var(--u) * .2); overflow-wrap: anywhere; }
+.bp-cn-line { font-size: calc(var(--u) * 1.15); font-weight: 600; margin-top: calc(var(--u) * .2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* ticker: every live room, the featured one in yellow; scrolls only when it overflows */
 .bp-ticker { position: absolute; left: 0; right: 0; bottom: 0; height: calc(var(--u) * 5.06); z-index: 3;
   display: flex; align-items: center; overflow: hidden; background: var(--navy); color: #fff; }
-.bp-lbl { height: 100%; display: flex; align-items: center; padding: 0 calc(var(--u) * 1.5); background: var(--red); color: #fff; font-size: calc(var(--u) * 1.4); }
+.bp-lbl { height: 100%; display: flex; align-items: center; flex: none; white-space: nowrap; padding: 0 calc(var(--u) * 1.5); background: var(--red); color: #fff; font-size: calc(var(--u) * 1.4); }
 .bp-items-wrap { flex: 1 1 auto; min-width: 0; height: 100%; overflow: hidden; display: flex; align-items: center; }
 .bp-items { display: flex; white-space: nowrap; padding-left: calc(var(--u) * 2); font-size: calc(var(--u) * 1.35); font-weight: 800; }
 .bp-tk { margin-right: calc(var(--u) * 3); }
@@ -516,8 +553,7 @@ html[data-theme="dark"] .bp-shape { opacity: .35; }
 .bp-next h4 { font-size: calc(var(--u) * 2); }
 .bp-nx { padding: calc(var(--u) * .7) 0; border-bottom: 1px solid var(--line); }
 .bp-nx-teams { display: flex; align-items: center; gap: calc(var(--u) * .8); font-weight: 800; font-size: calc(var(--u) * 1.6); }
-.bp-nx-teams > span:not(.bp-nx-vs) { flex: 1 1 0; min-width: 0; overflow-wrap: anywhere;
-  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.bp-nx-teams > span:not(.bp-nx-vs) { flex: 1 1 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bp-nx-teams > span:last-child { text-align: right; }
 .bp-nx-vs { flex: none; padding: calc(var(--u) * .1) calc(var(--u) * .6); border-radius: 99px; background: var(--yellow); color: var(--navy); font-size: calc(var(--u) * 1); }
 .bp-nx-code { font-size: calc(var(--u) * 1.05); font-weight: 700; color: var(--muted); letter-spacing: 1px; margin-top: calc(var(--u) * .2); }
@@ -545,7 +581,7 @@ html[data-theme="dark"] .bp-shape { opacity: .35; }
 
 
 @media (max-width: 900px) {
-  .dash { grid-template-columns: 1fr; }
+  .dash { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* ---- Desktop landscape in-match layout (feature #9) ----

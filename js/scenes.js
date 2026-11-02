@@ -150,8 +150,13 @@
     });
   }
 
-  const teamOf = (room, seat) => (seat === 'A' ? room.teamAName : room.teamBName) || (seat === 'A' ? 'Team A' : 'Team B');
-  const playerOf = (room, seat) => (room.seats && room.seats[seat] && room.seats[seat].name) || '';
+  // Names as shown: at most Names.MAX characters + "…" (QA pass); the full names stay available for
+  // hover titles and screen-reader text.
+  const teamFull = (room, seat) => (seat === 'A' ? room.teamAName : room.teamBName) || (seat === 'A' ? 'Team A' : 'Team B');
+  const playerFull = (room, seat) => (room.seats && room.seats[seat] && room.seats[seat].name) || '';
+  const shortName = s => { const N = lib('Names', './names.js'); return N ? N.short(s) : s; };
+  const teamOf = (room, seat) => shortName(teamFull(room, seat));
+  const playerOf = (room, seat) => shortName(playerFull(room, seat));
   const sizeClass = name => (name.length > 22 ? ' xlong' : name.length > 12 ? ' long' : '');
 
   function roomTag(room) {
@@ -199,7 +204,7 @@
 
     const ov = el('div', 'fx-overlay fx-intro' + (reduced ? ' fx-reduced' : ''));
     if (root.Layout) root.Layout.fitStage(ov, opts.areaEl); // desktop landscape: over the board
-    const sr = el('div', 'fx-sr', `${teamOf(room, 'A')} versus ${teamOf(room, 'B')}. Coin toss: ${firstTeam} goes first.`);
+    const sr = el('div', 'fx-sr', `${teamFull(room, 'A')} versus ${teamFull(room, 'B')}. Coin toss: ${teamFull(room, first)} goes first.`);
     sr.setAttribute('role', 'status');
     const stage = el('div', 'fx-stage');
     stage.setAttribute('aria-hidden', 'true');
@@ -280,7 +285,9 @@
     }
     wrap.appendChild(coin);
     const shadow = el('div', 'in-shadow');
-    const result = el('div', 'in-result disp', `${firstTeam} GOES FIRST!`.toUpperCase());
+    // "<TEAM> GOES FIRST!": the team on one line ("…" when long), then "GOES FIRST!".
+    const result = el('div', 'in-result disp');
+    result.append(el('span', 'nm', firstTeam.toUpperCase()), ' GOES FIRST!');
     box.append(el('div', 'in-coin-title disp', '🪙 COIN TOSS'), wrap, shadow, result,
       el('div', 'in-note', 'Same result on every screen'));
     scene.appendChild(box);
@@ -410,7 +417,9 @@
       inner.appendChild(el('div', 'res-trophy', kind === 'other' ? '🤝' : '🏆'));
       // One text run, "<TEAM> wins", so the headline reads (and copies) as the fixed copy; CSS uppercases it.
       const head = el('h2', 'res-head');
-      head.append(el('span', 'res-team disp' + sizeClass(team), team), ' ',
+      const teamEl = el('span', 'res-team disp' + sizeClass(team), team);
+      teamEl.title = teamFull(room, win); // long names end in "…"; the full name on hover
+      head.append(teamEl, ' ',
         el('span', 'res-wins disp', kind === 'winner' ? 'wins!' : kind === 'other' ? 'wins · well played' : 'wins'));
       inner.appendChild(head);
 
@@ -419,7 +428,13 @@
         const box = el('div', 'res-side' + (s === win ? ' w' : ''));
         const p = playerOf(room, s);
         const num = el('div', 'res-num disp', '');
-        box.append(el('div', 'res-lbl', p ? `${teamOf(room, s)} · ${p}` : teamOf(room, s)), num);
+        // Team on one line, player on the next, each ending in "…" when long; the " · " stays in the
+        // text (screen readers, copy) but isn't shown.
+        const lbl = el('div', 'res-lbl');
+        lbl.appendChild(el('span', 'res-lbl-team', teamOf(room, s)));
+        if (p) lbl.append(el('span', 'res-lbl-sep', ' · '), el('span', 'res-lbl-pl', p));
+        lbl.title = p ? `${teamFull(room, s)} · ${playerFull(room, s)}` : teamFull(room, s);
+        box.append(lbl, num);
         nums.push([num, Number(s === 'A' ? res.scoreA : res.scoreB) || 0]);
         return box;
       };
@@ -434,7 +449,15 @@
         inner.appendChild(line);
       }
       const reason = resultReason(room);
-      if (reason) inner.appendChild(el('div', 'res-reason', reason));
+      if (reason) {
+        // "<player> left the game": the name gets the one-line "…" treatment, the rest stays readable.
+        const line = el('div', 'res-reason');
+        const loser = win === 'A' ? 'B' : 'A';
+        const who = res.reason === 'resign' ? (playerOf(room, loser) || teamOf(room, loser)) : '';
+        if (who && reason.startsWith(who)) line.append(el('span', 'nm', who), reason.slice(who.length));
+        else line.textContent = reason;
+        inner.appendChild(line);
+      }
     }
     hero.appendChild(inner);
 

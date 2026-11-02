@@ -16,10 +16,12 @@
   const LOW_MS = 10000;
   const IN_PLAY = ['live', 'suddenDeath', 'hostDecision'];
 
+  // The name as shown: at most Names.MAX characters + "…" (QA pass).
+  const Names = root.Names || (typeof require === 'function' ? require('./names.js') : null);
   function nameOf(room, seat) {
     const s = room.seats && room.seats[seat];
-    if (s && s.name) return s.name;
-    return (seat === 'A' ? room.teamAName : room.teamBName) || 'Player';
+    const name = (s && s.name) || (seat === 'A' ? room.teamAName : room.teamBName) || 'Player';
+    return Names ? Names.short(name) : name;
   }
 
   function state(room, mySeat, now) {

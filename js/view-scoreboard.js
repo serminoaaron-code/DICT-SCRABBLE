@@ -65,9 +65,10 @@
     const named = room => Match.withTeamNames(room, st.teams);
     const teamName = (room, seat) => {
       const id = seat === 'A' ? room.teamA : room.teamB;
-      return (st.teams[id] && st.teams[id].name) || (seat === 'A' ? room.teamAName : room.teamBName) || (seat === 'A' ? 'Team A' : 'Team B');
+      // As shown on the projector (ticker included): at most Names.MAX characters + "…" (QA pass).
+    return Names.short((st.teams[id] && st.teams[id].name) || (seat === 'A' ? room.teamAName : room.teamBName) || (seat === 'A' ? 'Team A' : 'Team B'));
     };
-    const playerName = (room, seat) => (room.seats && room.seats[seat] && room.seats[seat].name) || '';
+    const playerName = (room, seat) => Names.short((room.seats && room.seats[seat] && room.seats[seat].name) || '');
     const isLive = room => !!room && LIVE.includes(room.status) && !!room.game;
 
     function clockOf(room) {
@@ -104,7 +105,7 @@
       const shown = list.length > max ? list.slice(0, max - 1) : list;
       const more = list.length - shown.length;
       const rows = (shown.map(t => `<tr class="${t.rank <= 3 ? 'r' + t.rank : ''}">
-        <td class="rk"><span>${t.rank}</span></td><td class="nm">${esc(t.name)}</td><td class="wl">${t.wins}-${t.losses}</td><td class="pts">${t.points}</td></tr>`).join('')
+        <td class="rk"><span>${t.rank}</span></td><td class="nm">${esc(Names.short(t.name))}</td><td class="wl">${t.wins}-${t.losses}</td><td class="pts">${t.points}</td></tr>`).join('')
         + (more ? `<tr class="bp-more"><td colspan="4" class="bp-empty">+${more} more</td></tr>` : ''))
         || '<tr><td colspan="4" class="bp-empty">No teams yet</td></tr>';
       const tbody = $('#bigStand');
@@ -225,7 +226,7 @@
         const seat = s => {
           const p = room.seats && room.seats[s];
           return `<div class="bp-lb-side bp-lb-${s.toLowerCase()}"><div class="bp-lb-team disp">${esc(teamName(room, s))}</div>
-            <div class="bp-lb-player">${p ? esc(p.name) + (p.ready ? ' · ✓ Ready' : '') : 'Waiting for player…'}</div></div>`;
+            <div class="bp-lb-player">${p ? esc(Names.short(p.name)) + (p.ready ? ' · ✓ Ready' : '') : 'Waiting for player…'}</div></div>`;
         };
         setHtml(lobby, 'lobby', `<div class="bp-lb-title disp">STARTING SOON</div>${seat('A')}<div class="bp-lb-vs disp">VS</div>${seat('B')}
           <div class="bp-lb-code">ROOM ${esc(pretty(room.code))}</div>`);
@@ -256,7 +257,7 @@
       else if (room.status === 'waiting') html = '<span class="bp-empty">The match has not started yet.</span>';
       else if (!lm) html = '<span class="bp-empty">First move coming up…</span>';
       else {
-        const who = `<b>${esc(playerName(room, lm.seat) || teamName(room, lm.seat))}</b>`;
+        const who = `<b class="nm">${esc(playerName(room, lm.seat) || teamName(room, lm.seat))}</b>`; // one line, "…" when long
         if (lm.type === 'pass') html = `${who} passed`;
         else if (lm.type === 'timeout') html = `${who} ran out of time`;
         else {

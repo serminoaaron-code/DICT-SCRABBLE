@@ -7,7 +7,9 @@
   const SEATS = ['A', 'B'];
 
   // Team colour chip: Team A is always blue, Team B is always red, everywhere.
-  const chip = (seat, name) => `<span class="chip chip-${seat.toLowerCase()}">${esc(name)}</span>`;
+  // Names as shown: at most Names.MAX characters + "…" (QA pass); full names stay in titles.
+  const short = s => Names.short(s);
+  const chip = (seat, name) => `<span class="chip chip-${seat.toLowerCase()}" title="${esc(name)}">${esc(short(name))}</span>`;
   const versusHtml = room => `<div class="versus">${chip('A', room.teamAName)}<span class="vs-sep">vs</span>${chip('B', room.teamBName)}</div>`;
 
   // ---------- join page ----------
@@ -154,9 +156,9 @@
       const btn = seat => {
         const s = room.seats[seat];
         const team = nameOf(room, seat);
-        if (s) return `<button disabled>${esc(team)}: taken by ${esc(s.name)}</button>`;
+        if (s) return `<button class="nm-btn" disabled title="${esc(team)}: taken by ${esc(s.name)}">${esc(short(team))}: taken by ${esc(short(s.name))}</button>`;
         // An empty seat in a running game: the player is continuing on a new device (host freed the seat).
-        return `<button data-claim="${seat}">${inPlay ? `Take ${esc(team)}'s seat` : `Play for ${esc(team)}`}</button>`;
+        return `<button class="nm-btn" data-claim="${seat}" title="${esc(team)}">${inPlay ? `Take ${esc(short(team))}'s seat` : `Play for ${esc(short(team))}`}</button>`;
       };
       const anyFree = SEATS.some(s => !room.seats[s]);
       el.innerHTML = `
@@ -203,7 +205,7 @@
         const online = Match.isSeatOnline(room, seat);
         // One line: a long team or player name ends in "…" (full name on hover) instead of wrapping the row.
         return `<div class="seat ${s.ready ? 'ready' : ''}" data-seat-row="${seat}">
-          <span class="seat-who"><span class="dot ${online ? 'on' : ''}"></span>${team}<span class="seat-sep">·</span><b class="seat-name" title="${esc(s.name)}">${esc(s.name)}</b>${state.mySeat === seat ? '<span class="seat-you">(you)</span>' : ''}</span>
+          <span class="seat-who"><span class="dot ${online ? 'on' : ''}"></span>${team}<span class="seat-sep">·</span><b class="seat-name" title="${esc(s.name)}">${esc(short(s.name))}</b>${state.mySeat === seat ? '<span class="seat-you">(you)</span>' : ''}</span>
           <span class="row seat-side">
             <span class="badge ${s.ready ? 'live' : ''}">${s.ready ? 'Ready' : 'Not ready'}</span>
             ${host ? `<button class="btn-secondary small" data-remove="${seat}">Remove</button>` : ''}
@@ -298,8 +300,9 @@
 
   const PLAYING = ['live', 'suddenDeath'];
 
-  const teamOf = (room, seat) => (seat === 'A' ? room.teamAName : room.teamBName);
-  const playerOf = (room, seat) => (room.seats[seat] ? room.seats[seat].name : teamOf(room, seat));
+  // As shown in the live view (score bar, last move, host bar): at most Names.MAX characters + "…".
+  const teamOf = (room, seat) => short(seat === 'A' ? room.teamAName : room.teamBName);
+  const playerOf = (room, seat) => short(room.seats[seat] ? room.seats[seat].name : (seat === 'A' ? room.teamAName : room.teamBName));
   const isSeat = s => s === 'A' || s === 'B';
 
   function myTurn(room, ctx) {
@@ -323,9 +326,12 @@
     if (ui.onDocClick) document.removeEventListener('click', ui.onDocClick);
     if (ui.onResize) window.removeEventListener('resize', ui.onResize);
     if (ui.onKey) document.removeEventListener('keydown', ui.onKey);
+    if (ui.dragDetach) ui.dragDetach();
     ui.onDocClick = null;
     ui.onResize = null;
     ui.onKey = null;
+    ui.dragDetach = null;
+    ui.drag = null;
   }
 
   function buildLive(el, ctx) {
@@ -372,7 +378,7 @@
       </div></div>`;
     el.querySelector('#stopWatching').onclick = () => ctx.stopWatching();
     const ui = ctx.state.ui;
-    Object.assign(ui, { temp: [], selected: null, busy: false, rejected: null, seenMove: -1, tried: {}, pillKind: null, noticeHidden: null, sideHtml: {}, lastSeenMove: null, rackOrder: null });
+    Object.assign(ui, { temp: [], selected: null, busy: false, rejected: null, seenMove: -1, tried: {}, pillKind: null, noticeHidden: null, sideHtml: {}, lastSeenMove: null, rackOrder: null, drag: null, dragMove: null });
     const $ = s => el.querySelector(s);
 
     // ⋯ menu: Leave lives here so it can't be tapped by accident.
@@ -416,6 +422,9 @@
     bonus.onclick = ev => { if (!ev.target.closest('.bonus-card') || ev.target.closest('.bonus-close')) setBonus(false); };
     ui.onKey = ev => { if (ev.key === 'Escape') setBonus(false); };
     document.addEventListener('keydown', ui.onKey);
+
+    // Drag-and-drop tiles (feature #5), mouse and touch; tap-to-place keeps working.
+    ui.dragDetach = Drag.attach($('#liveRoot'), dragHooks(el, ctx));
 
     $('#passBtn').onclick = async () => {
       const room = ctx.state.room;
@@ -492,6 +501,90 @@
     update(el, room, ctx);
   }
 
+  // ---- drag-and-drop (feature #5): what may be dragged, and what a drop does ----
+  // The drag lives in ui.drag ({kind:'rack', index} | {kind:'board', r, c}); while it is set,
+  // update() shows the dragged tile's rack slot empty / leaves it off the board.
+  function dragHooks(el, ctx) {
+    const ui = ctx.state.ui;
+    const room = () => ctx.state.room;
+    const locked = () => ui.busy || !!ui.rejected;
+    return {
+      source(t) {
+        if (!isSeat(ctx.state.mySeat) || !t || !t.closest || !room() || !room().game) return null;
+        const rt = t.closest('#rack .tile');
+        if (rt && !rt.classList.contains('used')) return { kind: 'rack', index: Number(rt.dataset.i) };
+        const bt = t.closest('#board-container .tile.temp');
+        if (bt && myTurn(room(), ctx) && !locked()) {
+          const sq = bt.closest('.sq');
+          return { kind: 'board', r: Number(sq.dataset.r), c: Number(sq.dataset.c) };
+        }
+        return null;
+      },
+      context() {
+        const rm = room();
+        const board = rm && rm.game ? rm.game.board : {};
+        return {
+          myTurn: !!(rm && rm.game) && myTurn(rm, ctx),
+          locked: locked(),
+          occupied: (r, c) => !!board[ScrabbleEngine.key(r, c)] || ui.temp.some(t => t.r === r && t.c === c)
+        };
+      },
+      start(from) {
+        ui.drag = from;
+        ui.dragMove = room().game.moveCount;
+        ui.selected = null;
+        update(el, room(), ctx);
+      },
+      // Where the floating tile flies back to: a placed tile dropped somewhere invalid stays on its own
+      // square, so it goes there; a rack tile, or a placed tile taken back, goes to its rack slot.
+      returnRect(from, action) {
+        if (from.kind === 'board' && action && action.type === 'return') {
+          const s = el.querySelector(`#board-container .sq[data-r="${from.r}"][data-c="${from.c}"]`);
+          return s ? s.getBoundingClientRect() : null;
+        }
+        const idx = from.kind === 'rack' ? from.index : (ui.temp.find(t => t.r === from.r && t.c === from.c) || {}).rackIndex;
+        const t = idx === undefined ? null : el.querySelector(`#rack .tile[data-i="${idx}"]`);
+        return t ? t.getBoundingClientRect() : null;
+      },
+      finish(action) {
+        const rm = room();
+        // A move landed while dragging: the rack and board it was based on are gone, so it only returns.
+        const stale = !rm || !rm.game || rm.game.moveCount !== ui.dragMove;
+        ui.drag = null;
+        applyDrag(el, ctx, stale && action.type !== 'reorder' ? { type: 'return' } : action);
+      }
+    };
+  }
+
+  function applyDrag(el, ctx, a) {
+    const ui = ctx.state.ui;
+    const room = ctx.state.room;
+    if (!room || !room.game || !el.querySelector('#liveRoot')) return;
+    let landed = null;
+    if (a.type === 'place') {
+      const letter = room.game.racks[ctx.state.mySeat][a.index];
+      if (letter !== undefined && !ui.temp.some(t => t.rackIndex === a.index)) {
+        ui.temp.push({ r: a.r, c: a.c, letter, rackIndex: a.index });
+        ui.selected = null;
+        landed = a;
+      }
+    } else if (a.type === 'move') {
+      const t = ui.temp.find(x => x.r === a.from.r && x.c === a.from.c);
+      if (t) { t.r = a.r; t.c = a.c; landed = a; }
+    } else if (a.type === 'unplace') {
+      ui.temp = ui.temp.filter(t => !(t.r === a.r && t.c === a.c));
+    } else if (a.type === 'reorder' && ui.rackOrder) {
+      const fromPos = ui.rackOrder.order.indexOf(a.index);
+      if (fromPos !== -1) ui.rackOrder = { key: ui.rackOrder.key, order: Rack.move(ui.rackOrder.order, fromPos, a.pos) };
+    }
+    if (landed) Sound.play('place');
+    update(el, ctx.state.room, ctx);
+    if (landed && !(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+      const t = el.querySelector(`#board-container .sq[data-r="${landed.r}"][data-c="${landed.c}"] .tile`);
+      if (t) t.classList.add('drop-in');
+    }
+  }
+
   function update(el, room, ctx) {
     const ui = ctx.state.ui;
     // Timers and async handlers can fire after the view switched to the final screen.
@@ -516,8 +609,9 @@
     }
 
     const mine = myTurn(room, ctx);
+    const lifted = ui.drag && ui.drag.kind === 'board' ? ui.drag : null; // the placed tile being dragged
     UI.renderBoard($('#board-container'), g.board, {
-      temp: mine ? ui.temp : [],
+      temp: mine ? ui.temp.filter(t => !(lifted && t.r === lifted.r && t.c === lifted.c)) : [],
       pending: g.pending ? g.pending.placements : null,
       onSquare: (r, c) => onSquare(el, ctx, r, c)
     });
@@ -530,6 +624,7 @@
       // This device's tile order (Shuffle); back to normal when the rack's letters change.
       ui.rackOrder = Rack.sync(ui.rackOrder, g.racks[seat]);
       const used = mine ? ui.temp.map(t => t.rackIndex) : [];
+      if (ui.drag && ui.drag.kind === 'rack') used.push(ui.drag.index); // its slot stays empty while dragged
       UI.renderRack(rackEl, g.racks[seat], {
         selectedIndex: ui.selected,
         usedIndices: used,
@@ -739,7 +834,7 @@
       if (!offline.length) ui.noticeHidden = null; // a new disconnect shows again
       const notice = el.querySelector('#noticeBox');
       notice.innerHTML = inPlay && offline.length && ui.noticeHidden !== noticeKey
-        ? `<div class="sheet-row"><div class="sheet-msg">📴 ${offline.map(s => esc(room.seats[s].name)).join(' and ')} disconnected${App.isHost() ? ' · Pause to wait, or Award win' : ''}</div>
+        ? `<div class="sheet-row"><div class="sheet-msg">📴 ${offline.map(s => `<span class="nm">${esc(short(room.seats[s].name))}</span>`).join(' and ')} disconnected${App.isHost() ? ' · Pause to wait, or Award win' : ''}</div>
             <button class="btn-ghost sheet-close" data-act="hideNotice" aria-label="Hide this notice">✕</button></div>`
         : '';
       notice.onclick = ev => {
@@ -752,18 +847,18 @@
       if (!App.isHost()) { bar.innerHTML = ''; return; }
       const warnings = SEATS
         .filter(s => room.seats[s] && room.fairPlay[s].screenLeaves > 0)
-        .map(s => `<div class="warn-line">⚠️ ${esc(room.seats[s].name)} left the screen ${room.fairPlay[s].screenLeaves}×</div>`).join('');
+        .map(s => `<div class="warn-line">⚠️ ${esc(short(room.seats[s].name))} left the screen ${room.fairPlay[s].screenLeaves}×</div>`).join('');
       let decision = '';
       if (phase === 'appeal') {
         const p = g.pending;
         decision = `<div class="warn-line stack">
-          <div>⚖️ <b>${esc(playerOf(room, p.seat))}</b> played ${p.words.map(w => `${esc(w.word)} (${w.score})`).join(', ')}: <b>${p.total} pts</b>.
+          <div>⚖️ <b class="nm">${esc(playerOf(room, p.seat))}</b> played ${p.words.map(w => `${esc(w.word)} (${w.score})`).join(', ')}: <b>${p.total} pts</b>.
           Not found: ${p.rejectedWords.map(esc).join(', ')}</div>
           <div class="row"><button class="small" data-host="approve">✅ Approve</button><button class="small danger" data-host="deny">✖ Deny</button></div>
         </div>`;
       } else if (phase === 'hostDecision') {
         decision = `<div class="warn-line stack"><div>Still tied after 3 sudden-death rounds. Award the win:</div>
-          <div class="row">${SEATS.map(s => `<button class="small" data-host="award" data-seat="${s}">🏆 ${esc(teamOf(room, s))}</button>`).join('')}</div></div>`;
+          <div class="row">${SEATS.map(s => `<button class="small nm-btn" data-host="award" data-seat="${s}" title="${esc(teamOf(room, s))}">🏆 ${esc(teamOf(room, s))}</button>`).join('')}</div></div>`;
       }
       const canPause = PLAYING.includes(room.status) && !room.clock.paused;
       const pinned = ctx.state.pinned === ctx.code;
@@ -772,13 +867,13 @@
         ${warnings}${decision}
         <div class="row">
           ${phase === 'paused' ? '<button class="small" data-host="resume">▶ Resume</button>' : `<button class="small secondary" data-host="pause" ${canPause ? '' : 'disabled'}>⏸ Pause</button>`}
-          ${SEATS.map(s => `<button class="small secondary" data-host="award" data-seat="${s}">Award win → ${esc(teamOf(room, s))}</button>`).join('')}
+          ${SEATS.map(s => `<button class="small secondary nm-btn" data-host="award" data-seat="${s}" title="Award win → ${esc(teamOf(room, s))}">Award win → ${esc(teamOf(room, s))}</button>`).join('')}
           <button class="small secondary" data-host="pin">${pinned ? 'Unpin' : '📌 Pin to big screen'}</button>
           <button class="small danger" data-host="void">Void</button>
         </div>
         <div class="row small-text">
           <span class="muted">Player switching devices?</span>
-          ${SEATS.filter(s => room.seats[s]).map(s => `<button class="small secondary" data-host="remove" data-seat="${s}">Free ${esc(room.seats[s].name)}'s seat</button>`).join('')}
+          ${SEATS.filter(s => room.seats[s]).map(s => `<button class="small secondary nm-btn" data-host="remove" data-seat="${s}" title="Free ${esc(room.seats[s].name)}'s seat">Free ${esc(short(room.seats[s].name))}'s seat</button>`).join('')}
         </div>
       </div>`;
       bar.onclick = async ev => {
@@ -829,7 +924,7 @@
       if (!box || !App.isHost() || room.status !== 'final' || !room.result) return;
       const otherSeat = room.result.winner === 'A' ? 'B' : 'A';
       box.innerHTML = `<div class="hostbar"><h4>⚙ Host</h4><div class="row">
-        <button class="small secondary" id="correctBtn">Give the win to ${esc(teamOf(room, otherSeat))}</button>
+        <button class="small secondary nm-btn" id="correctBtn" title="Give the win to ${esc(teamOf(room, otherSeat))}">Give the win to ${esc(teamOf(room, otherSeat))}</button>
         <button class="small danger" id="voidFinalBtn">Void</button></div></div>`;
       box.querySelector('#correctBtn').onclick = async () => {
         const note = prompt('Reason for the correction (kept in the record):', '');

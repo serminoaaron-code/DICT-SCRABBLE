@@ -36,7 +36,10 @@
     const seat = lm.seat;
     const total = Number(lm.total) || 0;
     const bingo = !!lm.bingo; // rooms from before the bingo flag: treat as false
-    const teamName = (seat === 'A' ? room.teamAName : room.teamBName) || '';
+    // Names as shown: at most Names.MAX characters + "…" (QA pass).
+    const Names = root.Names || (typeof require === 'function' ? require('./names.js') : null);
+    const short = s => (Names ? Names.short(s) : s);
+    const teamName = short((seat === 'A' ? room.teamAName : room.teamBName) || '');
     const seatInfo = room.seats && room.seats[seat];
     return {
       tier: tierFor({ total, bingo }),
@@ -44,7 +47,7 @@
       words: (lm.words || []).map(w => ({ word: String(w.word || ''), score: Number(w.score) || 0 })),
       bingo,
       seat,
-      playerName: (seatInfo && seatInfo.name) || teamName,
+      playerName: (seatInfo && seatInfo.name) ? short(seatInfo.name) : teamName,
       teamName,
       moveCount: g.moveCount
     };
