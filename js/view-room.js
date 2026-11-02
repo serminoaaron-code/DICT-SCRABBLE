@@ -465,8 +465,8 @@
     const setBonus = open => {
       const wasOpen = !bonus.classList.contains('hidden');
       bonus.classList.toggle('hidden', !open); bonusBtn.setAttribute('aria-expanded', String(open));
-      if (open && !wasOpen) bonus.querySelector('.bonus-close').focus();
-      if (!open && wasOpen) bonusBtn.focus();
+      if (open && !wasOpen) bonus.querySelector('.bonus-close').focus({ preventScroll: true }); // never jumps the page
+      if (!open && wasOpen) bonusBtn.focus({ preventScroll: true });
     };
     bonusBtn.onclick = () => setBonus(bonus.classList.contains('hidden'));
     bonus.onclick = ev => { if (!ev.target.closest('.bonus-card') || ev.target.closest('.bonus-close')) setBonus(false); };
@@ -505,7 +505,8 @@
     $('#playBtn').onclick = async () => {
       const room = ctx.state.room;
       const seat = ctx.state.mySeat;
-      if (!myTurn(room, ctx) || ui.busy || ui.drag) return; // never mid-drag: the dragged tile is not placed yet
+      // never mid-drag (the dragged tile is not placed yet), nor in the 0.5 s after a drag ends or is cut short
+      if (!myTurn(room, ctx) || ui.busy || ui.drag || performance.now() - (ui.dragEndedAt || -1e9) < 500) return;
       const placements = ui.temp.map(t => ({ r: t.r, c: t.c, letter: t.letter }));
       const m = Match.prepareMove(room, seat, placements);
       if (!m.ok) return UI.toast(ScrabbleEngine.ERROR_TEXT[m.error] || 'Invalid move.', 'error');
@@ -615,6 +616,7 @@
         return t ? t.getBoundingClientRect() : null;
       },
       finish(action) {
+        ui.dragEndedAt = performance.now(); // Play waits a moment after any drag ends (a second finger can cut one short)
         const rm = room();
         // A move landed while dragging: the rack and board it was based on are gone, so it only returns.
         const stale = !rm || !rm.game || rm.game.moveCount !== ui.dragMove;
