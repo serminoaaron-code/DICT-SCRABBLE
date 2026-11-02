@@ -56,7 +56,7 @@ Tick each box. If something fails, note what you did, what you saw, and on which
 - [ ] Player B turns on airplane mode (or closes the tab). Everyone sees "… disconnected". Player B reconnects, and the notice disappears.
 
 ## 6. Ending
-- [ ] Let the 3-minute clock reach 0:00. The winner's screen shows a trophy result screen ("🏆 TEAM WINS!" with confetti and a fanfare), the other player gets a calmer "well played" screen, and the host/spectators see a plain result summary. **Standings** update, and each screen's **+1 TEAM**/score stamp matches it.
+- [ ] Let the 3-minute clock reach 0:00. The winner's screen shows a trophy result screen ("🏆 TEAM WINS!" with confetti and a fanfare), the other player gets a calmer "well played" screen, and the host/spectators see the neutral result scene (the gold "TEAM wins" scene with confetti). **Standings** update, and each screen's **+1 TEAM**/score stamp matches it.
 - [ ] Repeat with a new 2-minute room and **close the host's window before 0:00**. A player's screen still records the result and shows its result screen. Reopening the host shows the same single result, not two.
 - [ ] New room: both players only **Pass** until time is up while the scores are tied. Sudden death starts, and after 3 tied rounds the host gets **Award the win** buttons.
 - [ ] New room: a player opens the **⋯** menu and presses **Leave**. A confirm box names their team and says they'll lose the match; confirming it, the other team wins.
