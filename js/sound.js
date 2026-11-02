@@ -28,32 +28,41 @@
 
   function enabled() { return readStored() === '1'; }
 
-  // The AudioContext is created lazily, on a user gesture, so its creation
-  // never trips browser autoplay restrictions. Two gestures can trigger it:
-  // turning sound on with toggle() (the click is itself a gesture), or — for
-  // a returning player who already has sound on from a previous session —
-  // the first pointerdown/keydown of the new page load (see bindFirstGesture
-  // below).
+  // The AudioContext is created lazily, and only after a user gesture, so it
+  // never trips browser autoplay restrictions. Chrome starts a context made
+  // without a gesture "suspended" and only lets resume() work after one, so:
+  // play() stays a silent no-op until the page has seen a gesture (the
+  // projector opened by window.open, a player who refreshed), and every
+  // gesture resumes a suspended context until it is running.
   let ctx = null;
+  let gestured = false;
   function ensureCtx() {
-    if (ctx) return ctx;
-    try {
-      const AC = root.AudioContext || root.webkitAudioContext;
-      if (AC) ctx = new AC();
-    } catch (e) {
-      ctx = null;
+    if (!ctx) {
+      try {
+        const AC = root.AudioContext || root.webkitAudioContext;
+        if (AC) ctx = new AC();
+      } catch (e) {
+        ctx = null;
+      }
     }
     try {
-      if (ctx && ctx.state === 'suspended' && ctx.resume) ctx.resume();
+      if (ctx && ctx.state === 'suspended' && ctx.resume) {
+        const p = ctx.resume();
+        if (p && p.then) p.then(unbindWhenRunning, () => {});
+      }
     } catch (e) { /* ignore */ }
     return ctx;
   }
 
   function ready() { return !!ctx; }
 
+  // Read-only, for checks: the AudioContext's state, or 'none' before one exists.
+  function state() { return ctx ? ctx.state : 'none'; }
+
   // Flips the stored preference and returns the new state. Only creates the
   // context when turning sound on (nothing to play for, or vibrate, once off).
   function toggle() {
+    gestured = true; // toggle() only runs from the sound button's click
     const next = !enabled();
     if (next) ensureCtx();
     writeStored(next);
@@ -61,17 +70,24 @@
   }
 
   // A returning player whose device already has sound on (scrabble.sound =
-  // '1' from an earlier session) gets no AudioContext until some gesture
-  // happens on the new page — toggle() isn't called again. Catch the very
-  // first pointerdown or keydown of the page instead so sound "just works"
-  // without re-toggling. Each listener removes itself after it runs.
-  function onFirstGesture() {
+  // '1' from an earlier session) gets no running AudioContext until some
+  // gesture happens on the new page — toggle() isn't called again. Every
+  // pointerdown/pointerup/keydown resumes it (pointerup: a touch only counts
+  // as a gesture when the finger lifts), and the listeners stay until the
+  // context is running, then remove themselves.
+  const GESTURES = ['pointerdown', 'pointerup', 'keydown'];
+  function onGesture() {
+    gestured = true;
     if (enabled()) ensureCtx();
+    unbindWhenRunning();
+  }
+  function unbindWhenRunning() {
+    if (!ctx || ctx.state !== 'running') return;
+    try { GESTURES.forEach(t => root.document.removeEventListener(t, onGesture, true)); } catch (e) { /* ignore */ }
   }
   try {
     if (root.document && root.document.addEventListener) {
-      root.document.addEventListener('pointerdown', onFirstGesture, { once: true });
-      root.document.addEventListener('keydown', onFirstGesture, { once: true });
+      GESTURES.forEach(t => root.document.addEventListener(t, onGesture, true));
     }
   } catch (e) { /* no document (Node, etc.) */ }
 
@@ -140,11 +156,13 @@
   }
 
   // name: 'turn' | 'place' | 'accept' | 'tier1'..'tier4' | 'vs' | 'coin' | 'win'.
-  // Silent no-op when sound is off or no AudioContext is available; never throws.
+  // Silent no-op when sound is off, before the page's first gesture, or while
+  // the context isn't running (notes queued on a suspended context would all
+  // burst out at once on resume); never throws.
   function play(name) {
-    if (!enabled()) return;
-    if (!ctx) ensureCtx(); // fallback: a gesture may not have fired yet
-    if (!ctx) return;
+    if (!enabled() || !gestured) return;
+    ensureCtx();
+    if (!ctx || ctx.state !== 'running') return;
     try { playPreset(name); } catch (e) { /* never throw */ }
   }
 
@@ -156,5 +174,5 @@
     } catch (e) { /* ignore */ }
   }
 
-  return { enabled, toggle, play, buzz, ready };
+  return { enabled, toggle, play, buzz, ready, state };
 });
