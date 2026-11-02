@@ -95,14 +95,27 @@
     function setText(node, text) { if (node.textContent !== text) node.textContent = text; }
 
     // ---------- right column, idle panel, ticker ----------
+    // Every team must be visible on the projector (DICT may field 20-30 teams): up to 18 rows in
+    // one column, then two columns of up to 18; past 36 teams the last row reads "+N more".
+    const STAND_COL_ROWS = 18;
     function renderStandings() {
       const list = Match.computeStandings(st.teams, st.rooms);
-      const rows = list.map(t => `<tr class="${t.rank <= 3 ? 'r' + t.rank : ''}">
+      const max = STAND_COL_ROWS * 2;
+      const shown = list.length > max ? list.slice(0, max - 1) : list;
+      const more = list.length - shown.length;
+      const rows = (shown.map(t => `<tr class="${t.rank <= 3 ? 'r' + t.rank : ''}">
         <td class="rk"><span>${t.rank}</span></td><td class="nm">${esc(t.name)}</td><td class="wl">${t.wins}-${t.losses}</td><td class="pts">${t.points}</td></tr>`).join('')
+        + (more ? `<tr class="bp-more"><td colspan="4" class="bp-empty">+${more} more</td></tr>` : ''))
         || '<tr><td colspan="4" class="bp-empty">No teams yet</td></tr>';
-      setHtml($('#bigStand'), 'stand', rows);
-      stage.classList.toggle('bp-many', list.length > 8);
-      stage.classList.toggle('bp-lots', list.length > 13);
+      const tbody = $('#bigStand');
+      setHtml(tbody, 'stand', rows);
+      const cols = list.length > STAND_COL_ROWS;
+      const perCol = cols ? Math.ceil((shown.length + (more ? 1 : 0)) / 2) : list.length;
+      tbody.style.setProperty('--stand-rows', String(perCol));
+      stage.classList.toggle('bp-cols', cols);
+      stage.classList.toggle('bp-many', perCol > 8);
+      stage.classList.toggle('bp-lots', perCol > 13);
+      stage.classList.toggle('bp-max', perCol > 15);
     }
 
     function renderRecent() {
