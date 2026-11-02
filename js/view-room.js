@@ -278,6 +278,7 @@
     const unsub = Store.watchRoom(code, onRoom);
     const unsubPinned = Store.watchPinned(p => { state.pinned = p; render(); });
     return () => {
+      App.inLiveSeat = false;
       unsubTeams();
       unsubPinned();
       document.removeEventListener('visibilitychange', onVisibility);
@@ -723,6 +724,8 @@
     $('#actions').classList.toggle('hidden', !isSeat(seat));
     for (const id of ['#playBtn', '#recallBtn', '#passBtn']) $(id).disabled = !mine || ui.busy || !!ui.rejected;
     syncTaunt(el, room, ctx);
+    // During my own live game the header's "How to play" opens in a new tab (app.js), so the game stays open.
+    App.inLiveSeat = isSeat(seat) && ['live', 'suddenDeath', 'hostDecision'].includes(room.status);
     $('#resignBtn').disabled = !isSeat(seat) || !['live', 'suddenDeath', 'hostDecision'].includes(room.status);
 
     // Bottom sheet (empty = hidden): the recall / ask-host choice, or my appeal waiting for the host.
@@ -998,6 +1001,7 @@
     // entrance plays once. A play that ended the game (bag out, last sudden-death move) never got its
     // word celebration on the live screen: it plays here over the result, whose entrance waits for it.
     renderFinal(el, room, ctx) {
+      App.inLiveSeat = false; // the game is over: How to play opens in the same tab again
       document.body.classList.add('in-game'); // collapsed header, so the result scene fills a phone like the mockup
       const ui = ctx.state.ui;
       const viewer = Scenes.resultViewer(room, ctx.state.mySeat);

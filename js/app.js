@@ -76,7 +76,19 @@
     }
   }
 
-  root.App = { go, isHost, setHost, onTick, route };
+  // The header's "How to play": during a seated player's own live game (App.inLiveSeat, set by the room
+  // view) it opens in a new tab, so the game stays open and connected; otherwise a normal link.
+  function wireHelpLink() {
+    const a = document.getElementById('helpLink');
+    if (!a) return;
+    a.addEventListener('click', ev => {
+      if (!root.App.inLiveSeat) return;
+      ev.preventDefault();
+      root.open(location.pathname + location.search + '#gamehelp', '_blank', 'noopener');
+    });
+  }
+
+  root.App = { go, isHost, setHost, onTick, route, inLiveSeat: false };
 
   function playgroundBanner() {
     if (!Store.playground) return;
@@ -99,6 +111,7 @@
     Store.init();
     playgroundBanner();
     wireHeaderToggles();
+    wireHelpLink();
     window.addEventListener('hashchange', route);
     route();
   });
