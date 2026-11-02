@@ -382,7 +382,7 @@
         <div id="tauntLive" class="fx-sr" aria-live="polite"></div>
         <div id="noticeBox" class="sheet sheet-notice"></div>
         <div id="rejectBox" class="sheet sheet-reject"></div>
-        <div class="bonus-backdrop hidden" id="bonusBackdrop"><div class="card bonus-card" id="bonusCard" role="dialog" aria-label="Bonus squares">
+        <div class="bonus-backdrop hidden" id="bonusBackdrop"><div class="card bonus-card" id="bonusCard" role="dialog" aria-modal="true" aria-label="Bonus squares">
           <div class="bonus-head"><b>Bonus squares</b><button type="button" class="bonus-close" aria-label="Close">✕</button></div>
           ${UI.bonusHelpHtml()}</div></div>
       </div></div>`;
@@ -459,10 +459,26 @@
     // "? Bonuses" help card (feature #7). update() never touches it, so it stays open while the game moves on.
     const bonus = $('#bonusBackdrop');
     const bonusBtn = $('#bonusBtn');
-    const setBonus = open => { bonus.classList.toggle('hidden', !open); bonusBtn.setAttribute('aria-expanded', String(open)); };
+    // A real dialog for keyboards: focus moves to ✕ on open, stays inside while open (Tab cycles),
+    // and returns to "? Bonuses" on close (Escape, ✕ or the backdrop).
+    const setBonus = open => {
+      const wasOpen = !bonus.classList.contains('hidden');
+      bonus.classList.toggle('hidden', !open); bonusBtn.setAttribute('aria-expanded', String(open));
+      if (open && !wasOpen) bonus.querySelector('.bonus-close').focus();
+      if (!open && wasOpen) bonusBtn.focus();
+    };
     bonusBtn.onclick = () => setBonus(bonus.classList.contains('hidden'));
     bonus.onclick = ev => { if (!ev.target.closest('.bonus-card') || ev.target.closest('.bonus-close')) setBonus(false); };
-    ui.onKey = ev => { if (ev.key === 'Escape') setBonus(false); };
+    ui.onKey = ev => {
+      if (bonus.classList.contains('hidden')) return;
+      if (ev.key === 'Escape') return setBonus(false);
+      if (ev.key !== 'Tab') return;
+      const items = [...bonus.querySelectorAll('button, [href], [tabindex]:not([tabindex="-1"])')].filter(e => !e.disabled);
+      if (!items.length) return;
+      const i = items.indexOf(document.activeElement), last = items.length - 1;
+      ev.preventDefault(); // focus never leaves the open card
+      items[ev.shiftKey ? (i <= 0 ? last : i - 1) : (i === -1 || i === last ? 0 : i + 1)].focus();
+    };
     document.addEventListener('keydown', ui.onKey);
 
     // Drag-and-drop tiles (feature #5), mouse and touch; tap-to-place keeps working.
