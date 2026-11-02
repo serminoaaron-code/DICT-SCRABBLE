@@ -162,6 +162,20 @@ test('bingo adds 50', () => {
   assert.strictEqual(m.total, 64);
 });
 
+// ---------- Task 5 ----------
+
+test('celebrationTier boundaries', () => {
+  assert.strictEqual(E.celebrationTier(14, false), 0);
+  assert.strictEqual(E.celebrationTier(15, false), 1);
+  assert.strictEqual(E.celebrationTier(24, false), 1);
+  assert.strictEqual(E.celebrationTier(25, false), 2);
+  assert.strictEqual(E.celebrationTier(39, false), 2);
+  assert.strictEqual(E.celebrationTier(40, false), 3);
+  assert.strictEqual(E.celebrationTier(59, false), 3);
+  assert.strictEqual(E.celebrationTier(60, false), 4);
+  assert.strictEqual(E.celebrationTier(5, true), 4);
+});
+
 test('scoreMove reports validation errors', () => {
   const m = E.scoreMove({}, [P(0, 0, 'A'), P(0, 1, 'T')]);
   assert.strictEqual(m.ok, false);

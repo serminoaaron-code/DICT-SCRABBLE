@@ -21,6 +21,26 @@
   function isHost() { return Store.local.get('scrabble.host') === '1'; }
   function setHost(on) { if (on) Store.local.set('scrabble.host', '1'); else Store.local.remove('scrabble.host'); }
 
+  // ---------- header switches ----------
+  function updateThemeIcon() {
+    const btn = document.getElementById('themeToggle');
+    if (btn) btn.textContent = Theme.current() === 'dark' ? '🌙' : '☀️';
+  }
+
+  function updateSoundIcon() {
+    const btn = document.getElementById('soundToggle');
+    if (btn) btn.textContent = Sound.enabled() ? '🔊' : '🔇';
+  }
+
+  function wireHeaderToggles() {
+    const themeBtn = document.getElementById('themeToggle');
+    if (themeBtn) themeBtn.onclick = () => { Theme.toggle(); updateThemeIcon(); };
+    const soundBtn = document.getElementById('soundToggle');
+    if (soundBtn) soundBtn.onclick = () => { Sound.toggle(); updateSoundIcon(); };
+    updateThemeIcon();
+    updateSoundIcon();
+  }
+
   function go(route) { location.hash = route; }
 
   function el() { return document.getElementById('app'); }
@@ -57,7 +77,9 @@
     if (!Store.playground) return;
     const bar = document.createElement('div');
     bar.className = 'playground-bar';
-    bar.innerHTML = '🧪 <b>PLAYGROUND</b>: local test data only, separate from the real tournament. ' +
+    // Full text on wide screens, one short line on phones (CSS picks one; see .pg-long/.pg-short).
+    bar.innerHTML = '<span class="pg-long">🧪 <b>PLAYGROUND</b>: local test data only, separate from the real tournament.</span>' +
+      '<span class="pg-short">🧪 <b>PLAYGROUND</b> · test data</span> ' +
       '<button class="small secondary" id="resetPlayground">Reset playground</button>';
     document.body.prepend(bar);
     bar.querySelector('#resetPlayground').onclick = async () => {
@@ -68,8 +90,10 @@
   }
 
   document.addEventListener('DOMContentLoaded', () => {
+    // The theme is already applied: js/theme.js does it in <head>, before first paint.
     Store.init();
     playgroundBanner();
+    wireHeaderToggles();
     window.addEventListener('hashchange', route);
     route();
   });

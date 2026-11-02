@@ -72,6 +72,15 @@ Every bug we've fixed is listed here with steps to **try to make it happen again
   2. Then close the tab entirely and reopen the room link on the same device.
 - **Expected now:** both times, Player A is back in seat A with the same tiles, and it's still their turn if it was.
 
+### BF-19: Long player name breaks the lobby seat row
+- **Area:** lobby · **Fixed in:** `feat/ui-revamp` (QA pass #1) · **Found by:** QA pass #1
+- **Used to happen:** in the room lobby, a long player name wrapped onto several lines and pushed the team chip, the **Ready** badge and the host's **Remove** button onto new lines.
+- **Try to trigger it:**
+  1. Add a team with a long name (about 40 characters).
+  2. Join its seat with a 40-character player name, e.g. `MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM`, on a phone (or a 360px-wide window).
+  3. Look at the lobby as that player and as the host.
+- **Expected now:** each seat row stays on one line. The long name (and a long team chip) ends in "…", while "(you)", the **Ready / Not ready** badge and **Remove** stay whole. Hovering the name on a laptop shows the full name.
+
 ---
 
 ## Host dashboard and results
@@ -160,6 +169,14 @@ Every bug we've fixed is listed here with steps to **try to make it happen again
   1. The host presses **Start**.
   2. Within 1–2 seconds, a player presses **Resign** and confirms.
 - **Expected now:** the result screen shows normally on every device. *(Optional: no red errors in the F12 Console.)*
+
+### BF-20: Coin toss result disappears before you can read who goes first
+- **Area:** live game · **Fixed in:** `feat/ui-revamp` (QA pass #1) · **Found by:** QA pass #1
+- **Used to happen:** after **Start**, the VS intro and the coin flip played, but "<TEAM> GOES FIRST!" popped up only about half a second before the whole scene faded away, so players couldn't see who goes first.
+- **Try to trigger it:**
+  1. Set up a room, get both players ready, and have the host press **Start**.
+  2. Watch the intro on both players and the host without pressing **Skip**.
+- **Expected now:** the coin lands and "<TEAM> GOES FIRST!" stays on screen for about 2 seconds on every device before the board appears. The first player's turn clock starts only after that, about 6.5 seconds after **Start**. The caption under the turn pill names the same team.
 
 ---
 

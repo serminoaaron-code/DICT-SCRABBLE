@@ -1,0 +1,361 @@
+/* ==========================================================================
+   Game-feel effects (Task 8+): word celebrations.
+   Matches the approved mockup celebrate-tiers-v2.html. Sizes use --k, one
+   mockup pixel scaled to the viewport (the mockup phone was 280x540).
+   Overlays sit on their own dark backdrop, so text stays readable in both
+   themes: titles carry a dark outline, small text sits on a navy chip.
+   ========================================================================== */
+
+.fx-overlay, .arena > .fx-overlay {
+  --k: min(0.357vw, 0.2vh, 2.6px);
+  position: fixed; inset: 0; z-index: 9500; width: auto; max-width: none;
+  pointer-events: none; overflow: hidden; color: #fff;
+}
+.fx-stage { position: absolute; inset: 0; }
+.fx-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.fx-stage > *, .fx-content > * { position: absolute; }
+/* Text and tiles live under the score bar (--fx-top, set from the score element), like the mockup. */
+.fx-stage > .fx-content { left: 0; right: 0; bottom: 0; top: var(--fx-top, 0px); }
+
+/* While an overlay plays: lift the game area above the sticky PLAYGROUND bar, and keep
+   the score bar above the dim so the points visibly land in it (as in the mockup). */
+body.fx-active main { z-index: 9100; }
+body.fx-active .scorebar { position: relative; z-index: 9600; }
+.fx-overlay .disp { font-family: 'Archivo Black', Impact, sans-serif; }
+
+.fx-skip {
+  position: absolute; top: calc(10px + env(safe-area-inset-top, 0px)); right: 10px; z-index: 5;
+  pointer-events: auto; padding: 6px 12px; border-radius: 999px; font-size: 13px; font-weight: 800;
+  background: #0b1f4d; color: #fff; border: 2px solid rgba(255,255,255,.85); box-shadow: 0 3px 0 rgba(0,0,0,.3);
+}
+
+/* shared text */
+.fx-title, .fx-pts, .fx-word { left: 0; right: 0; margin: 0 auto; text-align: center; }
+.fx-pts { color: #fff; font-size: calc(var(--k) * 30); line-height: 1.1;
+  -webkit-text-stroke: calc(var(--k) * 1.5) #0b1f4d; paint-order: stroke fill; text-shadow: 0 3px 0 rgba(0,0,0,.35); }
+.fx-word { width: max-content; max-width: 92vw; padding: 3px 12px; border-radius: 999px; overflow-wrap: anywhere;
+  background: rgba(11,31,77,.88); color: #fff; font-weight: 800; font-size: calc(var(--k) * 13); letter-spacing: 2px; }
+
+/* ---------- tier 0: "+N" float ---------- */
+.fx-float, .fx-fly {
+  position: fixed; z-index: 9700; pointer-events: none; transform: translate(-50%, -50%);
+  font-family: 'Archivo Black', Impact, sans-serif; color: var(--yellow); white-space: nowrap;
+  -webkit-text-stroke: 1.5px #0b1f4d; paint-order: stroke fill; text-shadow: 0 2px 0 rgba(0,0,0,.35);
+}
+.arena > .fx-float, .arena > .fx-fly { width: auto; max-width: none; }
+.fx-float { font-size: 26px; }
+.fx-fly { font-size: calc(min(0.357vw, 0.2vh, 2.6px) * 22); }
+
+/* score bump when the points land */
+.fx-bump { display: inline-block; animation: fx-bump .5s ease; }
+@keyframes fx-bump { 40% { transform: scale(1.5); color: var(--yellow); } }
+
+/* ---------- tiers 1-2: pop + burst ---------- */
+.fx-tier-1 .fx-content, .fx-tier-2 .fx-content { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: calc(var(--k) * 4); }
+.fx-tier-1 .fx-content > .fx-title, .fx-tier-1 .fx-content > .fx-pts, .fx-tier-1 .fx-content > .fx-word,
+.fx-tier-2 .fx-content > .fx-title, .fx-tier-2 .fx-content > .fx-pts, .fx-tier-2 .fx-content > .fx-word { position: relative; }
+.fx-dim { inset: 0; background: rgba(11,31,77,.72); }
+.fx-burst { left: 50%; top: 50%; width: calc(var(--k) * 340); height: calc(var(--k) * 340); margin: calc(var(--k) * -170) 0 0 calc(var(--k) * -170); border-radius: 50%; }
+.fx-tier-1 .fx-burst { background: radial-gradient(circle, rgba(46,124,246,.85) 0, transparent 60%); }
+.fx-tier-2 .fx-burst { background: radial-gradient(circle, rgba(0,166,81,.85) 0, transparent 62%); }
+.fx-tier-1 .fx-title, .fx-tier-2 .fx-title {
+  font-size: min(calc(var(--k) * 40), 16vw); line-height: 1.1; -webkit-text-stroke: calc(var(--k) * 2) #0b1f4d; paint-order: stroke fill;
+  text-shadow: 0 4px 0 rgba(0,0,0,.25); animation: fx-pop .55s cubic-bezier(.2,1.6,.4,1) both;
+}
+.fx-tier-1 .fx-title { color: var(--sky); }
+.fx-tier-2 .fx-title { color: var(--green); }
+@keyframes fx-pop { 0% { transform: scale(.2) rotate(-8deg); } 100% { transform: scale(1) rotate(-3deg); } }
+
+/* ---------- tier 3: golden sunburst ---------- */
+.fx-tier-3 .fx-dim { background: radial-gradient(circle at 50% 46%, rgba(255,194,14,.3), rgba(11,31,77,.75) 70%), rgba(11,31,77,.72); }
+.fx-rays {
+  left: 50%; top: 46%; width: calc(var(--k) * 700); height: calc(var(--k) * 700);
+  margin: calc(var(--k) * -350) 0 0 calc(var(--k) * -350); border-radius: 50%;
+  background: repeating-conic-gradient(from 0deg, rgba(255,214,90,.5) 0 8deg, transparent 8deg 20deg);
+  -webkit-mask: radial-gradient(circle, #000 18%, transparent 62%); mask: radial-gradient(circle, #000 18%, transparent 62%);
+  animation: fx-rays 2.8s linear both;
+}
+@keyframes fx-rays { 0% { transform: scale(.2) rotate(0); opacity: 0; } 15% { opacity: 1; } 100% { transform: scale(1) rotate(50deg); opacity: .9; } }
+.fx-tier-3 .fx-title {
+  top: 36%; font-size: min(calc(var(--k) * 44), 14vw); line-height: 1.1; color: #ffd23f;
+  -webkit-text-stroke: calc(var(--k) * 2) #7a4b00; text-shadow: 0 5px 0 #7a4b00, 0 0 24px rgba(255,210,63,.9);
+  background: linear-gradient(100deg, #ffd23f 30%, #fff8d6 45%, #ffd23f 60%); background-size: 250% 100%;
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  animation: fx-aw-in .6s cubic-bezier(.2,1.5,.4,1) both, fx-glint 1.2s .6s ease-in-out 2;
+}
+@keyframes fx-aw-in { 0% { transform: translateY(40px) scale(.4); opacity: 0; } 100% { transform: none; opacity: 1; } }
+@keyframes fx-glint { from { background-position: 120% 0; } to { background-position: -120% 0; } }
+.fx-tier-3 .fx-pts { top: 52%; font-size: calc(var(--k) * 32); }
+.fx-tier-3 .fx-word { top: 61%; letter-spacing: 3px; }
+.fx-star { color: #ffe58a; font-size: calc(var(--k) * 16); text-shadow: 0 0 8px #ffd23f; animation: fx-twinkle 1.1s ease-in-out infinite; }
+@keyframes fx-twinkle { 0%, 100% { transform: scale(.4); opacity: .2; } 50% { transform: scale(1.2); opacity: 1; } }
+
+/* ---------- tier 4: cinematic ---------- */
+/* Tiles, title, points, stamp and credit stack in a centred column so they never collide,
+   whatever room the score bar leaves; the spotlight and shockwave stay absolute. */
+.fx-tier-4 .fx-content { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: calc(var(--k) * 12); padding-bottom: 4%; }
+.fx-tier-4 .fx-content > .fx-tiles, .fx-tier-4 .fx-content > .fx-title, .fx-tier-4 .fx-content > .fx-pts,
+.fx-tier-4 .fx-content > .fx-stamp, .fx-tier-4 .fx-content > .fx-by { position: relative; top: auto; left: auto; right: auto; }
+.fx-tier-4 .fx-content > .fx-title { margin-top: calc(var(--k) * 34); }
+.fx-black { inset: -24px; background: #02040c; opacity: 0; animation: fx-blk 4.6s ease both; }
+@keyframes fx-blk { 0% { opacity: 0; } 8% { opacity: .94; } 88% { opacity: .94; } 100% { opacity: 0; } }
+.fx-spot { left: 50%; top: 40%; width: calc(var(--k) * 420); height: calc(var(--k) * 420); margin: calc(var(--k) * -210) 0 0 calc(var(--k) * -210); border-radius: 50%;
+  background: radial-gradient(circle, rgba(46,124,246,.35), transparent 60%); opacity: 0; animation: fx-spot 4.4s ease both; }
+@keyframes fx-spot { 0%, 10% { opacity: 0; } 25% { opacity: 1; } 85% { opacity: 1; } 100% { opacity: 0; } }
+.fx-tiles { display: flex; justify-content: center; gap: 3px; }
+.fx-tiles b {
+  --t: min(calc(var(--k) * 30), calc((100vw - 24px) / var(--n, 7) - 3px));
+  width: var(--t); height: calc(var(--t) * 1.13); border-radius: 5px; display: flex; align-items: center; justify-content: center;
+  font-family: 'Archivo Black', Impact, sans-serif; font-size: calc(var(--t) * .57);
+  background: var(--cream); color: var(--navy); box-shadow: 0 3px 0 #c9b78a, 0 0 18px rgba(255,210,63,.6);
+  opacity: 0; transform: translateY(-120px) scale(1.8);
+}
+.fx-tiles b.in { animation: fx-slam .32s cubic-bezier(.3,1.4,.5,1) forwards; }
+@keyframes fx-slam { to { opacity: 1; transform: none; } }
+.fx-ring { left: 50%; top: 47%; width: calc(var(--k) * 40); height: calc(var(--k) * 40); margin: calc(var(--k) * -20) 0 0 calc(var(--k) * -20); border-radius: 50%; border: 4px solid #fff; opacity: 0; }
+.fx-ring.go { animation: fx-ring .7s ease-out forwards; }
+@keyframes fx-ring { 0% { opacity: 1; transform: scale(.2); } 100% { opacity: 0; transform: scale(14); } }
+.fx-flash { inset: 0; background: #fff; opacity: 0; }
+.fx-flash.go { animation: fx-flash .35s ease-out; }
+@keyframes fx-flash { 0% { opacity: .85; } 100% { opacity: 0; } }
+.fx-tier-4 .fx-title { font-size: min(calc(var(--k) * 31), 11vw); line-height: 1.1; color: #fff; letter-spacing: 1px; opacity: 0; white-space: nowrap; }
+.fx-tier-4 .fx-title.go, .fx-tier-4 .fx-title.shown { text-shadow: -3px 0 0 #e1251b, 3px 0 0 #2e7cf6, 0 0 22px rgba(255,255,255,.7); }
+.fx-tier-4 .fx-title.go { animation: fx-slam-t .45s cubic-bezier(.2,1.6,.35,1) forwards; }
+.fx-tier-4 .fx-title.shown { opacity: 1; transform: rotate(-2deg); }
+.fx-tier-4 .fx-title.glitch { animation: fx-glitch .18s steps(2) 4; }
+@keyframes fx-slam-t { 0% { opacity: 0; transform: scale(3.2); } 100% { opacity: 1; transform: scale(1) rotate(-2deg); } }
+@keyframes fx-glitch { 0% { transform: translate(2px,-1px) rotate(-2deg); } 50% { transform: translate(-2px,1px) rotate(-2deg); } }
+.fx-tier-4 .fx-pts { font-size: calc(var(--k) * 36); color: #ffd23f; -webkit-text-stroke: 0; text-shadow: 0 0 18px rgba(255,210,63,.8); opacity: 0; }
+.fx-tier-4 .fx-pts.go { opacity: 1; transition: opacity .2s; }
+.fx-stamp { font-size: calc(var(--k) * 15); color: #fff; background: var(--red); padding: 5px 12px; border: 3px solid #fff; border-radius: 8px;
+  transform: rotate(-8deg) scale(3); opacity: 0; white-space: nowrap; }
+.fx-stamp.go { animation: fx-stamp .35s cubic-bezier(.3,1.5,.5,1) forwards; }
+@keyframes fx-stamp { to { opacity: 1; transform: rotate(-8deg) scale(1); } }
+.fx-by { max-width: 100%; padding: 0 12px; text-align: center; font-size: calc(var(--k) * 11); color: #c9d6ff; font-weight: 800; letter-spacing: 2px; opacity: 0; overflow-wrap: anywhere; }
+.fx-by.go { opacity: 1; transition: opacity .4s; }
+
+/* the one shake per IMPOSSIBLE!!! (on the overlay stage, which covers the dimmed game) */
+.fx-shake { animation: fx-shake .45s ease 2; }
+@keyframes fx-shake { 20% { transform: translate(-4px,2px); } 40% { transform: translate(4px,-2px); } 60% { transform: translate(-3px,-1px); } 80% { transform: translate(3px,1px); } }
+
+.confetti { position: absolute; width: 7px; height: 11px; border-radius: 2px; z-index: 2; }
+
+/* ---------- reduced motion: a calm fade card ---------- */
+.fx-reduced .fx-stage { background: rgba(11,31,77,.72); }
+.fx-reduced .fx-content { display: flex; align-items: center; justify-content: center; }
+.fx-reduced .fx-content > .fx-card { position: relative; }
+.fx-card { min-width: min(80vw, 280px); max-width: 90vw; padding: 18px 22px; border-radius: 18px; text-align: center;
+  background: #0b1f4d; color: #fff; border: 3px solid var(--yellow); box-shadow: 0 10px 28px rgba(0,0,0,.4);
+  display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.fx-reduced .fx-card .fx-title { position: static; font-size: 30px; line-height: 1.1; color: var(--yellow); opacity: 1; animation: none; transform: none;
+  background: none; -webkit-text-fill-color: currentColor; -webkit-text-stroke: 0; text-shadow: none; white-space: normal; margin: 0; }
+.fx-reduced .fx-card .fx-pts { position: static; font-size: 28px; color: #fff; opacity: 1; -webkit-text-stroke: 0; text-shadow: none; }
+.fx-card .fx-word { position: static; background: rgba(255,255,255,.12); }
+.fx-card-note { font-size: 13px; font-weight: 800; letter-spacing: 1.5px; color: #dfe7ff; overflow-wrap: anywhere; }
+
+/* ==========================================================================
+   Match start (Task 9): VS intro + 3D coin toss (~5 s, mockup intro-coin-winner-v2.html),
+   and the projector's ROUND STARTING scene. Scenes have their own opaque backdrop, so
+   their colours are the same in both themes. --in-off is a negative delay that starts
+   the CSS animations at the point matching the room's clock (late arrival / refresh).
+   ========================================================================== */
+body.fx-scene main { z-index: 9100; }
+/* The host's controls stay visible and clickable above any scene or celebration (e.g. Resume while
+   a paused intro is held). #liveRoot/.card make no stacking context, so this competes with the overlay. */
+body.fx-scene #hostBar, body.fx-active #hostBar { position: relative; z-index: 9600; }
+.fx-intro .fx-stage, .fx-round .fx-stage { background: #0b1f4d; }
+.fx-stage > .in-scene { inset: 0; display: none; }
+.fx-stage > .in-scene.on { display: block; }
+
+/* VS: Team A (blue, top) and Team B (red, bottom) slam in from opposite sides */
+.in-half { position: absolute; left: 0; right: 0; height: 50%; padding: 0 16px; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: calc(var(--k) * 4); color: #fff; text-align: center; }
+.in-a { top: 0; padding-bottom: calc(var(--k) * 30); background: linear-gradient(160deg, #1446a0, #0b2a75); clip-path: polygon(0 0, 100% 0, 100% 82%, 0 100%); }
+.in-b { bottom: 0; padding-top: calc(var(--k) * 30); background: linear-gradient(160deg, #e1251b, #a3140d); clip-path: polygon(0 18%, 100% 0, 100% 100%, 0 100%); }
+.in-tm { max-width: 100%; font-size: calc(var(--k) * 30); line-height: 1.1; overflow-wrap: anywhere; text-shadow: 0 4px 0 rgba(0,0,0,.25); }
+.in-tm.long { font-size: calc(var(--k) * 22); }
+.in-tm.xlong { font-size: calc(var(--k) * 16); }
+.in-pl { max-width: 100%; font-weight: 800; letter-spacing: 2px; font-size: max(11px, calc(var(--k) * 13)); overflow-wrap: anywhere; }
+.in-vs.on .in-a { animation: fx-in-l .55s calc(var(--in-off, 0ms) + 0ms) cubic-bezier(.2,1.2,.4,1) both; }
+.in-vs.on .in-b { animation: fx-in-r .55s calc(var(--in-off, 0ms) + 100ms) cubic-bezier(.2,1.2,.4,1) both; }
+@keyframes fx-in-l { from { transform: translateX(-110%); } }
+@keyframes fx-in-r { from { transform: translateX(110%); } }
+.in-badge { position: absolute; left: 50%; top: 50%; width: calc(var(--k) * 92); height: calc(var(--k) * 92); margin: calc(var(--k) * -46) 0 0 calc(var(--k) * -46);
+  border-radius: 50%; background: var(--yellow); color: var(--navy); display: flex; align-items: center; justify-content: center; z-index: 2;
+  font-size: calc(var(--k) * 36); border: calc(var(--k) * 5) solid #fff; box-shadow: 0 8px 20px rgba(0,0,0,.35); }
+.in-vs.on .in-badge { animation: fx-vs-pop .5s calc(var(--in-off, 0ms) + 600ms) cubic-bezier(.2,1.7,.4,1) both,
+  fx-vs-pulse 1s calc(var(--in-off, 0ms) + 1200ms) ease-in-out 2; }
+@keyframes fx-vs-pop { from { transform: scale(0) rotate(-180deg); } }
+@keyframes fx-vs-pulse { 50% { transform: scale(1.12); } }
+.in-tag { position: absolute; left: 0; right: 0; bottom: calc(var(--k) * 10 + env(safe-area-inset-bottom, 0px)); z-index: 3; padding: 0 12px;
+  text-align: center; color: #fff; font-size: max(10px, calc(var(--k) * 10)); font-weight: 800; letter-spacing: 2px; }
+
+/* Coin toss: Team A on the yellow face, Team B on the red face; it lands on game.firstSeat */
+.in-coin { background: radial-gradient(circle at 50% 40%, #1d4fb5, #0b1f4d 70%); }
+.in-coin.on { animation: fx-in-fade .2s var(--in-off, 0ms) both; }
+.in-coin-box { position: absolute; inset: 0; padding: 0 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #fff; text-align: center; }
+.in-coin-title { font-size: calc(var(--k) * 20); letter-spacing: 1px; }
+.in-coin-wrap { perspective: calc(var(--k) * 600); width: calc(var(--k) * 150); height: calc(var(--k) * 150); margin: calc(var(--k) * 10) 0 calc(var(--k) * 18); }
+.in-coin3d { width: 100%; height: 100%; position: relative; transform-style: preserve-3d; }
+.in-face { position: absolute; inset: 0; padding: 14%; border-radius: 50%; overflow: hidden; -webkit-backface-visibility: hidden; backface-visibility: hidden;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; line-height: 1.1; overflow-wrap: anywhere;
+  font-family: 'Archivo Black', Impact, sans-serif; font-size: calc(var(--k) * 20);
+  border: calc(var(--k) * 7) solid #e2a800; box-shadow: inset 0 0 0 4px rgba(255,255,255,.4); }
+.in-face.long { font-size: calc(var(--k) * 14); }
+.in-face.xlong { font-size: calc(var(--k) * 10); }
+.in-face span { max-width: 100%; }
+.in-face small { font-family: Inter, system-ui, sans-serif; font-weight: 800; font-size: max(9px, calc(var(--k) * 10)); letter-spacing: 2px; }
+.in-front { background: radial-gradient(circle at 35% 30%, #ffe27a, #ffc20e 60%, #d79c00); color: #0b1f4d; }
+.in-back { background: radial-gradient(circle at 35% 30%, #ff8a80, #e1251b 60%, #9e120c); color: #fff; transform: rotateY(180deg); }
+.in-shadow { width: calc(var(--k) * 110); height: calc(var(--k) * 14); border-radius: 50%; background: rgba(0,0,0,.35); margin-top: calc(var(--k) * -6); }
+.in-result { max-width: 100%; font-size: calc(var(--k) * 22); color: var(--yellow); opacity: 0; overflow-wrap: anywhere; margin-top: calc(var(--k) * 8); }
+.in-result.go { animation: fx-in-res .5s cubic-bezier(.2,1.6,.4,1) forwards; }
+.in-result.shown { opacity: 1; }
+@keyframes fx-in-res { from { opacity: 0; transform: scale(.4); } to { opacity: 1; transform: none; } }
+.in-note { font-size: max(11px, calc(var(--k) * 11)); margin-top: calc(var(--k) * 6); color: #dfe7ff; }
+@keyframes fx-in-fade { from { opacity: 0; } }
+
+/* Host paused during the intro: the scene freezes where it is until the resume re-syncs it */
+.fx-hold, .fx-hold * { animation-play-state: paused !important; }
+.in-paused { position: absolute; left: 50%; top: calc(12px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); z-index: 5;
+  padding: 6px 14px; border-radius: 999px; background: #0b1f4d; color: #fff; border: 2px solid rgba(255,255,255,.85); font-size: 14px; font-weight: 800; }
+
+/* ROUND STARTING: every matchup slams in under the title */
+.fx-round .fx-stage { background: radial-gradient(circle at 50% 40%, #1d4fb5, #0b1f4d 70%); }
+.fx-stage > .rs-box { inset: 0; padding: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: calc(var(--k) * 16); }
+.rs-title { font-size: min(calc(var(--k) * 40), 12vw); color: var(--yellow); letter-spacing: 1px; text-align: center;
+  text-shadow: 0 4px 0 rgba(0,0,0,.35); animation: fx-rs-slam .5s cubic-bezier(.2,1.6,.4,1) both; }
+.rs-list { display: flex; flex-direction: column; align-items: center; gap: calc(var(--k) * 8); max-width: 100%; }
+.fx-round.many .rs-list { flex-direction: row; flex-wrap: wrap; justify-content: center; }
+.rs-match { display: flex; align-items: center; gap: calc(var(--k) * 8); max-width: 100%; font-weight: 800; font-size: calc(var(--k) * 18); color: #fff;
+  animation: fx-rs-slam .4s calc(500ms + var(--i, 0) * 180ms) cubic-bezier(.3,1.5,.5,1) both; }
+.rs-team { padding: calc(var(--k) * 5) calc(var(--k) * 12); border-radius: 999px; border: 2px solid rgba(255,255,255,.85); overflow-wrap: anywhere; min-width: 0; }
+.rs-a { background: #1446a0; }
+.rs-b { background: #c41f16; }
+.rs-vs { color: var(--yellow); font-size: calc(var(--k) * 13); }
+@keyframes fx-rs-slam { from { opacity: 0; transform: scale(2.6); } to { opacity: 1; transform: none; } }
+
+/* reduced motion: no slides, spin, flip or slam; everything fades */
+.fx-reduced.fx-intro .in-vs.on .in-a, .fx-reduced.fx-intro .in-vs.on .in-b, .fx-reduced.fx-intro .in-vs.on .in-badge {
+  animation: fx-in-fade .4s calc(var(--in-off, 0ms) + 0ms) both; }
+.fx-reduced.fx-intro .in-coin.on { animation: fx-in-fade .4s var(--in-off, 0ms) both; }
+.fx-reduced.fx-intro .in-result.go { animation: fx-in-fade .4s forwards; opacity: 1; }
+.fx-reduced.fx-round .rs-title, .fx-reduced.fx-round .rs-match { animation-name: fx-in-fade; }
+.fx-reduced.fx-intro .fx-stage { background: #0b1f4d; }
+.fx-reduced.fx-round .fx-stage { background: radial-gradient(circle at 50% 40%, #1d4fb5, #0b1f4d 70%); }
+
+/* ==========================================================================
+   Result screens (Task 10, spec 5.6, mockup intro-coin-winner-v2.html): the hero sits in
+   the final screen's card. Its colours are fixed (own backdrop), the same in both themes.
+   Contrast: light surfaces (score pill, View board, void card) carry dark text; dark or
+   saturated ones (best-word chip, stamp, Back to start) carry white text.
+   --res-delay holds the entrance while a game-ending word celebration plays over it.
+   ========================================================================== */
+.res-final { gap: 12px; }
+.res-hero {
+  position: relative; overflow: hidden; isolation: isolate; border-radius: 16px;
+  min-height: min(560px, 85vh); min-height: min(560px, 85svh);
+  display: flex; flex-direction: column; text-align: center; color: #0b1f4d;
+  background: radial-gradient(circle at 50% 30%, #ffe58a, #ffc20e 35%, #f39c12 70%, #c0392b);
+}
+.res-other { background: radial-gradient(circle at 50% 30%, #3b62c4, #1446a0 45%, #0b1f4d); color: #fff; }
+.res-bg { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+.res-rays {
+  position: absolute; left: 50%; top: 30%; width: 800px; height: 800px; margin: -400px 0 0 -400px;
+  background: repeating-conic-gradient(rgba(255,255,255,.28) 0 9deg, transparent 9deg 22deg);
+  animation: res-spin 14s linear infinite;
+}
+@keyframes res-spin { to { transform: rotate(360deg); } }
+.res-in { position: relative; z-index: 1; flex: 1 0 auto; display: flex; flex-direction: column; align-items: center; padding: 44px 16px 14px; }
+.res-trophy { font-size: 76px; line-height: 1; filter: drop-shadow(0 6px 0 rgba(0,0,0,.2));
+  animation: res-drop .7s var(--res-delay, 0ms) cubic-bezier(.2,1.5,.4,1) both; }
+@keyframes res-drop { from { transform: translateY(-200px) scale(.5); } }
+/* "<TEAM> wins" is one text run: the team is a full-width inline-block, so "wins" sits on its own line */
+.res-hero .res-head { margin: 4px 0 0; max-width: 100%; color: inherit; line-height: 1.15; text-transform: uppercase; }
+.res-team { display: inline-block; width: 100%; font-size: 34px; color: #fff; overflow-wrap: anywhere;
+  -webkit-text-stroke: 2px #0b1f4d; text-shadow: 0 5px 0 #0b1f4d;
+  animation: res-slam .5s calc(var(--res-delay, 0ms) + 450ms) cubic-bezier(.2,1.7,.4,1) both; }
+.res-team.long { font-size: 26px; }
+.res-team.xlong { font-size: 19px; }
+.res-wins { font-size: 18px; letter-spacing: 3px; color: #0b1f4d; }
+.res-other .res-wins { font-size: 16px; letter-spacing: 2px; color: #fff; }
+@keyframes res-slam { from { transform: scale(3); opacity: 0; } }
+.res-score { margin-top: 14px; max-width: 100%; display: flex; gap: 14px; align-items: center; padding: 10px 16px; border-radius: 14px;
+  background: #fff8e6; color: #0b1f4d; font-weight: 800; box-shadow: 0 4px 0 rgba(11,31,77,.18); }
+/* the other player's pill: light, dark text (user's contrast fix) */
+.res-other .res-score { background: #f4f7ff; color: #0b1f4d; }
+.res-side { flex: 1 1 0; min-width: 0; }
+.res-lbl { font-size: 11px; line-height: 1.25; overflow-wrap: anywhere; }
+.res-num { font-size: 26px; line-height: 1.15; color: #0b1f4d; font-variant-numeric: tabular-nums; }
+.res-side.w .res-num { color: #067a3e; }
+.res-dash { font-size: 20px; }
+.res-plus { margin-top: 12px; max-width: 100%; overflow-wrap: anywhere; padding: 8px 18px; border-radius: 99px; font-size: 18px;
+  background: #067a3e; color: #fff; box-shadow: 0 4px 0 #04542b;
+  animation: res-slam .45s calc(var(--res-delay, 0ms) + 1600ms) cubic-bezier(.2,1.7,.4,1) both; }
+.res-plus.long { font-size: 15px; }
+.res-plus.xlong { font-size: 13px; border-radius: 14px; }
+.res-best { margin-top: 12px; max-width: 100%; overflow-wrap: anywhere; padding: 6px 12px; border-radius: 10px;
+  font-size: 12px; font-weight: 800; background: rgba(11,31,77,.88); color: #fff; }
+.res-reason { margin-top: 10px; max-width: 100%; overflow-wrap: anywhere; font-size: 13px; font-weight: 700; }
+.res-btns { position: relative; z-index: 3; display: flex; gap: 8px; padding: 0 16px 16px; }
+.res-hero .res-btns button { flex: 1 1 0; min-width: 0; padding: 11px 10px; border-radius: 12px; font-size: 14px; font-weight: 800;
+  background: #0b1f4d; color: #fff; border: 2px solid #0b1f4d; box-shadow: 0 3px 0 rgba(0,0,0,.25); }
+.res-hero .res-btns .res-alt { background: #fff; color: #0b1f4d; }
+.res-other .res-btns .res-main { border-color: rgba(255,255,255,.85); }
+.res-confetti { top: -14px; pointer-events: none; }
+.res-stand-title { margin: 6px 0 0; }
+.res-board { align-self: center; }
+
+/* void: a calm grey card with the reason */
+.res-void { min-height: 0; background: #e8ecf3; color: #24324f; }
+.res-void .res-in { padding: 22px 16px 14px; gap: 6px; }
+.res-icon { font-size: 40px; line-height: 1; }
+.res-hero .res-void-head { margin: 0; font-size: 22px; color: #24324f; }
+.res-void-note { margin: 0; font-size: 14px; color: #3d4a66; overflow-wrap: anywhere; }
+.res-void .res-btns .res-alt { border-color: #b9c3d8; }
+
+/* reduced motion: no rays or confetti (not even created); drop and slams become fades */
+.res-reduced .res-trophy, .res-reduced .res-team, .res-reduced .res-plus { animation-name: fx-in-fade; animation-timing-function: ease; }
+/* a result opened later (refresh, a later visit): no entrance at all */
+.res-static .res-trophy, .res-static .res-team, .res-static .res-plus { animation: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .fx-bump { animation: none; }
+  .fx-shake, .fx-rays, .fx-flash, .confetti, .res-rays { display: none; }
+  .res-trophy, .res-team, .res-plus { animation-name: fx-in-fade; }
+}
+
+/* ==========================================================================
+   Projector broadcast (Task 12, spec 5.7, mockup projector-broadcast.html):
+   the swipe between rooms and the broadcast scale of the shared scenes.
+   The layout itself lives in style.css (big screen section).
+   ========================================================================== */
+/* swipe between rooms: three Pop bands sweep across; the room is swapped while they cover it */
+.bp-wipe { position: absolute; inset: 0; z-index: 8; pointer-events: none; transform: translateX(-110%);
+  background: linear-gradient(100deg, var(--red) 0 30%, var(--yellow) 30% 55%, var(--blue) 55% 100%); }
+.bp-wipe.go { animation: bp-wipe .7s cubic-bezier(.7,0,.3,1); }
+@keyframes bp-wipe { 0% { transform: translateX(-110%); } 45%, 55% { transform: translateX(0); } 100% { transform: translateX(110%); } }
+@keyframes bp-fade { 0%, 100% { opacity: 0; } 45%, 55% { opacity: 1; } }
+
+/* broadcast scale for the shared scenes (intro, round start, word celebrations); no Skip on a projector,
+   and the score bar stays above a celebration so its points land in it */
+body.bigscreen .fx-overlay { --k: min(0.45vw, 0.4vh); }
+body.bigscreen .fx-tier-4 { --k: min(0.4vw, 0.32vh); } /* its tall column (tiles, title, points, BINGO stamp, credit) */
+body.bigscreen .fx-intro, body.bigscreen .fx-round { --k: min(0.4vw, 0.26vh); }
+/* celebration text starts under the broadcast score bar (the stage is centred below the PLAYGROUND bar) */
+body.bigscreen .fx-overlay { --fx-top: calc(var(--pgh) + (100vh - var(--pgh) - var(--u) * 56.25) / 2 + var(--u) * 9.4) !important; }
+body.bigscreen .fx-skip { display: none; }
+/* landscape: Awesome!'s title, points and word need more room between them than on a phone */
+body.bigscreen .fx-tier-3 .fx-title { top: 22%; }
+body.bigscreen .fx-tier-3 .fx-pts { top: 49%; }
+body.bigscreen .fx-tier-3 .fx-word { top: 69%; }
+body.bigscreen.fx-active .bp-top { z-index: 9600; }
+
+@media (prefers-reduced-motion: reduce) {
+  .bp-wipe { transform: none; opacity: 0; background: var(--navy); }
+  .bp-wipe.go { animation: bp-fade .7s ease; }
+  .bp-board .tile.bp-new { animation: none; }
+  .bp-corner.in { animation: bp-corner-fade .4s ease both; }
+  .bp-items.scroll { animation: none; }
+}
+@keyframes bp-corner-fade { from { opacity: 0; } }

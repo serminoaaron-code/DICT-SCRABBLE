@@ -7,12 +7,12 @@
 
   function showLogin(el) {
     el.innerHTML = `
-      <div class="panel narrow">
+      <div class="card narrow">
         <h2>⚙ Host login</h2>
         <form id="hostLogin" class="stack">
           <label for="hostPw">Host password</label>
           <input id="hostPw" type="password" autocomplete="current-password" placeholder="Enter host password">
-          <button type="submit">Unlock host dashboard</button>
+          <button type="submit" class="btn-primary">Unlock host dashboard</button>
         </form>
       </div>`;
     el.querySelector('#hostLogin').onsubmit = ev => {
@@ -39,7 +39,7 @@
   };
   const PHASE_ORDER = { live: 0, appeal: 0, paused: 0, suddenDeath: 0, hostDecision: 0, waiting: 1, final: 2, void: 3 };
   const REASON_TEXT = {
-    time: 'time', suddenDeath: 'sudden death', bagOut: 'tiles out', resign: 'resigned',
+    time: 'time', suddenDeath: 'sudden death', bagOut: 'tiles out', resign: 'left the game',
     awarded: 'awarded by host', walkover: 'walkover', corrected: 'corrected by host'
   };
 
@@ -75,7 +75,7 @@
             </div>
             <div><label for="nrLabel">Label (optional)</label><input id="nrLabel" maxlength="40" placeholder="e.g. Tonight 7 PM"></div>
             <div id="nrError" class="warn-line hidden"></div>
-            <button type="submit">Create room</button>
+            <button type="submit" class="btn-primary">Create room</button>
           </form>
           <div id="nrCreated" class="hidden stack" style="margin-top:8px;"></div>
         </details>
@@ -114,7 +114,7 @@
           const box = $('#nrCreated');
           box.innerHTML = `<div class="small-text muted">Room created for <b>${esc(state.teams[a].name)}</b> vs <b>${esc(state.teams[b].name)}</b>. Share this code:</div>
             <div class="code-big" id="nrCode">${esc(pretty)}</div>
-            <div class="row"><button type="button" class="secondary small" id="nrCopy">Copy code</button><a href="#room=${esc(code)}">Open room →</a></div>`;
+            <div class="row"><button type="button" class="btn-secondary small" id="nrCopy">Copy code</button><a href="#room=${esc(code)}">Open room →</a></div>`;
           box.classList.remove('hidden');
           $('#nrCopy').onclick = async () => {
             try { await navigator.clipboard.writeText(pretty); UI.toast('Code copied.', 'ok'); }
@@ -147,17 +147,21 @@
         }
         const live = ['live', 'paused', 'appeal', 'suddenDeath', 'hostDecision'].includes(phase);
         const actions = [`<a class="small-text" href="#room=${esc(room.code)}">Open room →</a>`];
+        if (room.status === 'waiting' || live) {
+          const pinned = state.pinned === room.code;
+          actions.push(`<button class="btn-secondary small" data-pin="${esc(room.code)}">${pinned ? 'Unpin' : '📌 Pin to big screen'}</button>`);
+        }
         if (room.status === 'waiting') {
-          actions.push(`<button class="secondary small" data-walkover="A" data-code="${esc(room.code)}">Walkover → ${esc(nameA)}</button>`);
-          actions.push(`<button class="secondary small" data-walkover="B" data-code="${esc(room.code)}">Walkover → ${esc(nameB)}</button>`);
-          actions.push(`<button class="secondary small" data-void="${esc(room.code)}">Void</button>`);
+          actions.push(`<button class="btn-secondary small" data-walkover="A" data-code="${esc(room.code)}">Walkover → ${esc(nameA)}</button>`);
+          actions.push(`<button class="btn-secondary small" data-walkover="B" data-code="${esc(room.code)}">Walkover → ${esc(nameB)}</button>`);
+          actions.push(`<button class="danger small" data-void="${esc(room.code)}">Void</button>`);
         } else if (room.status === 'final') {
-          actions.push(`<button class="secondary small" data-correct="${esc(room.code)}">Correct result</button>`);
-          actions.push(`<button class="secondary small" data-void="${esc(room.code)}">Void</button>`);
+          actions.push(`<button class="btn-secondary small" data-correct="${esc(room.code)}">Correct result</button>`);
+          actions.push(`<button class="danger small" data-void="${esc(room.code)}">Void</button>`);
         }
         return `<div class="room-card" data-room="${esc(room.code)}">
           <div class="spread">
-            <span class="teams">${esc(nameA)} <span class="muted">vs</span> ${esc(nameB)}</span>
+            <span class="teams"><span class="chip chip-a">${esc(nameA)}</span> <span class="vs-sep muted small-text">vs</span> <span class="chip chip-b">${esc(nameB)}</span></span>
             <span class="badge ${esc(phase)}">${live ? '● ' : ''}${esc(PHASE_LABEL[phase] || phase)}${live ? ` <span data-clock="${esc(room.code)}">${esc(clockText(room))}</span>` : ''}</span>
           </div>
           <div class="meta"><span class="code">${esc(Match.formatCode(room.code))}</span> · ${Math.round(room.matchLengthSec / 60)} min · seats ${seatsTaken}/2${room.label ? ' · ' + esc(room.label) : ''}</div>
@@ -177,10 +181,19 @@
       $('#roomList').onclick = async ev => {
         const btn = ev.target.closest('button');
         if (!btn) return;
-        const code = btn.dataset.code || btn.dataset.void || btn.dataset.correct;
+        const code = btn.dataset.code || btn.dataset.void || btn.dataset.correct || btn.dataset.pin;
         const room = state.rooms[code];
         if (!room) return;
-        if (btn.dataset.correct) {
+        if (btn.dataset.pin) {
+          btn.disabled = true;
+          try {
+            await Store.setPinned(state.pinned === code ? null : code);
+          } catch (e) {
+            UI.toast('Could not update the big-screen pin.', 'error');
+          } finally {
+            btn.disabled = false;
+          }
+        } else if (btn.dataset.correct) {
           const other = teamName(state, room, room.result.winner === 'A' ? 'B' : 'A');
           const note = prompt('Reason for the correction (kept in the record):', '');
           if (note === null || !confirm(`Give the win to ${other} instead?`)) return;
@@ -227,33 +240,33 @@
 
     el.innerHTML = `
       <div class="spread" style="margin-bottom:12px;">
-        <h2 style="color:#fef3c7;margin:0;">⚙ Host dashboard</h2>
+        <h2 style="margin:0;">⚙ Host dashboard</h2>
         <div class="row">
-          <button class="secondary small" id="lockBtn">🔒 Lock host</button>
+          <button class="btn-secondary small" id="lockBtn">🔒 Lock host</button>
           <button class="danger small" id="resetBtn">Reset tournament</button>
         </div>
       </div>
       <div class="dash">
-        <section class="panel">
+        <section class="card">
           <h3>1 · Teams</h3>
           <div id="teamList"></div>
           <form id="addTeam" class="row" style="margin-top:8px;">
             <input id="teamName" maxlength="40" placeholder="Add team name…" style="flex:1;min-width:0;">
-            <button type="submit">Add</button>
+            <button type="submit" class="btn-primary">Add</button>
           </form>
         </section>
-        <section class="panel">
+        <section class="card">
           <h3>2 · Fixture rooms</h3>
           <div id="roomsPanel"></div>
         </section>
-        <section class="panel">
+        <section class="card">
           <h3>3 · Standings</h3>
           <div id="standings"></div>
-          <button class="secondary small" id="bigScreenBtn" style="margin-top:10px;width:100%;">📺 Open big-screen view</button>
+          <button class="btn-secondary small" id="bigScreenBtn" style="margin-top:10px;width:100%;">📺 Open big-screen view</button>
         </section>
       </div>`;
 
-    const state = { teams: {}, rooms: {} };
+    const state = { teams: {}, rooms: {}, pinned: null };
     const ctx = { el, state };
 
     function renderTeams() {
@@ -266,8 +279,8 @@
         <div class="list-item">
           <span class="name">${esc(state.teams[id].name)}</span>
           <span class="row">
-            <button class="secondary small" data-rename="${esc(id)}">Rename</button>
-            ${used.has(id) ? '' : `<button class="secondary small" data-delete="${esc(id)}" title="Delete">✕</button>`}
+            <button class="btn-secondary small" data-rename="${esc(id)}">Rename</button>
+            ${used.has(id) ? '' : `<button class="danger small" data-delete="${esc(id)}" title="Delete">✕</button>`}
           </span>
         </div>`).join('');
     }
@@ -326,8 +339,12 @@
       renderTeams(); renderStandings();
       if (roomsPanel) roomsPanel.render();
     });
+    const unsubPinned = Store.watchPinned(p => {
+      state.pinned = p;
+      if (roomsPanel) roomsPanel.render();
+    });
 
-    return () => { unsubTeams(); unsubRooms(); };
+    return () => { unsubTeams(); unsubRooms(); unsubPinned(); };
   }
 
   root.HostView = { show };

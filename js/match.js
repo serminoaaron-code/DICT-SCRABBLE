@@ -12,6 +12,9 @@
 
   const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
   const TURN_MS = 60000;
+  const INTRO_MS = 6500; // VS intro 2.6 s + coin flip 1.9 s, then "<TEAM> GOES FIRST!" holds 2 s (Scenes.COIN_RESULT_AT)
+  // Delay (ms) before the next turn's clock starts, indexed by Engine.celebrationTier().
+  const CELEBRATE_MS = [0, 2600, 2600, 3000, 4500];
   const SUDDEN_DEATH_MAX_ROUNDS = 3;
   const SEATS = ['A', 'B'];
 
@@ -92,7 +95,11 @@
       if (g.pending) g.pending.rejectedWords = g.pending.rejectedWords || [];
       g.suddenDeath = g.suddenDeath || null;
       g.lastMove = g.lastMove || null;
-      if (g.lastMove) g.lastMove.words = g.lastMove.words || [];
+      if (g.lastMove) {
+        g.lastMove.words = g.lastMove.words || [];
+        g.lastMove.bingo = !!g.lastMove.bingo;
+      }
+      g.bestMove = g.bestMove || null;
       if (g.pending) g.pending.words = g.pending.words || [];
     }
     return r;
@@ -156,7 +163,7 @@
 
   // ---------- start ----------
 
-  function startMatch(room, now, rng = Math.random) {
+  function startMatch(room, now, rng = Math.random, introMs = 0) {
     if (room.status !== 'waiting') return null;
     if (!SEATS.every(s => room.seats[s] && room.seats[s].ready)) return null;
     const r = clone(room);
@@ -166,9 +173,10 @@
     const firstSeat = rng() < 0.5 ? 'A' : 'B';
     r.game = {
       board: {}, bag, racks: { A: a.drawn, B: b.drawn }, scores: { A: 0, B: 0 },
-      firstSeat, turn: firstSeat, moveCount: 0, pending: null, suddenDeath: null, lastMove: null
+      firstSeat, turn: firstSeat, moveCount: 0, pending: null, suddenDeath: null, lastMove: null, bestMove: null
     };
-    r.clock = { startedAt: now, endsAt: now + room.matchLengthSec * 1000, turnStartedAt: now, paused: null };
+    const startedAt = now + introMs;
+    r.clock = { startedAt, endsAt: startedAt + room.matchLengthSec * 1000, turnStartedAt: startedAt, paused: null };
     r.status = 'live';
     return r;
   }
@@ -181,6 +189,7 @@
   function canAct(room, seat, expectedMoveCount, now) {
     if (!room.game || !room.clock) return false;
     if (!PLAYING.includes(room.status)) return false;
+    if (now < room.clock.startedAt) return false;
     if (room.clock.paused) return false;
     if (room.game.pending) return false;
     if (room.game.turn !== seat) return false;
@@ -217,24 +226,25 @@
     return A === B ? null : (A > B ? 'A' : 'B');
   }
 
-  function enterSuddenDeath(r, now) {
+  function enterSuddenDeath(r, now, delayMs = 0) {
     r.status = 'suddenDeath';
     r.game.suddenDeath = { startMove: r.game.moveCount, rounds: 0 };
     r.game.turn = r.game.firstSeat;
-    r.clock.turnStartedAt = now;
+    r.clock.turnStartedAt = now + delayMs;
     return r;
   }
 
   // Mutates r (already a clone): advance the turn, then apply end-of-game rules.
-  function endTurn(r, seat, now, wentOut) {
+  // delayMs holds the opponent's turn clock back for a celebration (0 for passes/timeouts).
+  function endTurn(r, seat, now, wentOut, delayMs = 0) {
     const g = r.game;
     g.moveCount += 1;
     g.turn = other(seat);
-    r.clock.turnStartedAt = now;
+    r.clock.turnStartedAt = now + delayMs;
 
     if (wentOut && r.status === 'live') {
       const lead = leader(r);
-      return lead ? finalize(r, lead, 'bagOut', now) : enterSuddenDeath(r, now);
+      return lead ? finalize(r, lead, 'bagOut', now) : enterSuddenDeath(r, now, delayMs);
     }
     if (r.status === 'suddenDeath' && (g.moveCount - g.suddenDeath.startMove) % 2 === 0) {
       g.suddenDeath.rounds += 1;
@@ -257,9 +267,13 @@
     g.racks[seat] = rack.concat(d.drawn);
     g.bag = d.bag;
     g.scores[seat] += m.total;
-    g.lastMove = { seat, type: 'play', words: m.words, total: m.total, unverified: !!unverified, at: now };
+    g.lastMove = { seat, type: 'play', words: m.words, total: m.total, bingo: m.bingo, unverified: !!unverified, at: now };
+    if (!g.bestMove || m.total > g.bestMove.total) {
+      g.bestMove = { seat, words: m.words, total: m.total, bingo: m.bingo };
+    }
+    const tier = Engine.celebrationTier(m.total, m.bingo);
     const wentOut = g.racks[seat].length === 0 && g.bag.length === 0;
-    return endTurn(r, seat, now, wentOut);
+    return endTurn(r, seat, now, wentOut, CELEBRATE_MS[tier]);
   }
 
   function applyPlay(room, seat, placements, { now, expectedMoveCount, unverified = false }) {
@@ -274,7 +288,7 @@
       if (now < room.clock.turnStartedAt + TURN_MS) return null;
     }
     const r = clone(room);
-    r.game.lastMove = { seat, type: timeout ? 'timeout' : 'pass', words: [], total: 0, unverified: false, at: now };
+    r.game.lastMove = { seat, type: timeout ? 'timeout' : 'pass', words: [], total: 0, bingo: false, unverified: false, at: now };
     return endTurn(r, seat, now, false);
   }
 
@@ -291,16 +305,24 @@
   function pausedSnapshot(room, now, by) {
     return {
       by,
+      introRemainingMs: Math.max(0, room.clock.startedAt - now),
       matchRemainingMs: room.clock.endsAt - now,
-      turnRemainingMs: Math.max(0, TURN_MS - (now - room.clock.turnStartedAt))
+      turnRemainingMs: Math.min(TURN_MS, Math.max(0, TURN_MS - (now - room.clock.turnStartedAt)))
     };
   }
 
   // Mutates r (a clone): restart both clocks from the stored remaining times.
+  // A pause taken during the intro keeps the remaining "Get ready" time frozen
+  // too, so the clocks and the start guard resume in lockstep.
   function resumeInPlace(r, now) {
     const p = r.clock.paused;
+    if (p.introRemainingMs) {
+      r.clock.startedAt = now + p.introRemainingMs;
+      r.clock.turnStartedAt = r.clock.startedAt;
+    } else {
+      r.clock.turnStartedAt = now - (TURN_MS - p.turnRemainingMs);
+    }
     r.clock.endsAt = now + p.matchRemainingMs;
-    r.clock.turnStartedAt = now - (TURN_MS - p.turnRemainingMs);
     r.clock.paused = null;
     return r;
   }
@@ -432,7 +454,7 @@
   }
 
   return {
-    CODE_ALPHABET, TURN_MS, SUDDEN_DEATH_MAX_ROUNDS,
+    CODE_ALPHABET, TURN_MS, INTRO_MS, CELEBRATE_MS, SUDDEN_DEATH_MAX_ROUNDS,
     generateRoomCode, formatCode, normalizeCode, isRoomRecord, createRoom, normalizeRoom,
     claimSeat, setReady, removePlayer, leaveSeat, rejoinSeat, withTeamNames, startMatch,
     prepareMove, applyPlay, applyPass, resolveTimeUp, finalize,

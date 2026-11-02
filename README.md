@@ -25,8 +25,17 @@ Each team sends one representative. The host sets up **fixture rooms** (for exam
   - **During a game:** pause or resume, award a win, void a room, remove a player.
   - **No-show rooms:** walkover or void.
   - **Fair-play warnings:** when a player leaves the screen, the host gets a warning. There are no automatic penalties.
-- **Live team standings:** wins, losses and points on the host dashboard, plus a big-screen view for a projector (`?view=scoreboard`).
+- **Live team standings:** wins, losses and points on the host dashboard.
 - **Result corrections:** the host can correct or void a finished result.
+- **Look and feel:** a DICT-branded light/dark theme (☀️/🌙, remembered per device, follows the device by default) with Archivo Black display type and accessible colour tokens.
+- **Game feel:**
+  - A live **turn pill** always shows whose turn it is, a low-time warning, paused/appeal/sudden-death state, or "Get ready".
+  - **Word celebrations:** a quick "+N" for small plays, and four bigger tiers up to a cinematic "IMPOSSIBLE!!!" for a bingo, on every screen (players, spectators, projector) at once.
+  - A **VS intro and coin toss** (~5 s) opens every match, naming which team goes first.
+  - **Result screens:** a trophy scene for the winner, a respectful "well played" screen for the other player, and a neutral summary for spectators and the host, each with the final board and the best word of the match.
+  - **Sound effects** (off by default, remembered per device) and a short "your turn" vibration on phones.
+  - `prefers-reduced-motion` turns shake, flash, confetti and spins into simple fades, with the same information.
+- **Broadcast projector (`?view=scoreboard`):** an auto-director picks a live room to feature — highlights first, then drama (sudden death, the last minute), then rotation — and plays the same celebrations and result scenes at full-screen scale. The host can **pin** a room to hold the screen there regardless of what else happens. Idle (nothing live) shows full-screen standings and "Next up". Read-only: the projector never writes to Firebase.
 
 ## Running locally
 
@@ -64,14 +73,23 @@ node --test "tests/*.test.js"
 ```
 index.html            # page shell; loads the scripts below
 css/style.css         # all styles
+css/fx.css            # celebrations, intro/coin, result screens, broadcast scale
+js/theme.js           # light/dark theme (pure + localStorage glue, tested)
+js/sound.js           # optional sound effects, off by default (tested)
 js/engine.js          # Scrabble rules (pure, tested)
 js/match.js           # room state: seats, turns, clocks, results, standings (pure, tested)
 js/dictionary.js      # word check with timeout (tested)
+js/env.js             # picks the Firebase data area (playground vs live)
+js/pill.js            # turn-pill state (pure, tested)
+js/celebrate.js       # word celebration overlays (pure parts tested)
+js/scenes.js          # VS intro/coin toss, round start, result screens
+js/director.js        # auto-director for the projector (pure, tested)
 js/store.js           # Firebase connection and safe (transactional) writes
 js/ui.js              # shared rendering helpers
 js/view-host.js       # host dashboard
-js/view-room.js       # join page, lobby, live game, final screen
-js/app.js             # routing and clock ticker
+js/view-room.js       # join page, lobby, live game, result screen
+js/view-scoreboard.js # ?view=scoreboard: the broadcast projector view
+js/app.js             # routing, clock ticker, theme/sound toggles
 tests/                # unit tests
 docs/                 # design, plan and dry-run checklist
 ```
