@@ -12,7 +12,7 @@ Design and plan: `docs/superpowers/specs/2026-11-01-tournament-rooms-design.md`,
 
 Upstream: `https://github.com/serminoaaron-code/DICT-SCRABBLE`. There is no CI.
 
-> 🚀 **Merging into `main` deploys to production.** GitHub Pages auto-deploys `main` to https://serminoaaron-code.github.io/DICT-SCRABBLE/ within a minute or two. That site uses the **real** tournament data (`scrabble/`). Before merging, run the unit tests and test in the local playground. Never test on the live site. To roll back, revert the PR on GitHub, which redeploys the previous version. **Git workflow:** don't commit to `main` directly. Create a feature branch (`feat/…`, `fix/…`, `docs/…`) and merge into `main` through a pull request. Don't add `Co-Authored-By` trailers to commits.
+> 🚀 **Merging into `main` deploys to GitHub Pages.** `main` auto-deploys to https://serminoaaron-code.github.io/DICT-SCRABBLE/ within a minute or two. That site isn't the final tournament page yet, so merges to `main` are safe during ongoing development — but it does use the **real** tournament data (`scrabble/`), so before merging, run the unit tests and test in the local playground. Never test on the live site with `?db=live` unless asked. To roll back, revert the PR on GitHub, which redeploys the previous version. Once a tournament is actually running from this deploy, merge only when no rooms are live, and have everyone refresh afterwards (there's no build step or hot-reload, so a tab left open keeps running the old JS against the new data). **Git workflow:** don't commit to `main` directly. Create a feature branch (`feat/…`, `fix/…`, `docs/…`) and merge into `main` through a pull request. Don't add `Co-Authored-By` trailers to commits.
 
 ## Tech stack
 
@@ -44,21 +44,34 @@ Routes: `#` = join page · `#room=CODE` = room · `#host` = host dashboard (pass
 
 ## Architecture
 
-Script load order (in `index.html`): `engine.js → match.js → dictionary.js → store.js → ui.js → view-host.js → view-room.js → app.js`.
+Script load order (in `index.html`): `theme.js → sound.js → scenes.js` (in `<head>`, so the theme applies before first paint) `→ engine.js → match.js → dictionary.js → env.js → pill.js → celebrate.js → director.js → store.js → ui.js → view-host.js → view-room.js → view-scoreboard.js → app.js`.
 
 | File | Role |
 |---|---|
-| `js/engine.js` | **Pure Scrabble rules** (global `ScrabbleEngine`): letters, tile bag, `PREMIUM_GRID`, board map, `validatePlacement`, `findWords` (main word + cross-words), `scoreMove` (+50 bingo), `ERROR_TEXT`. |
-| `js/match.js` | **Pure room-state transitions** (global `Match`). Every mutator takes a room and returns a *new* room, or `null` to reject: `claimSeat`, `startMatch` (coin toss), `applyPlay`, `applyPass`, `resolveTimeUp`, sudden death, `requestAppeal`/`resolveAppeal`, pause/resume, `resign`/`awardWin`/`walkover`/`voidRoom`/`correctResult`. Also `computeStandings` and `roomPhase`. |
+| `js/theme.js` | **Pure light/dark resolution** (global `Theme`) plus the `<html data-theme>` / `localStorage scrabble.theme` glue: `resolve`, `init`, `current`, `toggle`. Device `prefers-color-scheme` is the fallback when nothing is stored. |
+| `js/sound.js` | **Optional sound effects** (global `Sound`), off by default (`localStorage scrabble.sound`): `enabled`, `toggle`, `play(name)` (short Web Audio tones: `turn`, `place`, `accept`, `tier1..4`, `vs`, `coin`, `win`), `buzz()` (a "your turn" vibration), `ready()`. The `AudioContext` is created lazily on a user gesture, never at load. |
+| `js/engine.js` | **Pure Scrabble rules** (global `ScrabbleEngine`): letters, tile bag, `PREMIUM_GRID`, board map, `validatePlacement`, `findWords` (main word + cross-words), `scoreMove` (+50 bingo), `celebrationTier` (total/bingo → 0–4), `ERROR_TEXT`. |
+| `js/match.js` | **Pure room-state transitions** (global `Match`). Every mutator takes a room and returns a *new* room, or `null` to reject: `claimSeat`, `startMatch` (coin toss, intro offset), `applyPlay`, `applyPass`, `resolveTimeUp`, sudden death, `requestAppeal`/`resolveAppeal`, pause/resume, `resign`/`awardWin`/`walkover`/`voidRoom`/`correctResult`. Also `computeStandings`, `roomPhase`, and the fixed constants `INTRO_MS` and `CELEBRATE_MS` (below). |
 | `js/env.js` | `Env.dataRoot()` picks the Firebase data area: playground for local runs, real data when deployed. |
+| `js/pill.js` | **Pure turn-pill state** (global `Pill`): `state(room, mySeat, now)` → `{ kind, text, ms }` for the game screen's `#statusLine` (`Your turn`, `<name>'s turn`, `Get ready`, `⏸ Paused`, `⚖️ Waiting for host[ decision]`, sudden death). |
+| `js/celebrate.js` | **Word celebrations** (global `Celebrate`): a "+N" float for small plays, four overlay tiers (`Not Bad!` / `Cool!` / `Awesome!` / `IMPOSSIBLE!!!`) with a count-up that flies into the score bar. Pure parts (`tierFor`, `detect`, `createQueue`) are Node-testable; `show`/`clear` touch the DOM. Honors `prefers-reduced-motion` (a calm fade card, no shake/flash/confetti/rays). |
+| `js/scenes.js` | **Shared timed scenes** (global `Scenes`), used by both the room and the projector: the VS intro + coin toss, the round-start card, and `renderResult` (winner / respectful / neutral / void result screens). |
+| `js/director.js` | **Pure auto-director for the projector** (global `Director`, spec §5.7): `step(state, rooms, pinned, now)` decides which room is featured and which scene plays (intro/round-start/highlight/winner/idle), esports-observer style — highlights first, then drama (sudden death, last 60 s), then rotation with a minimum dwell; a host pin holds the room. |
 | `js/dictionary.js` | `checkWords()`: 404 = rejected; error/timeout (5 s) = accepted but `unverified`. |
-| `js/store.js` | Firebase wiring (global `Store`): watchers, `mutateRoom`, `createRoom`, presence, team CRUD, `serverNow()` (server-time estimate), `local` (localStorage with fallback). |
+| `js/store.js` | Firebase wiring (global `Store`): watchers, `mutateRoom`, `createRoom`, presence, team CRUD, `serverNow()` (server-time estimate), `setPinned`/`watchPinned` (`<data root>/broadcast/pinned`, a plain set/read — not a room transaction), `local` (localStorage with fallback). |
 | `js/ui.js` | Shared rendering: `escapeHtml`, `formatClock`, `renderBoard`, `renderRack`, `renderStandings`, `toast`. |
-| `js/view-host.js` | Host login + dashboard (Teams, Fixture rooms, Standings, Reset). |
-| `js/view-room.js` | Join page, room lobby, live game (`RoomLive`), host control bar, final screen, fair-play reporting. |
-| `js/app.js` | Router (`hashchange`) and the shared 250 ms ticker (`App.onTick`, cleared on every route change). |
+| `js/view-host.js` | Host login + dashboard (Teams, Fixture rooms, Standings, Reset, pin). |
+| `js/view-room.js` | Join page, room lobby, live game (`RoomLive`), host control bar, result screen, fair-play reporting. |
+| `js/view-scoreboard.js` | `?view=scoreboard`: the **projector broadcast view** — `Director` auto-features a live room (or idle standings), plays the shared `Scenes`/`Celebrate` scenes at broadcast scale, and respects a host pin. Read-only: it never writes to Firebase. |
+| `js/app.js` | Router (`hashchange`) and the shared 250 ms ticker (`App.onTick`, cleared on every route change); wires the header's theme/sound toggles. |
 
-`engine.js`, `match.js` and `dictionary.js` use a small UMD wrapper so they load both as browser globals and via Node `require` (the tests).
+`engine.js`, `match.js`, `dictionary.js`, `theme.js`, `sound.js`, `pill.js`, `celebrate.js`, `scenes.js` and `director.js` use a small UMD wrapper so they load both as browser globals and via Node `require` (the tests).
+
+### Visual tokens and contrast (`css/style.css`, `css/fx.css`)
+- Brand and theme colours are CSS custom properties on `:root` and the `html[data-theme="light"|"dark"]` blocks (`--navy`, `--blue`, `--sky`, `--red`, `--yellow`, `--green`, `--cream`; `--bg`, `--surface`, `--text`, `--muted`). Use these, not new hard-coded colours.
+- **Contrast rule:** a light background always gets dark text and a dark background gets light text, on every pill, chip, badge, button and card. Everything meets **WCAG AA** in both themes — 4.5:1 for normal text, 3:1 for large text/UI (≥ 24px, or ≥ 18.66px bold). A scripted check (`contrast AA in both themes` in `.superpowers/e2e/revamp.js`) sweeps every `.pill, .chip, .badge, button, .card` on the join page, lobby, game screen, result screen and dashboard, in both themes. An element behind its own gradient/image backdrop (the result hero's fixed, hand-checked colours) is exempt from this sweep.
+- `prefers-reduced-motion: reduce` turns off shake, flash, confetti, spinning rays and the coin flip; scenes become simple fades with the same information. Never more than one flash per scene.
+- `Match.INTRO_MS` (`5000`) delays the first turn after `startMatch` for the VS intro + coin toss. `Match.CELEBRATE_MS` (`[0, 2600, 2600, 3000, 4500]`, indexed by celebration tier) delays the next turn so a word's celebration finishes before the next move lands.
 
 ### The core rule: every room write is a transaction around a pure `Match` function
 
@@ -84,8 +97,10 @@ scrabble/
                             pending (appeal), suddenDeath {startMove, rounds}, lastMove },
                     fairPlay: { A|B: { screenLeaves } },
                     result: { winner, teamId, scoreA, scoreB, reason, decidedAt }, voidedAt }
+  broadcast/pinned: CODE | null   # host's pin for the projector (Store.setPinned/watchPinned); not room state
 ```
 
+- `game.lastMove.bingo` (bool) and `game.bestMove` (`{ seat, words, total, bingo }`, the highest-scoring play so far) let clients and the projector pick a celebration tier and the result screen's "best word" line without recomputing. Rooms created before this existed simply lack them; the UI falls back to a total-only tier check and hides "best word".
 - "Paused" and "appeal" are **derived** by `Match.roomPhase()` from `clock.paused` and `game.pending`; they aren't stored statuses.
 - Standings are **never stored**. They're computed from `final` rooms by `Match.computeStandings`.
 - **Firebase storage rules:**
@@ -104,7 +119,7 @@ This project uses the **Superpowers** plugin (`superpowers@claude-plugins-offici
 | New feature, change in game rules or behaviour, UI addition | `superpowers:brainstorming` → `superpowers:writing-plans` → `superpowers:executing-plans` (or `superpowers:subagent-driven-development` for plans whose tasks are independent of each other) |
 | Bug, unexpected behaviour, desync between clients | `superpowers:systematic-debugging`: reproduce it, find the root cause and state it before proposing a fix. No guess-and-patch. **After the fix, add a QA re-test entry to `docs/important-docs/bugs-fixed.md`** (template at the end of that file; plain-language steps a playtester can follow). |
 | Starting a feature branch | `superpowers:using-git-worktrees` (or at least `git switch -c feat/…` off `main`) |
-| Rules or room logic (`engine.js`, `match.js`, `dictionary.js`) | `superpowers:test-driven-development`: write the failing test in `tests/` first |
+| Rules or room logic (`engine.js`, `match.js`, `dictionary.js`, `pill.js`, `celebrate.js`, `director.js`, `theme.js`, `sound.js`) | `superpowers:test-driven-development`: write the failing test in `tests/` first |
 | Before saying anything is done or fixed | `superpowers:verification-before-completion`: unit tests, plus the browser (2+ windows for multiplayer). Show the evidence. |
 | Work is finished | `/security-review`, then `superpowers:requesting-code-review`, then `superpowers:finishing-a-development-branch` to open the PR |
 | Responding to PR feedback | `superpowers:receiving-code-review` |
@@ -127,5 +142,5 @@ Infrastructure findings (Firebase rules, auth, hosting) belong to DevOps. Note t
 
 - Firebase **v8** API style only. All paths under `scrabble/`.
 - User-supplied strings (team names, player names, labels, words) go through `UI.escapeHtml()` before they're put into `innerHTML`. Names are capped at 40 characters.
-- Use the CSS custom properties in `:root` (`--scrabble-*`, `--dict-*`, `--sq-*`) rather than new hard-coded colours. Breakpoints: 900px (dashboard stacks) and 480px (phone).
+- Use the CSS custom properties in `:root` (`--navy`, `--blue`, `--sky`, `--red`, `--yellow`, `--green`, `--cream`, `--bg`, `--surface`, `--text`, `--muted`, `--sq-*`) rather than new hard-coded colours — see "Visual tokens and contrast" above. Breakpoints: 900px (dashboard stacks) and 480px (phone).
 - Fair play only **warns** the host (screen-leave counter); there are no automatic penalties. "Host decides" is the rule for disputes: appeals, walkover/void, award win.

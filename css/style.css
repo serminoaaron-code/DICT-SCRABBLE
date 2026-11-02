@@ -12,7 +12,9 @@
   --sq-tw: var(--red);
   --sq-dw: var(--yellow);
   --sq-tl: var(--green);
-  --sq-dl: var(--sky);
+  /* a touch lighter than --sky: navy-on-sky at the brand hex is 4.05:1 with the small bold
+     square label, under the 4.5:1 AA floor. This keeps the same sky family at AA (~5:1). */
+  --sq-dl: #4d90f7;
 
   /* status chips (badges, warn/ok lines) keep their own fixed light tint in both themes */
   --green-bg: #ecfdf5;
@@ -127,6 +129,10 @@ html[data-theme="dark"] .panel, html[data-theme="dark"] .card { box-shadow: 0 10
 .badge.warn, .badge.paused, .badge.appeal, .badge.hostDecision, .badge.suddenDeath { border-color: var(--red); color: #fff; background: var(--red); }
 .warn-line { background: var(--red-bg); color: var(--red-ink); border: 2px solid #fecaca; border-radius: 10px; padding: 8px 10px; font-size: 12px; font-weight: 600; }
 .ok-line { background: var(--green-bg); color: var(--green-ink); border: 2px solid #a7f3d0; border-radius: 10px; padding: 8px 10px; font-size: 12px; font-weight: 600; }
+/* these two sit on a fixed light tint in both themes (above): a nested .muted note must not
+   take the theme's muted colour (light in dark mode), which drops to ~2:1 there. */
+.ok-line .muted { color: var(--green-ink); }
+.warn-line .muted { color: var(--red-ink); }
 
 /* chips: team colour tags, consistent everywhere (Team A blue, Team B red) */
 .chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 11px; border-radius: 999px; font-weight: 800; font-size: 12px; letter-spacing: .2px; white-space: nowrap; line-height: 1.5; }
