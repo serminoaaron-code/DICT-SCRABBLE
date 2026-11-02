@@ -376,6 +376,7 @@
           <button class="link small-text hidden" id="stopWatching">Stop watching / take a seat</button></div>
         </div>
         <div id="board-container"></div>
+        <div id="tauntLive" class="fx-sr" aria-live="polite"></div>
         <div id="noticeBox" class="sheet sheet-notice"></div>
         <div id="rejectBox" class="sheet sheet-reject"></div>
         <div class="bonus-backdrop hidden" id="bonusBackdrop"><div class="card bonus-card" id="bonusCard" role="dialog" aria-label="Bonus squares">
@@ -840,6 +841,10 @@
       const s = room.seats && room.seats[t.seat];
       const name = Names.short((s && s.name) || (t.seat === 'A' ? room.teamAName : room.teamBName) || '');
       Taunt.show(el.querySelector('#side' + t.seat), el.querySelector('.scorebar'), { seat: t.seat, e: t.e, name });
+      // Screen readers: a lasting polite live region whose text changes (an inserted, already-filled
+      // region is often not announced). The floating face is aria-hidden.
+      const live = el.querySelector('#tauntLive');
+      if (live) { const msg = Taunt.text(name, t.e); live.textContent = ''; setTimeout(() => { live.textContent = msg; }, 60); } // the same text twice still announces
     }
   }
 

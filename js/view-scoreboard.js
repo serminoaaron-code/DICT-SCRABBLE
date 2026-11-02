@@ -438,6 +438,7 @@
         st.hlCode = null;
       }
       stage.classList.toggle('is-idle', d.scene === 'idle');
+      if (!['room', 'highlight'].includes(d.scene)) Taunt.clear(); // never over the intro, round start or winner card
       const target = d.featured;
       const changed = target !== st.target;
       st.target = target;

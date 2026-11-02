@@ -69,6 +69,11 @@ test('arrivals: both seats at once show both, A first', () => {
   assert.deepStrictEqual(Taunt.arrivals(base, r, T + 50).show.map(x => x.seat), ['A', 'B']);
 });
 
+test('text: what screen readers hear for a taunt', () => {
+  assert.strictEqual(Taunt.text('Maria', 'lol'), 'Maria: LOL');
+  assert.strictEqual(Taunt.text('Juan', 'cry'), 'Juan: Crying');
+});
+
 test('box: on the score bar, centred on the sender\'s side, 1.5x the bar height', () => {
   const bar = { left: 8, top: 88, width: 344, height: 44 };
   assert.deepStrictEqual(Taunt.box({ left: 10, top: 90, width: 150, height: 40 }, bar, 360), { left: 52, top: 77, size: 66 });

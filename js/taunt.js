@@ -114,8 +114,7 @@
     removeSeat(info.seat);
     const wrap = d.createElement('div');
     wrap.className = 'taunt taunt-' + info.seat + (reducedMotion() ? ' fx-reduced' : '');
-    wrap.setAttribute('role', 'status');
-    wrap.setAttribute('aria-label', (info.name || '') + ': ' + LABELS[info.e]);
+    wrap.setAttribute('aria-hidden', 'true'); // screen readers hear the view's lasting #tauntLive region instead (Taunt.text)
     Object.assign(wrap.style, { left: b.left + 'px', top: b.top + 'px', width: b.size + 'px', height: b.size + 'px' });
     wrap.appendChild(face(info.e));
     if (info.name) {
@@ -131,5 +130,8 @@
 
   function clear() { for (const s of Object.keys(shown)) removeSeat(s); }
 
-  return { IDS, LABELS, SHOW_MS, LATE_MS, cooldownLeft, canSend, arrivals, box, face, show, clear };
+  // What screen readers hear for a taunt, e.g. "Maria: LOL" (set on a view's lasting polite live region).
+  const text = (name, e) => (name || '') + ': ' + (LABELS[e] || '');
+
+  return { IDS, LABELS, SHOW_MS, LATE_MS, cooldownLeft, canSend, arrivals, box, text, face, show, clear };
 });
