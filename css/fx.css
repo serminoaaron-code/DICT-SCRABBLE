@@ -81,7 +81,13 @@ body.fx-active .scorebar { position: relative; z-index: 9600; }
 @keyframes fx-rays { 0% { transform: scale(.2) rotate(0); opacity: 0; } 15% { opacity: 1; } 100% { transform: scale(1) rotate(50deg); opacity: .9; } }
 .fx-tier-3 .fx-title {
   top: 36%; font-size: min(calc(var(--k) * 44), 14vw); line-height: 1.1; color: #ffd23f;
-  -webkit-text-stroke: calc(var(--k) * 2) #7a4b00; text-shadow: 0 5px 0 #7a4b00, 0 0 24px rgba(255,210,63,.9);
+  /* The yellow is a gradient clipped to the letters (for the glint), and a text-shadow or stroke
+     would be painted on top of it, darkening the letters. Filters apply after the letters are
+     drawn, so the brown outline, drop and glow sit behind them. */
+  -webkit-text-stroke: 0; text-shadow: none;
+  filter: drop-shadow(calc(var(--k) * 1.2) 0 0 #7a4b00) drop-shadow(calc(var(--k) * -1.2) 0 0 #7a4b00)
+    drop-shadow(0 calc(var(--k) * 1.2) 0 #7a4b00) drop-shadow(0 calc(var(--k) * -1.2) 0 #7a4b00)
+    drop-shadow(0 5px 0 #7a4b00) drop-shadow(0 0 12px rgba(255,210,63,.9));
   background: linear-gradient(100deg, #ffd23f 30%, #fff8d6 45%, #ffd23f 60%); background-size: 250% 100%;
   -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
   animation: fx-aw-in .6s cubic-bezier(.2,1.5,.4,1) both, fx-glint 1.2s .6s ease-in-out 2;
@@ -151,7 +157,7 @@ body.fx-active .scorebar { position: relative; z-index: 9600; }
   background: #0b1f4d; color: #fff; border: 3px solid var(--yellow); box-shadow: 0 10px 28px rgba(0,0,0,.4);
   display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .fx-reduced .fx-card .fx-title { position: static; font-size: 30px; line-height: 1.1; color: var(--yellow); opacity: 1; animation: none; transform: none;
-  background: none; -webkit-text-fill-color: currentColor; -webkit-text-stroke: 0; text-shadow: none; white-space: normal; margin: 0; }
+  background: none; -webkit-text-fill-color: currentColor; -webkit-text-stroke: 0; text-shadow: none; filter: none; white-space: normal; margin: 0; }
 .fx-reduced .fx-card .fx-pts { position: static; font-size: 28px; color: #fff; opacity: 1; -webkit-text-stroke: 0; text-shadow: none; }
 .fx-card .fx-word { position: static; background: rgba(255,255,255,.12); }
 .fx-card-note { font-size: 13px; font-weight: 800; letter-spacing: 1.5px; color: #dfe7ff; overflow-wrap: anywhere; }
