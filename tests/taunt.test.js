@@ -82,3 +82,7 @@ test('box: on the score bar, centred on the sender\'s side, 1.5x the bar height'
   assert.ok(Taunt.box({ left: 10, top: 90, width: 150, height: 40 }, bar, 360, 0.9).size < 66, 'a smaller scale');
   assert.strictEqual(Taunt.box({ left: 0, top: 0, width: 10, height: 10 }, { left: 0, top: 0, width: 10, height: 10 }, 360).size, 44, 'at least 44px');
 });
+
+test('polish: one set of taunt ids, shared with Match', () => {
+  assert.strictEqual(Taunt.IDS, M.TAUNTS);
+});

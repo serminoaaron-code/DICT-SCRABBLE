@@ -666,3 +666,41 @@ test('normalizeRoom: taunts default to { A: null, B: null }', () => {
   assert.deepStrictEqual(M.normalizeRoom({}).taunts, { A: null, B: null });
   assert.deepStrictEqual(M.normalizeRoom({ taunts: { A: { e: 'lol', at: 5 } } }).taunts, { A: { e: 'lol', at: 5 }, B: null });
 });
+
+// ---------- polish pass (C6-C9, A15) ----------
+test('tauntAllowed mirrors taunt\'s guards without copying the room', () => {
+  const base = M.normalizeRoom(liveRoom());
+  const cases = [
+    [base, 'A', T0], [base, 'watch', T0], [base, 'A', base.clock.startedAt - 1],
+    [M.taunt(base, 'A', 'lol', { now: T0 }), 'A', T0 + 5000], [Object.assign(M.normalizeRoom(liveRoom()), { status: 'final' }), 'A', T0],
+    [M.pauseClocks(M.normalizeRoom(liveRoom()), T0), 'B', T0 + 1]
+  ];
+  for (const [r, seat, now] of cases) {
+    assert.strictEqual(M.tauntAllowed(deepFreeze2(r), seat, now), M.taunt(r, seat, 'lol', { now }) !== null, `${r.status} ${seat} ${now}`);
+  }
+  assert.deepStrictEqual(M.TAUNT_STATUSES, ['live', 'suddenDeath', 'hostDecision']);
+});
+
+test('taunt: no taunts while the VS intro is frozen by a pause', () => {
+  const started = M.normalizeRoom(M.startMatch(readyRoom(), 1000, constRng(0.2), 5000)); // clocks start at 6000
+  const paused = M.pauseClocks(started, 3000);              // paused during the intro
+  assert.ok(paused.clock.paused.introRemainingMs > 0);
+  assert.strictEqual(M.taunt(paused, 'A', 'lol', { now: started.clock.startedAt + 500 }), null, 'past the old start, still frozen');
+  const resumed = M.resumeClocks(paused, 10000);
+  assert.strictEqual(M.taunt(resumed, 'A', 'lol', { now: resumed.clock.startedAt - 1 }), null);
+  assert.notStrictEqual(M.taunt(resumed, 'A', 'lol', { now: resumed.clock.startedAt }), null);
+});
+
+test('taunt: inherited object keys are not taunt ids', () => {
+  const r = M.normalizeRoom(liveRoom());
+  for (const id of ['constructor', 'toString', '__proto__']) assert.strictEqual(M.taunt(r, 'A', id, { now: T0 }), null, id);
+});
+
+test('taunt then applyPlay on the same room: the play applies and the taunt stays', () => {
+  const r = M.normalizeRoom(liveRoom({ game: { racks: { A: RACK_CAT.slice(), B: RACK_CAT.slice() } } }));
+  const t = M.taunt(r, 'A', 'lol', { now: T0 });
+  const n = M.applyPlay(t, 'A', CAT, { now: T0 + 10, expectedMoveCount: 0 });
+  assert.notStrictEqual(n, null);
+  assert.strictEqual(n.game.moveCount, 1);
+  assert.deepStrictEqual(n.taunts.A, { e: 'lol', at: T0 });
+});

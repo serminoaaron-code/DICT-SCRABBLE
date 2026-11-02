@@ -14,7 +14,7 @@
 
   const Match = typeof require === 'function' ? require('./match.js') : root.Match;
 
-  const IDS = ['angry', 'lol', 'cry'];
+  const IDS = Match.TAUNTS; // one list, owned by Match
   const LABELS = { angry: 'Angry', lol: 'LOL', cry: 'Crying' };
   const SHOW_MS = 2500; // on screen
   const LATE_MS = 3000; // a taunt arriving later than this (slow connection) is skipped
@@ -28,9 +28,9 @@
     return last ? Math.max(0, last.at + Match.TAUNT_COOLDOWN_MS - now) : 0;
   }
 
-  // The same rule as Match.taunt (status, intro over, seat, cooldown).
+  // The same rule as Match.taunt (status, intro over and not frozen, seat, cooldown), without copying the room.
   function canSend(room, seat, now) {
-    return Match.taunt(room, seat, 'lol', { now }) !== null;
+    return Match.tauntAllowed(room, seat, now);
   }
 
   // What this view should show now. seen = { A, B } (last `at` per seat) or null on the first render,
@@ -85,7 +85,7 @@
 
   function face(id) {
     const d = doc();
-    if (!d || !SVG[id]) return null;
+    if (!d || !IDS.includes(id)) return null;
     const svg = d.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('viewBox', '0 0 100 100');
     svg.setAttribute('class', 'tf tf-' + id);
@@ -109,7 +109,7 @@
   // replaces this seat's face still on screen and removes itself after SHOW_MS. Returns false without anchors.
   function show(anchorEl, barEl, info, opts = {}) {
     const d = doc();
-    if (!d || !anchorEl || !barEl || !info || !SVG[info.e]) return false;
+    if (!d || !anchorEl || !barEl || !info || !IDS.includes(info.e)) return false;
     const b = box(anchorEl.getBoundingClientRect(), barEl.getBoundingClientRect(), root.innerWidth || 0, opts.scale || 1.5);
     removeSeat(info.seat);
     const wrap = d.createElement('div');

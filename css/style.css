@@ -262,7 +262,11 @@ table.standings tr:first-child td { font-weight: 700; }
 .caption-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px; height: 18px; font-size: 12px; color: var(--muted); }
 .caption-row .caption-text { min-width: 0; line-height: 16px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* "? Bonuses" (feature #7): a small pill on the right of the caption line. */
-.caption-btn { height: 18px; padding: 0 8px; font-size: 11px; line-height: 14px; font-weight: 800; border-radius: 999px; background: var(--surface); color: var(--text); border: 2px solid var(--line); box-shadow: none; }
+/* "? Bonuses": the button is 26px tall, so taps 4px above or below still hit it (WCAG 2.2 target size),
+   but it looks like the old 18px pill: ::before draws the pill, and the -4px margins keep the row height.
+   (A ::before sticking out of a <button> does not take taps in Chrome, so the button itself is taller.) */
+.caption-btn { position: relative; z-index: 0; height: 26px; margin: -4px 0; padding: 0 10px; font-size: 11px; line-height: 14px; font-weight: 800; border-radius: 999px; background: transparent; color: var(--text); border: 0; box-shadow: none; }
+.caption-btn::before { content: ''; position: absolute; left: 0; right: 0; top: 4px; bottom: 4px; z-index: -1; border-radius: 999px; background: var(--surface); border: 2px solid var(--line); }
 .arena > .bonus-backdrop { width: auto; max-width: none; } /* full window, not the 520px phone column */
 .bonus-backdrop { position: fixed; inset: 0; z-index: 9420; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(11,31,77,.45); }
 .bonus-card { width: 100%; max-width: 340px; padding: 14px; background: var(--bg); color: var(--text); border: 2px solid var(--line); border-radius: 16px; box-shadow: 0 12px 32px rgba(0,0,0,.35); }
@@ -611,15 +615,18 @@ html[data-theme="dark"] .bp-shape { opacity: .35; }
   /* only the board and the panel's pieces lose the phone column cap; the fixed sheets keep 520px */
   .live-panel, .live-panel > * { max-width: none; }
   .arena > #board-container { grid-column: 1; grid-row: 1; max-width: none; }
-  .live-panel { grid-column: 2; grid-row: 1; display: flex; flex-direction: column; gap: 10px; height: var(--board-px, auto); overflow: auto; }
+  .live-panel { grid-column: 2; grid-row: 1; display: flex; flex-direction: column; gap: 10px; height: var(--board-px, auto); overflow: auto; padding: 0 2px 4px; } /* room for the buttons' 3px shadow */
   .live-panel > * { order: 0; flex: none; }
   .live-panel > .rack-row { margin-top: auto; }
+  /* spectators and the host have no rack row: the host bar (empty for a spectator) takes its place at the bottom */
+  .live-panel > .rack-row.hidden ~ #hostBar:not(:empty), .live-panel > .rack-row.hidden ~ #hostBar:empty + #liveFoot { margin-top: auto; }
   .live-panel .rack .tile, .live-panel .rack-shuffle { width: 44px; height: 44px; font-size: 20px; }
   .live-panel .rack .tile .sub { font-size: 10px; }
   .live-panel .actions-row button { padding: 13px 8px; font-size: 14px; }
-  #board-container .sq { font-size: calc(var(--cell, 30px) * .3); }
-  #board-container .tile { font-size: calc(var(--cell, 30px) * .55); }
-  #board-container .tile .sub { font-size: calc(var(--cell, 30px) * .22); }
+  /* the live board only (the result screen's "View board" uses the same id and keeps its own sizes) */
+  .arena > #board-container .sq { font-size: calc(var(--cell, 30px) * .3); }
+  .arena > #board-container .tile { font-size: calc(var(--cell, 30px) * .55); }
+  .arena > #board-container .tile .sub { font-size: calc(var(--cell, 30px) * .22); }
 }
 @media (max-width: 480px) {
   main, .site-header { padding: 0 8px; }

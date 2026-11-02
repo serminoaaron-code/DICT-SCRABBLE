@@ -212,6 +212,23 @@ Every bug we've fixed is listed here with steps to **try to make it happen again
   4. Turn the spectator's Wi-Fi back on and wait a few seconds.
 - **Expected now:** the spectator sees "Room not found", and the room is gone from the data for good: no empty entry with only "presence" in it.
 
+### BF-28: Polish pass: small glitches from the feature batches
+- **Area:** live game / host / big screen · **Fixed in:** the polish-pass PR · **Found by:** the final code reviews of batches 1–5
+- **Used to happen** (the most visible ones):
+  - spectators and the host had an empty gap under the board;
+  - on a laptop, "✕ Skip" and "⏸ Paused" sat in the window's corner instead of on the board;
+  - while dragging a tile, the green target ring vanished when the board refreshed;
+  - pressing Play while dragging a placed tile played it at its old square;
+  - the ⋯ menu and the 😀 pop-up could be open at the same time;
+  - "? Bonuses" was hard to tap on a phone, and the Bonuses card didn't move keyboard focus.
+- **Try to trigger it:**
+  1. Join as a spectator: there's no empty gap under the board.
+  2. On a laptop, play a big word (e.g. Awesome!): "✕ Skip" sits in the top-right corner of the board.
+  3. On a phone, start dragging one of your placed tiles while the other player moves: the green ring stays. Press Play mid-drag: nothing is played.
+  4. Open ⋯, then 😀 (and the other way round): only one stays open.
+  5. Tap just above or below "? Bonuses": it still opens. With a keyboard, open it with Enter: focus is on ✕; Tab stays inside; Escape closes it and focus returns to "? Bonuses".
+- **Expected now:** all of the above, with nothing else looking or working differently.
+
 ## Turn moments and the big screen
 
 ### BF-23: "Whose turn" ribbon stuck on the left of a laptop screen

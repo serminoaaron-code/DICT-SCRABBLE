@@ -81,8 +81,8 @@
           <div id="nrCreated" class="hidden stack" style="margin-top:8px;"></div>
         </details>
         <div class="tabs" id="roomTabs" role="tablist" aria-label="Rooms"></div>
-        <div id="roomList"></div>
-        <div class="pager hidden" id="roomPager" aria-label="Pages"></div>`;
+        <div id="roomList" role="tabpanel"></div>
+        <nav class="pager hidden" id="roomPager" aria-label="Pages"></nav>`;
 
       const $ = s => panel.querySelector(s);
       // Room list tabs (feature #8): Active is never paged; Finished and Void remember their page.
@@ -182,13 +182,23 @@
       const TAB_LABEL = { active: 'Active', finished: 'Finished', void: 'Void' };
       const TAB_EMPTY = { active: 'No active rooms. Create one above.', finished: 'No finished rooms yet.', void: 'No void rooms.' };
 
+      // Keyboard focus on a tab or a page button survives the rebuild that every room update causes.
+      function focusKey() {
+        const a = document.activeElement;
+        if (!a || !a.closest) return null;
+        if (a.closest('#roomTabs') && a.dataset.tab) return `[data-tab="${a.dataset.tab}"]`;
+        if (a.closest('#roomPager') && a.dataset.page) return a.getAttribute('aria-label') ? `[aria-label="${a.getAttribute('aria-label')}"]` : `[data-page="${a.dataset.page}"]:not([aria-label])`;
+        return null;
+      }
+
       function renderList() {
+        const keep = focusKey();
         const rooms = Object.values(state.rooms).sort((x, y) =>
           (PHASE_ORDER[Match.roomPhase(x)] ?? 9) - (PHASE_ORDER[Match.roomPhase(y)] ?? 9) || (y.createdAt || 0) - (x.createdAt || 0));
         const v = RoomList.view(rooms, { tab: sel.tab, page: sel.page[sel.tab] || 1 }, Match.roomPhase);
         if (v.tab !== 'active') sel.page[v.tab] = v.page; // a page that emptied steps back
         $('#roomTabs').innerHTML = Object.keys(TAB_LABEL).map(t =>
-          `<button type="button" class="tab${t === v.tab ? ' on' : ''}" role="tab" aria-selected="${t === v.tab}" data-tab="${t}">${TAB_LABEL[t]} (${v.counts[t]})${t === 'active' && v.counts.attention
+          `<button type="button" class="tab${t === v.tab ? ' on' : ''}" role="tab" aria-selected="${t === v.tab}" aria-controls="roomList" tabindex="${t === v.tab ? 0 : -1}" data-tab="${t}">${TAB_LABEL[t]} (${v.counts[t]})${t === 'active' && v.counts.attention
             ? ` <span class="tab-attn" title="Waiting for your decision">⚖️ ${v.counts.attention}</span>` : ''}</button>`).join('');
         $('#roomList').innerHTML = v.items.length ? v.items.map(cardHtml).join('') : `<p class="muted small-text">${TAB_EMPTY[v.tab]}</p>`;
         const pager = $('#roomPager');
@@ -199,7 +209,19 @@
             : `<button type="button" data-page="${p}"${p === v.page ? ' class="on" aria-current="page"' : ''}>${p}</button>`),
           `<button type="button" data-page="${v.page + 1}" aria-label="Next page" ${v.page === v.pages ? 'disabled' : ''}>›</button>`
         ].join('');
+        if (keep) { const el = document.querySelector('#roomTabs ' + keep) || document.querySelector('#roomPager ' + keep); if (el) el.focus(); }
       }
+
+      // Arrow keys / Home / End move focus between the tabs; Enter or Space switches (manual activation).
+      $('#roomTabs').onkeydown = ev => {
+        const tabs = [...document.querySelectorAll('#roomTabs [role=tab]')];
+        const i = tabs.indexOf(document.activeElement);
+        if (i === -1) return;
+        const to = { ArrowRight: (i + 1) % tabs.length, ArrowLeft: (i - 1 + tabs.length) % tabs.length, Home: 0, End: tabs.length - 1 }[ev.key];
+        if (to === undefined) return;
+        ev.preventDefault();
+        tabs[to].focus();
+      };
 
       $('#roomTabs').onclick = ev => {
         const b = ev.target.closest('[data-tab]');

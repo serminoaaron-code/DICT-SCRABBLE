@@ -413,7 +413,9 @@
         st.hlCode = d.featured;
         Scenes.clearRibbon();
         Celebrate.show(d.move, { container: stage, scoreEl: () => stage.querySelector(`.bp-score[data-seat="${seat}"]`), mine: false,
-          delayMs: d.move.dropped ? Match.DROP_MS : 0 }); // the word drops in first
+          // the word drops in first, but only when this view really started that drop (a play landing
+          // during the wipe to its room was never dropped here, so its celebration starts at once)
+          delayMs: d.move.dropped && st.drop && st.drop.code === d.featured && st.drop.moveCount === d.move.moveCount ? Match.DROP_MS : 0 });
       } else if (d.scene === 'winner' && room) {
         const w = $('#bigWinner');
         w.classList.remove('hidden');

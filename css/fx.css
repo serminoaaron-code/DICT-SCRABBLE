@@ -84,6 +84,12 @@
 /* Desktop landscape (Layout.fitStage): the whole stage sits over the board, at board scale (--k inline). */
 .fx-on-board > .fx-stage { left: var(--fx-left); top: var(--fx-top); width: var(--fx-w); height: var(--fx-h); right: auto; bottom: auto; }
 .fx-on-board .fx-stage > .fx-content { top: 0; }
+/* on the board, long words are sized by the board, not the window (a 15-letter bingo stays on it) */
+.fx-on-board .fx-tiles b { --t: min(calc(var(--k) * 30), calc((var(--fx-w) - 24px) / var(--n, 7) - 3px)); }
+.fx-on-board .fx-word { max-width: calc(var(--fx-w) - 16px); }
+/* and its Skip / Paused chips sit in the board's top corners, not the window's (same nodes: still reachable) */
+.fx-on-board > .fx-skip { top: calc(var(--fx-top) + 10px); right: auto; left: calc(var(--fx-left) + var(--fx-w) - 10px); transform: translateX(-100%); }
+.fx-on-board > .in-paused { top: calc(var(--fx-top) + 12px); left: calc(var(--fx-left) + var(--fx-w) / 2); }
 
 /* While an overlay plays: lift the game area above the sticky PLAYGROUND bar, and keep
    the score bar above the dim so the points visibly land in it (as in the mockup). */

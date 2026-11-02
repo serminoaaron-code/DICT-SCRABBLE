@@ -330,12 +330,12 @@
     if (ui.onResize) window.removeEventListener('resize', ui.onResize);
     if (ui.onKey) document.removeEventListener('keydown', ui.onKey);
     if (ui.onTauntKey) document.removeEventListener('keydown', ui.onTauntKey);
-    if (ui.dragDetach) ui.dragDetach();
+    if (ui.dragApi) ui.dragApi.detach();
     ui.onDocClick = null;
     ui.onResize = null;
     ui.onKey = null;
     ui.onTauntKey = null;
-    ui.dragDetach = null;
+    ui.dragApi = null;
     ui.drag = null;
   }
 
@@ -382,7 +382,7 @@
         <div id="tauntLive" class="fx-sr" aria-live="polite"></div>
         <div id="noticeBox" class="sheet sheet-notice"></div>
         <div id="rejectBox" class="sheet sheet-reject"></div>
-        <div class="bonus-backdrop hidden" id="bonusBackdrop"><div class="card bonus-card" id="bonusCard" role="dialog" aria-label="Bonus squares">
+        <div class="bonus-backdrop hidden" id="bonusBackdrop"><div class="card bonus-card" id="bonusCard" role="dialog" aria-modal="true" aria-label="Bonus squares">
           <div class="bonus-head"><b>Bonus squares</b><button type="button" class="bonus-close" aria-label="Close">✕</button></div>
           ${UI.bonusHelpHtml()}</div></div>
       </div></div>`;
@@ -396,7 +396,7 @@
     const menu = $('#moreMenu');
     const moreBtn = $('#moreBtn');
     const setMenu = open => { menu.classList.toggle('hidden', !open); moreBtn.setAttribute('aria-expanded', String(open)); };
-    moreBtn.onclick = ev => { ev.stopPropagation(); setMenu(menu.classList.contains('hidden')); };
+    moreBtn.onclick = ev => { ev.stopPropagation(); if (ui.setTauntPop) ui.setTauntPop(false); setMenu(menu.classList.contains('hidden')); }; // one pop-up at a time
     menu.onclick = () => setMenu(false);
     // 😀 taunts (batch 5): the button opens the three faces; tapping one sends it (Match.taunt in a
     // transaction, which also enforces the 10 s cooldown) and closes the pop-up. Live only, no toast.
@@ -415,7 +415,7 @@
     }
     const setTaunt = open => { tauntPop.classList.toggle('hidden', !open); tauntBtn.setAttribute('aria-expanded', String(open)); };
     ui.setTauntPop = setTaunt;
-    tauntBtn.onclick = ev => { ev.stopPropagation(); if (!tauntBtn.disabled) setTaunt(tauntPop.classList.contains('hidden')); };
+    tauntBtn.onclick = ev => { ev.stopPropagation(); setMenu(false); if (!tauntBtn.disabled) setTaunt(tauntPop.classList.contains('hidden')); };
     tauntPop.onclick = ev => {
       ev.stopPropagation();
       const b = ev.target.closest && ev.target.closest('[data-taunt]');
@@ -451,21 +451,38 @@
       if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
       rackEl.querySelectorAll('.tile').forEach(t => {
         const dx = (before[t.dataset.i] ?? 0) - t.getBoundingClientRect().left;
-        if (dx && t.animate) t.animate([{ transform: `translateX(${dx}px)` }, { transform: 'none' }], { duration: 300, easing: 'cubic-bezier(.2,.8,.2,1)' });
+        const up = t.classList.contains('selected') ? ' translateY(-5px)' : ''; // a selected tile stays lifted while it slides
+        if (dx && t.animate) t.animate([{ transform: `translateX(${dx}px)${up}` }, { transform: up.trim() || 'none' }], { duration: 300, easing: 'cubic-bezier(.2,.8,.2,1)' });
       });
     };
 
     // "? Bonuses" help card (feature #7). update() never touches it, so it stays open while the game moves on.
     const bonus = $('#bonusBackdrop');
     const bonusBtn = $('#bonusBtn');
-    const setBonus = open => { bonus.classList.toggle('hidden', !open); bonusBtn.setAttribute('aria-expanded', String(open)); };
+    // A real dialog for keyboards: focus moves to ✕ on open, stays inside while open (Tab cycles),
+    // and returns to "? Bonuses" on close (Escape, ✕ or the backdrop).
+    const setBonus = open => {
+      const wasOpen = !bonus.classList.contains('hidden');
+      bonus.classList.toggle('hidden', !open); bonusBtn.setAttribute('aria-expanded', String(open));
+      if (open && !wasOpen) bonus.querySelector('.bonus-close').focus();
+      if (!open && wasOpen) bonusBtn.focus();
+    };
     bonusBtn.onclick = () => setBonus(bonus.classList.contains('hidden'));
     bonus.onclick = ev => { if (!ev.target.closest('.bonus-card') || ev.target.closest('.bonus-close')) setBonus(false); };
-    ui.onKey = ev => { if (ev.key === 'Escape') setBonus(false); };
+    ui.onKey = ev => {
+      if (bonus.classList.contains('hidden')) return;
+      if (ev.key === 'Escape') return setBonus(false);
+      if (ev.key !== 'Tab') return;
+      const items = [...bonus.querySelectorAll('button, [href], [tabindex]:not([tabindex="-1"])')].filter(e => !e.disabled);
+      if (!items.length) return;
+      const i = items.indexOf(document.activeElement), last = items.length - 1;
+      ev.preventDefault(); // focus never leaves the open card
+      items[ev.shiftKey ? (i <= 0 ? last : i - 1) : (i === -1 || i === last ? 0 : i + 1)].focus();
+    };
     document.addEventListener('keydown', ui.onKey);
 
     // Drag-and-drop tiles (feature #5), mouse and touch; tap-to-place keeps working.
-    ui.dragDetach = Drag.attach($('#liveRoot'), dragHooks(el, ctx));
+    ui.dragApi = Drag.attach($('#liveRoot'), dragHooks(el, ctx)); // { detach, refresh }
 
     // Test hook for the browser checks, in the playground only (never on the real tournament data).
     if (/_playground$/.test(Store.ROOT)) root.__room = { ui };
@@ -487,7 +504,7 @@
     $('#playBtn').onclick = async () => {
       const room = ctx.state.room;
       const seat = ctx.state.mySeat;
-      if (!myTurn(room, ctx) || ui.busy) return;
+      if (!myTurn(room, ctx) || ui.busy || ui.drag) return; // never mid-drag: the dragged tile is not placed yet
       const placements = ui.temp.map(t => ({ r: t.r, c: t.c, letter: t.letter }));
       const m = Match.prepareMove(room, seat, placements);
       if (!m.ok) return UI.toast(ScrabbleEngine.ERROR_TEXT[m.error] || 'Invalid move.', 'error');
@@ -671,15 +688,22 @@
     const shuffleBtn = $('#shuffleBtn');
     rackEl.classList.toggle('hidden', !isSeat(seat));
     shuffleBtn.classList.toggle('hidden', !isSeat(seat));
+    $('.rack-row').classList.toggle('hidden', !isSeat(seat)); // no empty row (and gap) for spectators / the host
     if (isSeat(seat)) {
       // This device's tile order (Shuffle). After my own play (turn moments #3) the tiles I kept stay
       // where they were and the drawn ones go into the used slots; any other change resets the order.
       const rackNow = g.racks[seat];
+      // My appeal was turned down (the pending word is gone and my rack is unchanged): forget the play notes.
+      if (g.pending && g.pending.seat === seat) ui.sawMyAppeal = true;
+      else if (ui.sawMyAppeal) {
+        ui.sawMyAppeal = false;
+        if (ui.lastRack && rackNow.join(',') === ui.lastRack.join(',')) { ui.lastUsed = null; ui.lastRack = null; }
+      }
       if (ui.rackOrder && ui.lastUsed && ui.lastRack && ui.rackOrder.key !== rackNow.join(',')) {
         const refilled = Rack.refill(ui.rackOrder, ui.lastRack, rackNow, ui.lastUsed);
         if (refilled) {
           ui.rackOrder = refilled;
-          if (refilled.fresh.length) ui.refill = { fresh: refilled.fresh, at: performance.now(), started: false };
+          if (refilled.fresh.length) ui.refill = { fresh: refilled.fresh, at: performance.now(), started: false, key: rackNow.join(',') };
         }
         ui.lastUsed = null; ui.lastRack = null;
       }
@@ -717,6 +741,8 @@
     if (RoomLive.updateHost) RoomLive.updateHost(el, room, ctx);
     tick(el, ctx);
     fitBoard(el, ctx);
+    // A drag in progress keeps its target ring and the rack's make-room shift across this redraw.
+    if (ui.drag && ui.dragApi) ui.dragApi.refresh();
   }
 
   // Seated players see the whole game screen without scrolling: if the action row would end
@@ -769,12 +795,11 @@
 
   // The 😀 button: seated players only, on the game screen once the VS intro is over. During the
   // 10 s cooldown (from the room data, so a refresh keeps it) it is disabled and shows the seconds left.
-  const TAUNT_STATUSES = ['live', 'suddenDeath', 'hostDecision'];
   function syncTaunt(el, room, ctx) {
     const wrap = el.querySelector('#tauntWrap');
     if (!wrap) return;
     const seat = ctx.state.mySeat, now = Store.serverNow();
-    const on = isSeat(seat) && !!room && !!room.clock && TAUNT_STATUSES.includes(room.status) && now >= room.clock.startedAt;
+    const on = isSeat(seat) && !!room && !!room.clock && Match.TAUNT_STATUSES.includes(room.status) && now >= room.clock.startedAt && !(room.clock.paused && room.clock.paused.introRemainingMs > 0);
     wrap.classList.toggle('hidden', !on);
     const can = on && Taunt.canSend(room, seat, now);
     const btn = el.querySelector('#tauntBtn');
@@ -896,10 +921,13 @@
     const bag = el.querySelector('.rack-bag');
     if (!f) return;
     const elapsed = performance.now() - f.at;
-    if (elapsed > DEAL_SHOW_MS) { ui.refill = null; if (bag) bag.classList.remove('on'); return; }
-    if (bag && !f.started) { bag.classList.remove('on'); void bag.offsetWidth; bag.classList.add('on'); }
+    const room = ctx.state.room, seat = ctx.state.mySeat;
+    const rackNow = room && room.game && room.game.racks[seat] ? room.game.racks[seat].join(',') : '';
+    // Done, or the rack is no longer the refilled one (the play failed and it went back): stop at once.
+    if (elapsed > DEAL_SHOW_MS || (f.key && rackNow !== f.key)) { ui.refill = null; if (bag) bag.classList.remove('on'); return; }
+    // The bag is never redrawn: its fade starts once (setting its delay again would make it jump ahead).
+    if (bag && !f.started) { bag.style.animationDelay = '0ms'; bag.classList.remove('on'); void bag.offsetWidth; bag.classList.add('on'); }
     f.started = true;
-    if (bag) bag.style.animationDelay = Math.round(-elapsed) + 'ms';
     const from = bag ? bag.getBoundingClientRect() : null;
     const delays = Celebrate.stagger(f.fresh.length, DEAL_TOTAL_MS, DEAL_EACH_MS);
     f.fresh.forEach((idx, i) => {
