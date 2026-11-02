@@ -93,3 +93,8 @@ test('endingCelebration: the play that ended the game (bag out / sudden death) s
   assert.strictEqual(Scenes.endingCelebration(12, ended('bagOut', play(44))), null);
   assert.strictEqual(Scenes.endingCelebration(11, Object.assign(ended('bagOut', play(44)), { status: 'void' })), null);
 });
+
+test('resultReason cuts a long player name to 25 characters + "…"', () => {
+  const room = finalRoom('A', { result: { winner: 'A', reason: 'resign', scoreA: 1, scoreB: 0, decidedAt: 1 }, seats: { A: { name: 'Maria' }, B: { name: 'M'.repeat(40) } } });
+  assert.strictEqual(Scenes.resultReason(room), 'M'.repeat(25) + '… left the game');
+});

@@ -111,3 +111,12 @@ test('durationFor: every overlay tier is fully gone by Match.CELEBRATE_MS[tier] 
   // Tier 0 is the small "+N" float: no overlay, and no turn delay (CELEBRATE_MS[0] = 0).
   assert.ok(Celebrate.durationFor(0) <= 1000, 'tier 0 float lasts at most 1 s');
 });
+
+test('detect cuts long player and team names to 25 characters + "…" (the BY line, the projector corner)', () => {
+  const r = roomAfterCAT();
+  r.seats.A.name = 'w'.repeat(40);
+  r.teamAName = 'TEST-' + 'w'.repeat(35);
+  const c = Celebrate.detect(0, r);
+  assert.strictEqual(c.playerName, 'w'.repeat(25) + '…');
+  assert.strictEqual(c.teamName, 'TEST-' + 'w'.repeat(20) + '…');
+});

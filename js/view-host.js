@@ -45,7 +45,8 @@
 
   function teamName(state, room, seat) {
     const id = seat === 'A' ? room.teamA : room.teamB;
-    return (state.teams[id] && state.teams[id].name) || (seat === 'A' ? room.teamAName : room.teamBName) || '?';
+    // As shown: at most Names.MAX characters + "…" (QA pass).
+    return Names.short((state.teams[id] && state.teams[id].name) || (seat === 'A' ? room.teamAName : room.teamBName) || '?');
   }
 
   function clockText(room) {
@@ -92,7 +93,7 @@
         const ids = Object.keys(state.teams).sort((a, b) => state.teams[a].name.localeCompare(state.teams[b].name));
         for (const sel of [$('#nrA'), $('#nrB')]) {
           const keep = sel.value;
-          sel.innerHTML = '<option value="">— choose —</option>' + ids.map(id => `<option value="${esc(id)}">${esc(state.teams[id].name)}</option>`).join('');
+          sel.innerHTML = '<option value="">— choose —</option>' + ids.map(id => `<option value="${esc(id)}" title="${esc(state.teams[id].name)}">${esc(Names.short(state.teams[id].name))}</option>`).join('');
           if (ids.includes(keep)) sel.value = keep;
         }
       }
@@ -116,7 +117,7 @@
           });
           const pretty = Match.formatCode(code);
           const box = $('#nrCreated');
-          box.innerHTML = `<div class="small-text muted">Room created for <b>${esc(state.teams[a].name)}</b> vs <b>${esc(state.teams[b].name)}</b>. Share this code:</div>
+          box.innerHTML = `<div class="small-text muted">Room created for <b class="nm">${esc(Names.short(state.teams[a].name))}</b> vs <b class="nm">${esc(Names.short(state.teams[b].name))}</b>. Share this code:</div>
             <div class="code-big" id="nrCode">${esc(pretty)}</div>
             <div class="row"><button type="button" class="btn-secondary small" id="nrCopy">Copy code</button><a href="#room=${esc(code)}">Open room →</a></div>`;
           box.classList.remove('hidden');
@@ -149,7 +150,7 @@
           const winName = room.result.winner === 'A' ? nameA : nameB;
           const note = room.result.note ? ': ' + esc(room.result.note) : '';
           const why = room.result.reason !== 'time' ? ` <span class="muted">(${esc(REASON_TEXT[room.result.reason] || room.result.reason)}${note})</span>` : '';
-          status = `<div class="ok-line">+1 ${esc(winName)} · ${room.result.scoreA}–${room.result.scoreB}${why}</div>`;
+          status = `<div class="ok-line">+1 <span class="nm" title="${esc(winName)}">${esc(winName)}</span> · ${room.result.scoreA}–${room.result.scoreB}${why}</div>`;
         }
         const live = ['live', 'paused', 'appeal', 'suddenDeath', 'hostDecision'].includes(phase);
         const actions = [`<a class="small-text" href="#room=${esc(room.code)}">Open room →</a>`];
@@ -158,8 +159,8 @@
           actions.push(`<button class="btn-secondary small" data-pin="${esc(room.code)}">${pinned ? 'Unpin' : '📌 Pin to big screen'}</button>`);
         }
         if (room.status === 'waiting') {
-          actions.push(`<button class="btn-secondary small" data-walkover="A" data-code="${esc(room.code)}">Walkover → ${esc(nameA)}</button>`);
-          actions.push(`<button class="btn-secondary small" data-walkover="B" data-code="${esc(room.code)}">Walkover → ${esc(nameB)}</button>`);
+          actions.push(`<button class="btn-secondary small nm-btn" data-walkover="A" data-code="${esc(room.code)}" title="Walkover → ${esc(nameA)}">Walkover → ${esc(nameA)}</button>`);
+          actions.push(`<button class="btn-secondary small nm-btn" data-walkover="B" data-code="${esc(room.code)}" title="Walkover → ${esc(nameB)}">Walkover → ${esc(nameB)}</button>`);
           actions.push(`<button class="danger small" data-void="${esc(room.code)}">Void</button>`);
         } else if (room.status === 'final') {
           actions.push(`<button class="btn-secondary small" data-correct="${esc(room.code)}">Correct result</button>`);
@@ -312,7 +313,7 @@
       for (const r of Object.values(state.rooms)) { used.add(r.teamA); used.add(r.teamB); }
       list.innerHTML = ids.map(id => `
         <div class="list-item">
-          <span class="name">${esc(state.teams[id].name)}</span>
+          <span class="name" title="${esc(state.teams[id].name)}">${esc(Names.short(state.teams[id].name))}</span>
           <span class="row">
             <button class="btn-secondary small" data-rename="${esc(id)}">Rename</button>
             ${used.has(id) ? '' : `<button class="danger small" data-delete="${esc(id)}" title="Delete">✕</button>`}

@@ -193,12 +193,12 @@ Every bug we've fixed is listed here with steps to **try to make it happen again
   1. Add two teams with 40-character names without spaces, and join with 40-character player names.
   2. On a phone, and on a laptop, open each of these in turn: the host dashboard (Teams, New room, room tabs, Standings), the seat choice after typing the code, the lobby, the VS intro, the game, and the result screen for winner, other player and host.
 - **Expected now:**
+  - Every team and player name shows at most **25 characters, then "…"**, on one line, everywhere: chips, buttons, the team list, standings, the score bar, the intro and coin, the result screens and the projector (the ticker included).
+  - On a narrow phone a name can be cut a little earlier to fit.
+  - Hovering a cut name on a laptop shows the full name.
   - Nothing is wider than the screen and phones never zoom out.
-  - Team chips end in "…".
-  - Long names in buttons, lists and standings wrap inside their box.
-  - Short labels stay whole: "Rename", "Void", "RANK", "W-L", "1-0".
-  - The intro shows the team in at most 2 lines and the player in 1.
-  - The result screen shows the winner in at most 2 lines and the "+1" pill in 2.
+  - Short labels stay whole: "Rename", "Void", "RANK", "W-L", "1-0", and the projector's "LIVE".
+  - The full names are still saved: renaming and standings are unaffected.
 
 ---
 

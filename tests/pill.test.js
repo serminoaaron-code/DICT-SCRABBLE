@@ -124,3 +124,9 @@ test('not playing', () => {
   assert.strictEqual(Pill.state(fin, 'A', 6000), null);
   assert.strictEqual(Pill.state(null, 'A', 6000), null);
 });
+
+test('a long opponent name is cut to 25 characters + "…" in the pill', () => {
+  const r = started();
+  r.seats.A.name = 'w'.repeat(40);
+  assert.strictEqual(Pill.state(r, 'B', 21000).text, 'w'.repeat(25) + "…'s turn");
+});

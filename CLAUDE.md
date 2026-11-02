@@ -44,11 +44,12 @@ Routes: `#` = join page · `#room=CODE` = room · `#host` = host dashboard (pass
 
 ## Architecture
 
-Script load order (in `index.html`): `theme.js → sound.js → scenes.js` (in `<head>`, so the theme applies before first paint) `→ engine.js → match.js → dictionary.js → env.js → pill.js → celebrate.js → director.js → rack.js → roomlist.js → layout.js → drag.js → store.js → ui.js → view-host.js → view-room.js → view-scoreboard.js → app.js`.
+Script load order (in `index.html`): `theme.js → sound.js → names.js → scenes.js` (in `<head>`, so the theme applies before first paint) `→ engine.js → match.js → dictionary.js → env.js → pill.js → celebrate.js → director.js → rack.js → roomlist.js → layout.js → drag.js → store.js → ui.js → view-host.js → view-room.js → view-scoreboard.js → app.js`.
 
 | File | Role |
 |---|---|
 | `js/theme.js` | **Pure light/dark resolution** (global `Theme`) plus the `<html data-theme>` / `localStorage scrabble.theme` glue: `resolve`, `init`, `current`, `toggle`. Device `prefers-color-scheme` is the fallback when nothing is stored. |
+| `js/names.js` | **Display names** (global `Names`): `short(name, max = MAX)` shows at most `MAX` (25) characters (code points), then "…". Display only: Firebase keeps full names, and titles / screen-reader text show them. Used by every view, `pill.js`, `scenes.js` and `celebrate.js`; CSS adds a width-based "…" as a safety net (`.nm` inside a sentence, `.nm-btn` for a button). |
 | `js/sound.js` | **Optional sound effects** (global `Sound`), off by default (`localStorage scrabble.sound`): `enabled`, `toggle`, `play(name)` (short Web Audio tones: `turn`, `place`, `accept`, `tier1..4`, `vs`, `coin`, `win`), `buzz()` (a "your turn" vibration), `ready()`, `state()`. The `AudioContext` is created lazily and only after a user gesture (`play()` is silent until then); every gesture resumes a suspended context until it runs. |
 | `js/engine.js` | **Pure Scrabble rules** (global `ScrabbleEngine`): letters, tile bag, `PREMIUM_GRID`, board map, `validatePlacement`, `findWords` (main word + cross-words), `scoreMove` (+50 bingo), `celebrationTier` (total/bingo → 0–4), `ERROR_TEXT`. |
 | `js/match.js` | **Pure room-state transitions** (global `Match`). Every mutator takes a room and returns a *new* room, or `null` to reject: `claimSeat`, `startMatch` (coin toss, intro offset), `applyPlay`, `applyPass`, `resolveTimeUp`, sudden death, `requestAppeal`/`resolveAppeal`, pause/resume, `resign`/`awardWin`/`walkover`/`voidRoom`/`correctResult`. Also `computeStandings`, `roomPhase`, and the fixed constants `INTRO_MS` and `CELEBRATE_MS` (below). |
@@ -69,7 +70,7 @@ Script load order (in `index.html`): `theme.js → sound.js → scenes.js` (in `
 | `js/view-scoreboard.js` | `?view=scoreboard`: the **projector broadcast view** — `Director` auto-features a live room (or idle standings), plays the shared `Scenes`/`Celebrate` scenes at broadcast scale, and respects a host pin. Read-only: it never writes to Firebase. |
 | `js/app.js` | Router (`hashchange`) and the shared 250 ms ticker (`App.onTick`, cleared on every route change); wires the header's theme/sound toggles. |
 
-`engine.js`, `match.js`, `dictionary.js`, `theme.js`, `sound.js`, `pill.js`, `celebrate.js`, `scenes.js`, `director.js`, `rack.js`, `roomlist.js`, `layout.js` and `drag.js` use a small UMD wrapper so they load both as browser globals and via Node `require` (the tests).
+`engine.js`, `match.js`, `dictionary.js`, `theme.js`, `sound.js`, `pill.js`, `celebrate.js`, `scenes.js`, `director.js`, `rack.js`, `roomlist.js`, `layout.js`, `drag.js` and `names.js` use a small UMD wrapper so they load both as browser globals and via Node `require` (the tests).
 
 ### Visual tokens and contrast (`css/style.css`, `css/fx.css`)
 - Brand and theme colours are CSS custom properties on `:root` and the `html[data-theme="light"|"dark"]` blocks (`--navy`, `--blue`, `--sky`, `--red`, `--yellow`, `--green`, `--cream`; `--bg`, `--surface`, `--text`, `--muted`). Use these, not new hard-coded colours.
@@ -124,7 +125,7 @@ This project uses the **Superpowers** plugin (`superpowers@claude-plugins-offici
 | New feature, change in game rules or behaviour, UI addition | `superpowers:brainstorming` → `superpowers:writing-plans` → `superpowers:executing-plans` (or `superpowers:subagent-driven-development` for plans whose tasks are independent of each other) |
 | Bug, unexpected behaviour, desync between clients | `superpowers:systematic-debugging`: reproduce it, find the root cause and state it before proposing a fix. No guess-and-patch. **After the fix, add a QA re-test entry to `docs/important-docs/bugs-fixed.md`** (template at the end of that file; plain-language steps a playtester can follow). |
 | Starting a feature branch | `superpowers:using-git-worktrees` (or at least `git switch -c feat/…` off `main`) |
-| Rules or room logic (`engine.js`, `match.js`, `dictionary.js`, `pill.js`, `celebrate.js`, `director.js`, `theme.js`, `sound.js`, `rack.js`, `roomlist.js`, `layout.js`, `drag.js`) | `superpowers:test-driven-development`: write the failing test in `tests/` first |
+| Rules or room logic (`engine.js`, `match.js`, `dictionary.js`, `pill.js`, `celebrate.js`, `director.js`, `theme.js`, `sound.js`, `rack.js`, `roomlist.js`, `layout.js`, `drag.js`, `names.js`) | `superpowers:test-driven-development`: write the failing test in `tests/` first |
 | Before saying anything is done or fixed | `superpowers:verification-before-completion`: unit tests, plus the browser (2+ windows for multiplayer). Show the evidence. |
 | Work is finished | `/security-review`, then `superpowers:requesting-code-review`, then `superpowers:finishing-a-development-branch` to open the PR |
 | Responding to PR feedback | `superpowers:receiving-code-review` |
@@ -146,6 +147,6 @@ Infrastructure findings (Firebase rules, auth, hosting) belong to DevOps. Note t
 ## Conventions when editing
 
 - Firebase **v8** API style only. All paths under `scrabble/`.
-- User-supplied strings (team names, player names, labels, words) go through `UI.escapeHtml()` before they're put into `innerHTML`. Names are capped at 40 characters.
+- User-supplied strings (team names, player names, labels, words) go through `UI.escapeHtml()` before they're put into `innerHTML`. Names are capped at 40 characters when entered, and **shown** with `Names.short()` (25 characters, then "…"), on one line; keep the full name in a `title`.
 - Use the CSS custom properties in `:root` (`--navy`, `--blue`, `--sky`, `--red`, `--yellow`, `--green`, `--cream`, `--bg`, `--surface`, `--text`, `--muted`, `--sq-*`) rather than new hard-coded colours — see "Visual tokens and contrast" above. Breakpoints: 900px (dashboard stacks) and 480px (phone).
 - Fair play only **warns** the host (screen-leave counter); there are no automatic penalties. "Host decides" is the rule for disputes: appeals, walkover/void, award win.

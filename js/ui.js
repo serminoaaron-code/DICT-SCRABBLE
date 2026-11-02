@@ -36,7 +36,7 @@
     el.innerHTML = `<table class="standings">
       <thead><tr><th>Rank</th><th>Team</th><th>W-L</th><th>Pts</th></tr></thead>
       <tbody>${standings.map(t => `<tr>
-        <td>${medal(t.rank)}</td><td>${escapeHtml(t.name)}</td><td>${t.wins}-${t.losses}</td><td class="pts">${t.points}</td>
+        <td>${medal(t.rank)}</td><td title="${escapeHtml(t.name)}">${escapeHtml(root.Names ? root.Names.short(t.name) : t.name)}</td><td>${t.wins}-${t.losses}</td><td class="pts">${t.points}</td>
       </tr>`).join('')}</tbody></table>`;
   }
 
