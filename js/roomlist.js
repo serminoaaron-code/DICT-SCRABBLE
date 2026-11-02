@@ -1,7 +1,7 @@
 // Pure tabs + pages for the host's room list (feature #8).
 //   tabOf(phase)                    -> 'active' | 'finished' | 'void'
 //   view(sortedRooms, {tab, page}, phaseOf)
-//     -> { tab, counts: {active, finished, void}, items, page, pages }
+//     -> { tab, counts: {active, finished, void, attention}, items, page, pages }
 //        Active is never paged (those rooms need the host's attention); Finished and Void
 //        show PER_PAGE rooms per page, in the order given, and the page is clamped.
 //   pageList(page, pages)           -> page buttons: 1, the last page and page±1, '…' for gaps
@@ -15,6 +15,7 @@
 
   const PER_PAGE = 5;
   const TABS = ['active', 'finished', 'void'];
+  const ATTENTION = ['appeal', 'hostDecision'];
 
   function tabOf(phase) {
     if (phase === 'final') return 'finished';
@@ -26,7 +27,9 @@
     const tab = TABS.includes(sel && sel.tab) ? sel.tab : 'active';
     const groups = { active: [], finished: [], void: [] };
     for (const r of sortedRooms) groups[tabOf(phaseOf(r))].push(r);
-    const counts = { active: groups.active.length, finished: groups.finished.length, void: groups.void.length };
+    // attention: active rooms waiting on the host (an appeal or a tie to award), shown on every tab.
+    const attention = groups.active.filter(r => ATTENTION.includes(phaseOf(r))).length;
+    const counts = { active: groups.active.length, finished: groups.finished.length, void: groups.void.length, attention };
     const list = groups[tab];
     if (tab === 'active') return { tab, counts, items: list, page: 1, pages: 1 };
     const pages = Math.max(1, Math.ceil(list.length / PER_PAGE));

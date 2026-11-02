@@ -187,7 +187,8 @@
         const v = RoomList.view(rooms, { tab: sel.tab, page: sel.page[sel.tab] || 1 }, Match.roomPhase);
         if (v.tab !== 'active') sel.page[v.tab] = v.page; // a page that emptied steps back
         $('#roomTabs').innerHTML = Object.keys(TAB_LABEL).map(t =>
-          `<button type="button" class="tab${t === v.tab ? ' on' : ''}" role="tab" aria-selected="${t === v.tab}" data-tab="${t}">${TAB_LABEL[t]} (${v.counts[t]})</button>`).join('');
+          `<button type="button" class="tab${t === v.tab ? ' on' : ''}" role="tab" aria-selected="${t === v.tab}" data-tab="${t}">${TAB_LABEL[t]} (${v.counts[t]})${t === 'active' && v.counts.attention
+            ? ` <span class="tab-attn" title="Waiting for your decision">⚖️ ${v.counts.attention}</span>` : ''}</button>`).join('');
         $('#roomList').innerHTML = v.items.length ? v.items.map(cardHtml).join('') : `<p class="muted small-text">${TAB_EMPTY[v.tab]}</p>`;
         const pager = $('#roomPager');
         pager.classList.toggle('hidden', v.pages <= 1);

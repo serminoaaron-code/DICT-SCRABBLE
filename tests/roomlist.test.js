@@ -27,7 +27,7 @@ test('tabOf: every running or waiting phase is active; final is finished; void i
 
 test('view: counts per tab; the active tab shows every active room on one page', () => {
   const v = RoomList.view(fixture(), { tab: 'active', page: 4 }, phaseOf);
-  assert.deepStrictEqual(v.counts, { active: 3, finished: 12, void: 1 });
+  assert.deepStrictEqual(v.counts, { active: 3, finished: 12, void: 1, attention: 0 });
   assert.deepStrictEqual(v.items.map(r => r.code), ['L1', 'L2', 'W1']);
   assert.strictEqual(v.page, 1);
   assert.strictEqual(v.pages, 1);
@@ -63,4 +63,15 @@ test('pageList: first, last and the neighbours of the current page, with … for
   assert.deepStrictEqual(RoomList.pageList(5, 20), [1, '…', 4, 5, 6, '…', 20]);
   assert.deepStrictEqual(RoomList.pageList(2, 20), [1, 2, 3, '…', 20]);
   assert.deepStrictEqual(RoomList.pageList(20, 20), [1, '…', 19, 20]);
+});
+
+test('view: counts the active rooms waiting on the host (appeal or tie) on every tab', () => {
+  const rooms = fixture().concat([
+    room('AP', 'live', { game: { pending: { seat: 'A' } } }),
+    room('HD', 'hostDecision')
+  ]);
+  for (const tab of ['active', 'finished', 'void']) {
+    assert.strictEqual(RoomList.view(rooms, { tab, page: 1 }, phaseOf).counts.attention, 2, tab);
+  }
+  assert.strictEqual(RoomList.view(fixture(), { tab: 'finished', page: 1 }, phaseOf).counts.attention, 0);
 });
