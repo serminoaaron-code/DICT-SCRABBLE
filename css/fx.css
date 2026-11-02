@@ -391,11 +391,18 @@ body.bigscreen .fx-tier-3 .fx-title { top: 22%; }
 body.bigscreen .fx-tier-3 .fx-pts { top: 49%; }
 body.bigscreen .fx-tier-3 .fx-word { top: 69%; }
 body.bigscreen.fx-active .bp-top { z-index: 9600; }
+/* turn moments on the projector: the new word drops in, then glows as before (two delays set inline) */
+.bp-board .tile.bp-new.tile-drop { animation: tile-drop 450ms cubic-bezier(.2,1.2,.4,1) both, bp-glow 1.4s ease 2; }
+/* the whose-turn ribbon sits on the 16:9 stage, across the board, at broadcast size */
+body.bigscreen .turn-ribbon { position: absolute; top: 46%; }
+body.bigscreen .tr-band { padding: calc(var(--u) * .9) calc(var(--u) * 2); }
+body.bigscreen .tr-text { font-size: calc(var(--u) * 4.2); }
+body.bigscreen .tr-sd { font-size: calc(var(--u) * 1.2); }
 
 @media (prefers-reduced-motion: reduce) {
   .bp-wipe { transform: none; opacity: 0; background: var(--navy); }
   .bp-wipe.go { animation: bp-fade .7s ease; }
-  .bp-board .tile.bp-new { animation: none; }
+  .bp-board .tile.bp-new, .bp-board .tile.bp-new.tile-drop { animation: none; }
   .bp-corner.in { animation: bp-corner-fade .4s ease both; }
   .bp-items.scroll { animation: none; }
 }

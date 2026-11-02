@@ -58,7 +58,8 @@
       teams: {}, rooms: {}, pinned: null, got: { teams: false, rooms: false, pinned: false },
       dir: Director.init(), sceneId: -1, target: null, shown: null,
       swapTimer: null, wipeTimer: null, roundKey: '', hlCode: null,
-      keys: {}, scores: {}
+      keys: {}, scores: {},
+      boardSeen: null, drop: null, shownAt: 0, ribbonKey: null // turn moments: word drop + ribbon
     };
 
     // ---------- data helpers ----------
@@ -233,6 +234,7 @@
         return;
       }
       const g = room && room.game;
+      noteMove(room);
       const pending = g && g.pending ? g.pending.placements || null : null;
       const key = room ? [room.code, g ? g.moveCount : -1, g ? Object.keys(g.board || {}).length : 0, pending ? JSON.stringify(pending) : ''].join('|') : 'none';
       if (st.keys.board === key) return;
@@ -247,6 +249,54 @@
         const t = board.querySelector(`.sq[data-r="${r}"][data-c="${c}"] .tile`);
         if (t) t.classList.add('bp-new');
       }
+      decorateDrop(board);
+    }
+
+    // Turn moments #10 on the projector: a new play in the room on screen drops its tiles in, staggered
+    // like on the players' screens, then they glow. A room the projector has just cut to shows its board
+    // as it is (the director only delays a highlight when this drop played). The delays come from the
+    // start time, so a redraw mid-drop resumes it instead of restarting it.
+    const DROP_EACH_MS = 450;
+    function noteMove(room) {
+      const g = room && room.game;
+      const prev = st.boardSeen;
+      st.boardSeen = g ? { code: room.code, moveCount: g.moveCount } : null;
+      if (!g || !prev || prev.code !== room.code || g.moveCount !== prev.moveCount + 1) return;
+      const cells = g.lastMove && g.lastMove.type === 'play' ? Celebrate.newCells(g.lastMove) : [];
+      if (cells.length) st.drop = { code: room.code, moveCount: g.moveCount, cells, at: performance.now() };
+    }
+    function decorateDrop(board) {
+      const d = st.drop;
+      if (!d) return;
+      const room = st.rooms[d.code];
+      const elapsed = performance.now() - d.at;
+      if (st.shown !== d.code || !room || !room.game || room.game.moveCount !== d.moveCount || elapsed > Match.DROP_MS + 600) { st.drop = null; return; }
+      const delays = Celebrate.stagger(d.cells.length, Match.DROP_MS, DROP_EACH_MS);
+      d.cells.forEach((cell, i) => {
+        const t = board.querySelector(`.sq[data-r="${cell.r}"][data-c="${cell.c}"] .tile`);
+        if (!t) return;
+        t.classList.add('tile-drop');
+        t.style.animationDelay = `${Math.round(delays[i] - elapsed)}ms, ${Math.round(Match.DROP_MS - 150 - elapsed)}ms`;
+      });
+    }
+
+    // Turn moments #4 on the projector: the whose-turn ribbon (team name, as for a spectator) when the
+    // featured room's turn starts and no scene is playing. A room the projector cut to after its turn
+    // started, or a turn start hidden by a scene for longer than the ribbon window, gets no ribbon.
+    function tickRibbon() {
+      const d = st.dir, code = st.shown;
+      if (!code || code !== d.featured || st.swapTimer || ['idle', 'intro', 'roundStart', 'highlight', 'winner'].includes(d.scene)) return;
+      const room = st.rooms[code];
+      const info = room && Pill.ribbon(named(room), null);
+      if (!info || info.at < st.shownAt) return;
+      const keyed = { ...info, key: code + '|' + info.key };
+      if (!Pill.ribbonDue(keyed, st.ribbonKey, Store.serverNow())) return;
+      st.ribbonKey = keyed.key;
+      Scenes.ribbon(stage, keyed);
+    }
+    function showRoom(code) {
+      if (st.shown !== code) { st.shownAt = Store.serverNow(); Scenes.clearRibbon(); }
+      st.shown = code;
     }
 
     function renderLastMove(room) {
@@ -341,7 +391,8 @@
       if (d.scene === 'highlight' && d.move && room) {
         const seat = d.move.seat;
         st.hlCode = d.featured;
-        Celebrate.show(d.move, { container: stage, scoreEl: () => stage.querySelector(`.bp-score[data-seat="${seat}"]`), mine: false });
+        Celebrate.show(d.move, { container: stage, scoreEl: () => stage.querySelector(`.bp-score[data-seat="${seat}"]`), mine: false,
+          delayMs: d.move.dropped ? Match.DROP_MS : 0 }); // the word drops in first
       } else if (d.scene === 'winner' && room) {
         const w = $('#bigWinner');
         w.classList.remove('hidden');
@@ -378,13 +429,13 @@
         st.swapTimer = setTimeout(() => {
           st.swapTimer = null;
           hideWinner();
-          st.shown = target;
+          showRoom(target);
           render();
           mountScene();
         }, SWAP_MS);
       } else {
         hideWinner();
-        st.shown = target;
+        showRoom(target);
         render();
         mountScene();
       }
@@ -418,6 +469,7 @@
     const u3 = Store.watchPinned(p => { st.pinned = p || null; st.got.pinned = true; onData(); });
     App.onTick(() => {
       step();
+      tickRibbon();
       const room = st.shown ? st.rooms[st.shown] : null;
       el.querySelectorAll('.bp-ticker [data-bigclock]').forEach(n => {
         const r = st.rooms[n.dataset.bigclock];
@@ -434,6 +486,7 @@
       Scenes.clearIntro();
       Scenes.clearRound();
       Scenes.clearResult();
+      Scenes.clearRibbon();
     };
   }
 

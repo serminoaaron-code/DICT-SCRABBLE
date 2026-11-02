@@ -43,6 +43,9 @@ const deepFreeze = o => {
 
 const HL3 = M.CELEBRATE_MS[3] + 300; // Awesome! highlight scene length
 const HL4 = M.CELEBRATE_MS[4] + 300; // IMPOSSIBLE!!! highlight scene length
+// The same in the room already on screen: its word drops in first (turn moments).
+const HL3D = HL3 + M.DROP_MS;
+const HL4D = HL4 + M.DROP_MS;
 
 // ---------- the brief's tests ----------
 
@@ -248,7 +251,7 @@ test('pinned room stays featured; other highlights go to corner', () => {
   assert.strictEqual(s.featured, 'BBB');
 
   // Unpinning goes back to AUTO: BBB has been on screen for over 20 s, so it rotates.
-  s = Director.step(s, rooms, null, 36000 + HL3);
+  s = Director.step(s, rooms, null, 36000 + HL3D);
   assert.strictEqual(s.scene, 'room');
   assert.strictEqual(s.featured, 'AAA');
   assert.strictEqual(s.corner, null);
@@ -275,7 +278,7 @@ test('pinned room finishing returns to auto after winner card', () => {
   s = Director.step(s, rooms, 'BBB', 3000);
   assert.deepStrictEqual(s.queue.map(e => e.type + ':' + e.code), ['end:BBB', 'highlight:AAA', 'highlight:CCC']);
 
-  const t1 = 1000 + HL4;
+  const t1 = 1000 + HL4D;
   s = Director.step(s, rooms, 'BBB', t1);
   assert.strictEqual(s.scene, 'winner');
   assert.strictEqual(s.featured, 'BBB');
@@ -393,13 +396,13 @@ test('a queued start goes ahead of queued highlights (an intro cannot wait)', ()
   let rooms = { AAA: live('AAA'), BBB: live('BBB'), CCC: waiting('CCC') };
   let s = Director.step(Director.init(), rooms, null, 0);
   rooms = { ...rooms, AAA: played(rooms.AAA, 40) };
-  s = Director.step(s, rooms, null, 1000); // highlight AAA until 4300
+  s = Director.step(s, rooms, null, 1000); // highlight AAA (on screen) until 1000 + HL3D
   rooms = { ...rooms, BBB: played(rooms.BBB, 40) };
   s = Director.step(s, rooms, null, 1500);
   rooms = { ...rooms, CCC: live('CCC', { startedAt: 7000 }) };
   s = Director.step(s, rooms, null, 2000);
   assert.deepStrictEqual(s.queue.map(e => e.type + ':' + e.code), ['start:CCC', 'highlight:BBB']);
-  s = Director.step(s, rooms, null, 1000 + HL3);
+  s = Director.step(s, rooms, null, 1000 + HL3D);
   assert.strictEqual(s.scene, 'intro');
   assert.strictEqual(s.featured, 'CCC');
   assert.strictEqual(s.sceneUntil, 7000);
@@ -501,7 +504,7 @@ test('sceneId increases on every new scene, including two highlights in a row in
   rooms = { ...rooms, AAA: played(rooms.AAA, 60) };
   s = Director.step(s, rooms, null, 3000);
   assert.strictEqual(s.sceneId, id1, 'queued, the running scene keeps its id');
-  s = Director.step(s, rooms, null, 2000 + HL3);
+  s = Director.step(s, rooms, null, 2000 + HL3D);
   assert.strictEqual(s.scene, 'highlight');
   assert.strictEqual(s.featured, 'AAA');
   assert.strictEqual(s.move.tier, 4);
@@ -509,13 +512,51 @@ test('sceneId increases on every new scene, including two highlights in a row in
   assert.ok(id2 > id1, 'back-to-back highlights in one room get distinct ids');
 
   // Back to the room: new id; then a rotation: new id.
-  s = Director.step(s, rooms, null, 2000 + HL3 + HL4);
+  s = Director.step(s, rooms, null, 2000 + HL3D + HL4);
   assert.strictEqual(s.scene, 'room');
   const id3 = s.sceneId;
   assert.ok(id3 > id2);
-  s = Director.step(s, rooms, null, 2000 + HL3 + HL4 + 500);
+  s = Director.step(s, rooms, null, 2000 + HL3D + HL4 + 500);
   assert.strictEqual(s.sceneId, id3);
   s = Director.step(s, rooms, null, 40000);
   assert.strictEqual(s.featured, 'BBB');
   assert.ok(s.sceneId > id3, 'rotation is a new scene');
+});
+
+// ---------- turn moments: the word drop delays a highlight in the room on screen ----------
+
+test('a highlight in the featured room waits for the word drop', () => {
+  let rooms = { AAA: live('AAA'), BBB: live('BBB') };
+  let s = Director.step(Director.init(), rooms, null, 0);
+  assert.strictEqual(s.featured, 'AAA');
+  rooms = { ...rooms, AAA: played(rooms.AAA, 40) }; // Awesome! in the room on screen: its tiles drop in first
+  s = Director.step(s, rooms, null, 1000);
+  assert.strictEqual(s.scene, 'highlight');
+  assert.strictEqual(s.sceneUntil, 1000 + M.CELEBRATE_MS[3] + 300 + M.DROP_MS);
+  assert.strictEqual(s.move.dropped, true);
+});
+
+test('a cut-in highlight from another room does not wait for a drop', () => {
+  let rooms = { AAA: live('AAA'), BBB: live('BBB') };
+  let s = Director.step(Director.init(), rooms, null, 0);
+  rooms = { ...rooms, BBB: played(rooms.BBB, 40) }; // the board cuts to BBB with the word already on it
+  s = Director.step(s, rooms, null, 1000);
+  assert.strictEqual(s.featured, 'BBB');
+  assert.strictEqual(s.sceneUntil, 1000 + M.CELEBRATE_MS[3] + 300);
+  assert.strictEqual(s.move.dropped, false);
+});
+
+test('a queued highlight in the featured room plays late, without the drop delay', () => {
+  let rooms = { AAA: live('AAA') };
+  let s = Director.step(Director.init(), rooms, null, 0);
+  rooms = { AAA: played(rooms.AAA, 40) };
+  s = Director.step(s, rooms, null, 1000);
+  const end = s.sceneUntil;
+  rooms = { AAA: played(rooms.AAA, 60) }; // arrives (and drops in) while the first one plays
+  s = Director.step(s, rooms, null, 1500);
+  assert.strictEqual(s.queue.length, 1);
+  s = Director.step(s, rooms, null, end);
+  assert.strictEqual(s.move.tier, 4);
+  assert.strictEqual(s.move.dropped, false);
+  assert.strictEqual(s.sceneUntil, end + HL4);
 });
