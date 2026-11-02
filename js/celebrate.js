@@ -254,6 +254,12 @@
     });
   }
 
+  // Size of the scene's stage: the whole window on phones, the board in the desktop landscape layout.
+  function stageSize(run) {
+    const s = run.stage;
+    return s && s.clientWidth ? { w: s.clientWidth, h: s.clientHeight } : viewport();
+  }
+
   function viewport() {
     return { w: root.innerWidth || 360, h: root.innerHeight || 640 };
   }
@@ -300,7 +306,7 @@
 
   function confetti(run, n, fromCorners) {
     const colors = ['#e1251b', '#ffc20e', '#00a651', '#2e7cf6', '#ffffff', '#ff7ac6'];
-    const { w, h } = viewport();
+    const { w, h } = stageSize(run);
     for (let i = 0; i < n; i++) {
       const p = el('div', 'confetti');
       p.style.background = colors[i % colors.length];
@@ -360,7 +366,7 @@
     stage.insertBefore(el('div', 'fx-dim'), run.content);
     run.content.appendChild(el('div', 'fx-rays'));
     const { pts } = texts(run.content, c, TITLES[3].toUpperCase());
-    const { w, h } = viewport();
+    const { w, h } = stageSize(run);
     for (let i = 0; i < 9; i++) {
       const s = el('div', 'fx-star', '✦');
       s.style.left = (w * 0.08 + Math.random() * w * 0.82) + 'px';

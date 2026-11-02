@@ -331,13 +331,13 @@
   function buildLive(el, ctx) {
     detachLive(ctx.state.ui);
     // Phone-first order: score bar, turn pill, one-line caption, board, rack, actions.
-    // The board comes first in the markup and the rest sits in .live-panel: on phones the panel is
-    // display: contents and CSS order restores the phone column; in the desktop landscape layout
-    // (Layout.QUERY) the board is a square on the left and the panel a column on the right.
+    // The pieces around the board sit in .live-panel and the board follows it, so the page reads
+    // score bar first (screen readers). On phones the panel is display: contents and CSS order gives
+    // the phone column; in the desktop landscape layout (Layout.QUERY) the grid puts the board on
+    // the left and the panel on the right.
     // Temporary boxes (#noticeBox, #rejectBox) are fixed bottom sheets so they never push the board.
     el.innerHTML = `
       <div class="card live-card"><div class="arena" id="liveRoot">
-        <div id="board-container"></div>
         <div class="live-panel" id="livePanel">
         <div class="scorebar">
           <div class="side" id="sideA"></div>
@@ -363,6 +363,7 @@
         <div class="row live-foot" id="liveFoot"><a href="#" class="small-text">← Back to start</a>
           <button class="link small-text hidden" id="stopWatching">Stop watching / take a seat</button></div>
         </div>
+        <div id="board-container"></div>
         <div id="noticeBox" class="sheet sheet-notice"></div>
         <div id="rejectBox" class="sheet sheet-reject"></div>
         <div class="bonus-backdrop hidden" id="bonusBackdrop"><div class="card bonus-card" id="bonusCard" role="dialog" aria-label="Bonus squares">

@@ -80,5 +80,5 @@ All of these should stay sized to the game area, not to a phone-width column. Bo
 
 - The CSS technique: media query plus grid or flex on `.arena`, and how the board size is computed (CSS `min()` with viewport units, or the existing `fitBoard()` taught about landscape).
 - Exact font scaling for labels and tiles, as long as it reads well from 590px up to about 900px.
-- Exact spacing, gaps and panel width within roughly 340–380px.
+- Exact spacing and gaps. The panel stays about 420px wide (see Panel).
 - Whether the slim in-game header changes on desktop. It should not take more height than it does today.
