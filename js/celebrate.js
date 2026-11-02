@@ -194,10 +194,14 @@
     const content = el('div', 'fx-content'); // the area under the score bar, which stays visible
     stage.appendChild(content);
     ov.appendChild(stage);
-    const sc = resolve(opts.scoreEl);
-    const vh = viewport().h;
-    const top = sc && sc.isConnected ? sc.getBoundingClientRect().bottom + 8 : 0;
-    ov.style.setProperty('--fx-top', Math.round(Math.min(Math.max(top, 0), vh * 0.35)) + 'px');
+    // Desktop landscape: the stage sits over the board at board scale (opts.areaEl, Layout.fitStage).
+    // Otherwise (phones, the projector) the content starts under the score bar, as in the mockup.
+    if (!(root.Layout && root.Layout.fitStage(ov, opts.areaEl))) {
+      const sc = resolve(opts.scoreEl);
+      const vh = viewport().h;
+      const top = sc && sc.isConnected ? sc.getBoundingClientRect().bottom + 8 : 0;
+      ov.style.setProperty('--fx-top', Math.round(Math.min(Math.max(top, 0), vh * 0.35)) + 'px');
+    }
     const skip = el('button', 'fx-skip', '✕ Skip');
     skip.type = 'button';
     skip.setAttribute('aria-label', 'Skip celebration');
@@ -250,6 +254,12 @@
     });
   }
 
+  // Size of the scene's stage: the whole window on phones, the board in the desktop landscape layout.
+  function stageSize(run) {
+    const s = run.stage;
+    return s && s.clientWidth ? { w: s.clientWidth, h: s.clientHeight } : viewport();
+  }
+
   function viewport() {
     return { w: root.innerWidth || 360, h: root.innerHeight || 640 };
   }
@@ -258,7 +268,9 @@
   function floatPoints(run, later, end) {
     const { c, opts, reduced } = run.item;
     if (reduced) { releaseScore(run.item.hold, false); return end(0); }
-    const box = opts.container.getBoundingClientRect();
+    // From the middle of the play area: the board in the desktop landscape layout.
+    const onBoard = opts.areaEl && opts.areaEl.isConnected && root.Layout && root.Layout.landscapeNow();
+    const box = (onBoard ? opts.areaEl : opts.container).getBoundingClientRect();
     const vp = viewport();
     const from = {
       x: Math.min(vp.w - 30, Math.max(30, box.left + box.width / 2)),
@@ -294,7 +306,7 @@
 
   function confetti(run, n, fromCorners) {
     const colors = ['#e1251b', '#ffc20e', '#00a651', '#2e7cf6', '#ffffff', '#ff7ac6'];
-    const { w, h } = viewport();
+    const { w, h } = stageSize(run);
     for (let i = 0; i < n; i++) {
       const p = el('div', 'confetti');
       p.style.background = colors[i % colors.length];
@@ -354,7 +366,7 @@
     stage.insertBefore(el('div', 'fx-dim'), run.content);
     run.content.appendChild(el('div', 'fx-rays'));
     const { pts } = texts(run.content, c, TITLES[3].toUpperCase());
-    const { w, h } = viewport();
+    const { w, h } = stageSize(run);
     for (let i = 0; i < 9; i++) {
       const s = el('div', 'fx-star', '✦');
       s.style.left = (w * 0.08 + Math.random() * w * 0.82) + 'px';

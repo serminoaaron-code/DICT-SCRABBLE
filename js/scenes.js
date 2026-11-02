@@ -198,6 +198,7 @@
     };
 
     const ov = el('div', 'fx-overlay fx-intro' + (reduced ? ' fx-reduced' : ''));
+    if (root.Layout) root.Layout.fitStage(ov, opts.areaEl); // desktop landscape: over the board
     const sr = el('div', 'fx-sr', `${teamOf(room, 'A')} versus ${teamOf(room, 'B')}. Coin toss: ${firstTeam} goes first.`);
     sr.setAttribute('role', 'status');
     const stage = el('div', 'fx-stage');

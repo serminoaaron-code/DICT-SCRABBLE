@@ -196,7 +196,19 @@ table.standings tr:first-child td { font-weight: 700; }
 /* Phone-first column: score bar, turn pill, caption, board, rack, actions (spec §5.3). */
 .live-card { padding: 14px; }
 .arena { display: flex; flex-direction: column; align-items: center; gap: 8px; }
-.arena > * { width: 100%; max-width: 520px; }
+.arena > *, .live-panel > * { width: 100%; max-width: 520px; }
+/* The board follows .live-panel in the markup (the page reads score bar first; the desktop landscape
+   layout). On phones the panel is not a box at all, and `order` restores the phone column:
+   score bar, pill, caption, board, rack, actions, host bar, footer. */
+.live-panel { display: contents; }
+.live-panel > .scorebar { order: 1; }
+.live-panel > .pill-row { order: 2; }
+.live-panel > .caption-row { order: 3; }
+.arena > #board-container { order: 4; }
+.live-panel > .rack-row { order: 5; }
+.live-panel > #actions { order: 6; }
+.live-panel > #hostBar { order: 7; }
+.live-panel > #liveFoot { order: 8; }
 
 /* score bar: [chip / ▶ player  score] [match clock] [chip / score  player] */
 .scorebar { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 8px; background: var(--bar); color: #fff; border-radius: 12px; padding: 6px 10px; }
@@ -234,6 +246,7 @@ table.standings tr:first-child td { font-weight: 700; }
 .caption-row .caption-text { min-width: 0; line-height: 16px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* "? Bonuses" (feature #7): a small pill on the right of the caption line. */
 .caption-btn { height: 18px; padding: 0 8px; font-size: 11px; line-height: 14px; font-weight: 800; border-radius: 999px; background: var(--surface); color: var(--text); border: 2px solid var(--line); box-shadow: none; }
+.arena > .bonus-backdrop { width: auto; max-width: none; } /* full window, not the 520px phone column */
 .bonus-backdrop { position: fixed; inset: 0; z-index: 9420; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(11,31,77,.45); }
 .bonus-card { width: 100%; max-width: 340px; padding: 14px; background: var(--bg); color: var(--text); border: 2px solid var(--line); border-radius: 16px; box-shadow: 0 12px 32px rgba(0,0,0,.35); }
 .bonus-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 15px; }
@@ -533,6 +546,27 @@ html[data-theme="dark"] .bp-shape { opacity: .35; }
 
 @media (max-width: 900px) {
   .dash { grid-template-columns: 1fr; }
+}
+
+/* ---- Desktop landscape in-match layout (feature #9) ----
+   Same rule as Layout.QUERY in js/layout.js. The board is the largest square that fits (sized by
+   fitBoard via Layout.boardPx, which also sets --cell and --board-px); the 420px panel sits on
+   its right with the rack and buttons at the bottom, and scrolls by itself if it is taller. */
+@media (min-width: 1024px) and (min-height: 560px) and (orientation: landscape) {
+  body.in-game main { max-width: none; }
+  .arena { display: grid; grid-template-columns: max-content 420px; column-gap: 20px; justify-content: center; align-items: start; }
+  /* only the board and the panel's pieces lose the phone column cap; the fixed sheets keep 520px */
+  .live-panel, .live-panel > * { max-width: none; }
+  .arena > #board-container { grid-column: 1; grid-row: 1; max-width: none; }
+  .live-panel { grid-column: 2; grid-row: 1; display: flex; flex-direction: column; gap: 10px; height: var(--board-px, auto); overflow: auto; }
+  .live-panel > * { order: 0; flex: none; }
+  .live-panel > .rack-row { margin-top: auto; }
+  .live-panel .rack .tile, .live-panel .rack-shuffle { width: 44px; height: 44px; font-size: 20px; }
+  .live-panel .rack .tile .sub { font-size: 10px; }
+  .live-panel .actions-row button { padding: 13px 8px; font-size: 14px; }
+  #board-container .sq { font-size: calc(var(--cell, 30px) * .3); }
+  #board-container .tile { font-size: calc(var(--cell, 30px) * .55); }
+  #board-container .tile .sub { font-size: calc(var(--cell, 30px) * .22); }
 }
 @media (max-width: 480px) {
   main, .site-header { padding: 0 8px; }

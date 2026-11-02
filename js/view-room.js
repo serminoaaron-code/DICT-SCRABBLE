@@ -331,9 +331,14 @@
   function buildLive(el, ctx) {
     detachLive(ctx.state.ui);
     // Phone-first order: score bar, turn pill, one-line caption, board, rack, actions.
+    // The pieces around the board sit in .live-panel and the board follows it, so the page reads
+    // score bar first (screen readers). On phones the panel is display: contents and CSS order gives
+    // the phone column; in the desktop landscape layout (Layout.QUERY) the grid puts the board on
+    // the left and the panel on the right.
     // Temporary boxes (#noticeBox, #rejectBox) are fixed bottom sheets so they never push the board.
     el.innerHTML = `
       <div class="card live-card"><div class="arena" id="liveRoot">
+        <div class="live-panel" id="livePanel">
         <div class="scorebar">
           <div class="side" id="sideA"></div>
           <div class="clock" id="matchClock">0:00</div>
@@ -341,7 +346,6 @@
         </div>
         <div class="pill-row"><div class="pill pill-them" id="statusLine" role="status" aria-live="polite"><span class="pill-text"></span><span class="pill-clock" id="turnClock"></span></div></div>
         <div class="caption-row"><span class="caption-text"><span id="tossLine"></span><span id="lastMove"></span></span><button type="button" id="bonusBtn" class="caption-btn" aria-expanded="false" aria-controls="bonusCard">? Bonuses</button></div>
-        <div id="board-container"></div>
         <div class="rack-row"><div class="rack hidden" id="rack"></div><button type="button" id="shuffleBtn" class="rack-shuffle hidden" aria-label="Shuffle tiles" title="Shuffle tiles">🔀</button></div>
         <div class="actions-row hidden" id="actions">
           <button id="playBtn" class="btn-primary">✅ Play word</button>
@@ -358,6 +362,8 @@
         <div id="hostBar"></div>
         <div class="row live-foot" id="liveFoot"><a href="#" class="small-text">← Back to start</a>
           <button class="link small-text hidden" id="stopWatching">Stop watching / take a seat</button></div>
+        </div>
+        <div id="board-container"></div>
         <div id="noticeBox" class="sheet sheet-notice"></div>
         <div id="rejectBox" class="sheet sheet-reject"></div>
         <div class="bonus-backdrop hidden" id="bonusBackdrop"><div class="card bonus-card" id="bonusCard" role="dialog" aria-label="Bonus squares">
@@ -562,8 +568,21 @@
   function fitBoard(el, ctx) {
     const board = el.querySelector('#board-container');
     const actions = el.querySelector('#actions');
-    if (!board || !actions || !el.querySelector('#liveRoot')) return;
+    const live = el.querySelector('#liveRoot');
+    if (!board || !actions || !live) return;
     board.style.width = '';
+    // Desktop landscape (feature #9): for every viewer the board is the largest square that fits
+    // below its own top edge and left of the panel; letters scale with it (--cell), and the panel
+    // is capped at the board's height (--board-px) so it scrolls by itself instead of the page.
+    if (root.Layout && Layout.landscapeNow()) {
+      const px = Layout.boardPx({ vh: window.innerHeight, top: board.getBoundingClientRect().top, width: live.clientWidth });
+      board.style.width = px + 'px';
+      board.style.setProperty('--cell', (px / 15) + 'px');
+      live.style.setProperty('--board-px', px + 'px');
+      return;
+    }
+    board.style.removeProperty('--cell');
+    live.style.removeProperty('--board-px');
     if (!isSeat(ctx.state.mySeat)) return;
     const gap = 8; // breathing room under the action row
     const over = actions.getBoundingClientRect().bottom + gap - window.innerHeight;
@@ -636,6 +655,7 @@
       Celebrate.show(c, {
         container: el.querySelector('#liveRoot'),
         scoreEl: el.querySelector('#side' + seat + ' .score'),
+        areaEl: el.querySelector('#board-container'),
         mine: seat === ctx.state.mySeat
       });
     }
@@ -659,7 +679,7 @@
     const now = Store.serverNow();
     // While paused, play as if the clocks start after the frozen intro time, then hold it there.
     const sched = frozen ? Object.assign({}, room, { clock: Object.assign({}, c, { startedAt: now + frozen }) }) : room;
-    const played = Scenes.playIntro(el.querySelector('#liveRoot'), sched, now);
+    const played = Scenes.playIntro(el.querySelector('#liveRoot'), sched, now, { areaEl: el.querySelector('#board-container') });
     if (played && frozen) Scenes.holdIntro();
     ui.introKey = played ? key : null;
   }
