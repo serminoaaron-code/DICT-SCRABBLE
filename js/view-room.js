@@ -733,6 +733,12 @@
     const room = ctx.state.room;
     if (!room || !room.clock || !el.querySelector('#liveRoot')) return;
     const now = Store.serverNow();
+    // Turn moments #4: the whose-turn ribbon, once per turn, when its clock starts (not on a refresh).
+    const ribbon = Pill.ribbon(room, ctx.state.mySeat);
+    if (Pill.ribbonDue(ribbon, ctx.state.ui.ribbonKey, now)) {
+      Scenes.ribbon(el.querySelector('#liveRoot'), ribbon);
+      ctx.state.ui.ribbonKey = ribbon.key;
+    }
     const c = room.clock;
     const phase = Match.roomPhase(room);
     const matchMs = c.paused ? c.paused.matchRemainingMs : c.endsAt - now;
@@ -888,6 +894,7 @@
       ui.finalKey = key;
       Celebrate.clear();
       Scenes.clearIntro();
+      Scenes.clearRibbon();
       detachLive(ui);
       const ending = Scenes.endingCelebration(ui.lastSeenMove, room);
       if (room.game) ui.lastSeenMove = room.game.moveCount; // nothing replays on a later rebuild
@@ -1023,6 +1030,7 @@
       document.body.classList.remove('in-game');
       detachLive(ctx.state.ui);
       Scenes.clearIntro();
+      Scenes.clearRibbon();
       Scenes.clearResult();
       if (ctx.state.ui.standings) ctx.state.ui.standings.off();
     }
