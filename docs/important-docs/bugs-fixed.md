@@ -202,6 +202,16 @@ Every bug we've fixed is listed here with steps to **try to make it happen again
 
 ---
 
+### BF-27: A deleted room comes back as an empty "ghost" in the database
+- **Area:** host controls · **Fixed in:** the ghost-presence PR · **Found by:** code review during the UI revamp
+- **Used to happen:** when the host deleted or reset a room while a player or spectator was briefly offline, that device wrote its "I'm here" marker back when it reconnected. That left an empty room entry in the database. Nobody could see it, but it was clutter.
+- **Try to trigger it** (needs someone who can read the playground data, e.g. the developer):
+  1. Start a game with two players and a spectator.
+  2. Turn the spectator's Wi-Fi off (or put the phone in airplane mode).
+  3. The host presses **Reset playground** (or deletes the room).
+  4. Turn the spectator's Wi-Fi back on and wait a few seconds.
+- **Expected now:** the spectator sees "Room not found", and the room is gone from the data for good: no empty entry with only "presence" in it.
+
 ## Turn moments and the big screen
 
 ### BF-23: "Whose turn" ribbon stuck on the left of a laptop screen

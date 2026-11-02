@@ -110,6 +110,9 @@
       const first = !state.loaded;
       state.loaded = true;
       state.room = room;
+      // The room is gone (deleted or reset): stop marking presence in it, which also removes a
+      // presence-only ghost this device may have written from a stale copy on a reconnect.
+      if (room === null) setRole(null);
 
       // Seat taken away by the host?
       const s = state.mySeat;
