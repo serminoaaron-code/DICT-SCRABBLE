@@ -71,8 +71,12 @@
     }
   }
 
-  function renderRack(el, rack, { selectedIndex = null, usedIndices = [], onTile = null } = {}) {
-    el.innerHTML = rack.map((letter, i) => {
+  // order: rack indices in display order (Rack.shuffle); data-i stays the rack index, so
+  // selectedIndex, usedIndices and onTile all keep using rack indices.
+  function renderRack(el, rack, { selectedIndex = null, usedIndices = [], onTile = null, order = null } = {}) {
+    const show = order && order.length === rack.length ? order : rack.map((_, i) => i);
+    el.innerHTML = show.map(i => {
+      const letter = rack[i];
       const used = usedIndices.includes(i);
       const cls = used ? 'used' : (selectedIndex === i ? 'selected' : '');
       return `<div class="tile ${cls}" data-i="${i}">${used ? '' : escapeHtml(letter)}<span class="sub">${used ? '' : (E.LETTER_VALUES[letter] || 0)}</span></div>`;
@@ -97,5 +101,19 @@
     return { render, off() { u1(); u2(); } };
   }
 
-  root.UI = { escapeHtml, formatClock, toast, renderStandings, renderBoard, renderRack, mountStandings };
+  // Body of the "? Bonuses" help card (feature #7). Static copy; the swatches reuse the board's square classes.
+  function bonusHelpHtml() {
+    const row = (cls, label, text) => `<div class="bonus-sw sq ${cls}">${label}</div><div>${text}</div>`;
+    return `<div class="bonus-legend">
+      ${row('tw', LABELS.tw, '<b>Triple word</b>: the whole word scores ×3')}
+      ${row('dw', LABELS.dw, '<b>Double word</b>: the whole word scores ×2')}
+      ${row('tl', LABELS.tl, '<b>Triple letter</b>: that tile scores ×3')}
+      ${row('dl', LABELS.dl, '<b>Double letter</b>: that tile scores ×2')}
+      ${row('center', LABELS.center, '<b>Centre</b>: the first word must cover it (counts as 2W)')}
+      ${row('bingo', '+' + E.BINGO_BONUS, '<b>Bingo</b>: use all 7 tiles in one play')}
+    </div>
+    <p class="bonus-foot">Bonuses count only on the turn a tile first covers them.</p>`;
+  }
+
+  root.UI = { escapeHtml, formatClock, toast, renderStandings, renderBoard, renderRack, mountStandings, bonusHelpHtml };
 })(window);
