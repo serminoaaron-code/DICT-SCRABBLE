@@ -44,7 +44,7 @@ Routes: `#` = join page · `#room=CODE` = room · `#host` = host dashboard (pass
 
 ## Architecture
 
-Script load order (in `index.html`): `theme.js → sound.js → scenes.js` (in `<head>`, so the theme applies before first paint) `→ engine.js → match.js → dictionary.js → env.js → pill.js → celebrate.js → director.js → rack.js → roomlist.js → layout.js → store.js → ui.js → view-host.js → view-room.js → view-scoreboard.js → app.js`.
+Script load order (in `index.html`): `theme.js → sound.js → scenes.js` (in `<head>`, so the theme applies before first paint) `→ engine.js → match.js → dictionary.js → env.js → pill.js → celebrate.js → director.js → rack.js → roomlist.js → layout.js → drag.js → store.js → ui.js → view-host.js → view-room.js → view-scoreboard.js → app.js`.
 
 | File | Role |
 |---|---|
@@ -57,7 +57,8 @@ Script load order (in `index.html`): `theme.js → sound.js → scenes.js` (in `
 | `js/celebrate.js` | **Word celebrations** (global `Celebrate`): a "+N" float for small plays, four overlay tiers (`Not Bad!` / `Cool!` / `Awesome!` / `IMPOSSIBLE!!!`) with a count-up that flies into the score bar. Pure parts (`tierFor`, `detect`, `createQueue`) are Node-testable; `show`/`clear` touch the DOM. Honors `prefers-reduced-motion` (a calm fade card, no shake/flash/confetti/rays). |
 | `js/scenes.js` | **Shared timed scenes** (global `Scenes`), used by both the room and the projector: the VS intro + coin toss, the round-start card, and `renderResult` (winner / respectful / neutral / void result screens). |
 | `js/director.js` | **Pure auto-director for the projector** (global `Director`, spec §5.7): `step(state, rooms, pinned, now)` decides which room is featured and which scene plays (intro/round-start/highlight/winner/idle), esports-observer style — highlights first, then drama (sudden death, last 60 s), then rotation with a minimum dwell; a host pin holds the room. |
-| `js/rack.js` | **Pure local rack order** (global `Rack`) for the 🔀 Shuffle button: `sync(prev, rack)` (keeps this device's order while the rack's letters are unchanged, else back to normal) and `shuffle(order, rng)` (always a different order). The order is rack indices, never written to Firebase. |
+| `js/rack.js` | **Pure local rack order** (global `Rack`) for the 🔀 Shuffle button: `sync(prev, rack)` (keeps this device's order while the rack's letters are unchanged, else back to normal), `shuffle(order, rng)` (always a different order) and `move(order, from, to)` (drag within the rack). The order is rack indices, never written to Firebase. |
+| `js/drag.js` | **Drag-and-drop tiles** (global `Drag`), mouse and touch via Pointer Events: pure `decide({ from, to, myTurn, locked, occupied })` → `place` / `move` / `unplace` / `reorder` / `return`, and `THRESHOLD_PX` (a shorter press stays a tap). Browser-only `attach(rootEl, hooks)` runs the drag (floating `.drag-ghost` built with `textContent`, green/red ring on the target square, the rack making room, click suppression); `view-room.js` supplies the hooks and applies the result to `ui.temp` / `ui.rackOrder`. Nothing is written until Play word. |
 | `js/layout.js` | **Desktop landscape in-match layout** (global `Layout`): `QUERY` (the same media query as `css/style.css`: ≥ 1024×560 and wider than tall), `isLandscape(w, h)`, `boardPx({ vh, top, width })` (board = the largest square below its top edge and beside the 420px panel), `stageBox(rect)`. Browser-only helpers: `landscapeNow()`, `fitStage(overlay, boardEl)` (puts a celebration / intro stage over the board at board scale). |
 | `js/roomlist.js` | **Pure host room-list tabs + pages** (global `RoomList`): `tabOf(phase)` (Active / Finished / Void), `view(sortedRooms, {tab, page}, phaseOf)` (Active never paged; Finished and Void `PER_PAGE` = 5, page clamped), `pageList(page, pages)`. |
 | `js/dictionary.js` | `checkWords()`: 404 = rejected; error/timeout (5 s) = accepted but `unverified`. |
@@ -68,7 +69,7 @@ Script load order (in `index.html`): `theme.js → sound.js → scenes.js` (in `
 | `js/view-scoreboard.js` | `?view=scoreboard`: the **projector broadcast view** — `Director` auto-features a live room (or idle standings), plays the shared `Scenes`/`Celebrate` scenes at broadcast scale, and respects a host pin. Read-only: it never writes to Firebase. |
 | `js/app.js` | Router (`hashchange`) and the shared 250 ms ticker (`App.onTick`, cleared on every route change); wires the header's theme/sound toggles. |
 
-`engine.js`, `match.js`, `dictionary.js`, `theme.js`, `sound.js`, `pill.js`, `celebrate.js`, `scenes.js`, `director.js`, `rack.js`, `roomlist.js` and `layout.js` use a small UMD wrapper so they load both as browser globals and via Node `require` (the tests).
+`engine.js`, `match.js`, `dictionary.js`, `theme.js`, `sound.js`, `pill.js`, `celebrate.js`, `scenes.js`, `director.js`, `rack.js`, `roomlist.js`, `layout.js` and `drag.js` use a small UMD wrapper so they load both as browser globals and via Node `require` (the tests).
 
 ### Visual tokens and contrast (`css/style.css`, `css/fx.css`)
 - Brand and theme colours are CSS custom properties on `:root` and the `html[data-theme="light"|"dark"]` blocks (`--navy`, `--blue`, `--sky`, `--red`, `--yellow`, `--green`, `--cream`; `--bg`, `--surface`, `--text`, `--muted`). Use these, not new hard-coded colours.
@@ -123,7 +124,7 @@ This project uses the **Superpowers** plugin (`superpowers@claude-plugins-offici
 | New feature, change in game rules or behaviour, UI addition | `superpowers:brainstorming` → `superpowers:writing-plans` → `superpowers:executing-plans` (or `superpowers:subagent-driven-development` for plans whose tasks are independent of each other) |
 | Bug, unexpected behaviour, desync between clients | `superpowers:systematic-debugging`: reproduce it, find the root cause and state it before proposing a fix. No guess-and-patch. **After the fix, add a QA re-test entry to `docs/important-docs/bugs-fixed.md`** (template at the end of that file; plain-language steps a playtester can follow). |
 | Starting a feature branch | `superpowers:using-git-worktrees` (or at least `git switch -c feat/…` off `main`) |
-| Rules or room logic (`engine.js`, `match.js`, `dictionary.js`, `pill.js`, `celebrate.js`, `director.js`, `theme.js`, `sound.js`, `rack.js`, `roomlist.js`, `layout.js`) | `superpowers:test-driven-development`: write the failing test in `tests/` first |
+| Rules or room logic (`engine.js`, `match.js`, `dictionary.js`, `pill.js`, `celebrate.js`, `director.js`, `theme.js`, `sound.js`, `rack.js`, `roomlist.js`, `layout.js`, `drag.js`) | `superpowers:test-driven-development`: write the failing test in `tests/` first |
 | Before saying anything is done or fixed | `superpowers:verification-before-completion`: unit tests, plus the browser (2+ windows for multiplayer). Show the evidence. |
 | Work is finished | `/security-review`, then `superpowers:requesting-code-review`, then `superpowers:finishing-a-development-branch` to open the PR |
 | Responding to PR feedback | `superpowers:receiving-code-review` |
