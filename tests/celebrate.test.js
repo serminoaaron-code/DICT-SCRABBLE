@@ -108,8 +108,13 @@ test('durationFor: every overlay tier is fully gone by Match.CELEBRATE_MS[tier] 
     assert.ok(Number.isFinite(d) && d > 0, `tier ${tier}: a positive duration (${d})`);
     assert.ok(d <= M.CELEBRATE_MS[tier], `tier ${tier}: ${d} ms <= CELEBRATE_MS ${M.CELEBRATE_MS[tier]} ms`);
   }
-  // Tier 0 is the small "+N" float: no overlay, and no turn delay (CELEBRATE_MS[0] = 0).
-  assert.ok(Celebrate.durationFor(0) <= 1000, 'tier 0 float lasts at most 1 s');
+  // Tier 0 is the small "+N" float: no overlay; the next turn waits for it (CELEBRATE_MS[0] = 1000).
+  assert.ok(Celebrate.durationFor(0) <= M.CELEBRATE_MS[0], 'tier 0 float ends by CELEBRATE_MS[0]');
+});
+
+test('turn moments: the word drop (DROP_MS 700) and the tier-0 float (1000) are part of the turn delay', () => {
+  assert.strictEqual(M.DROP_MS, 700);
+  assert.strictEqual(M.CELEBRATE_MS[0], 1000);
 });
 
 test('detect cuts long player and team names to 25 characters + "…" (the BY line, the projector corner)', () => {

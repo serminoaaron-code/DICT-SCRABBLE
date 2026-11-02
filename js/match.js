@@ -13,8 +13,12 @@
   const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
   const TURN_MS = 60000;
   const INTRO_MS = 6500; // VS intro 2.6 s + coin flip 1.9 s, then "<TEAM> GOES FIRST!" holds 2 s (Scenes.COIN_RESULT_AT)
-  // Delay (ms) before the next turn's clock starts, indexed by Engine.celebrationTier().
-  const CELEBRATE_MS = [0, 2600, 2600, 3000, 4500];
+  // After a play the next turn's clock starts DROP_MS + CELEBRATE_MS[tier] later (turn moments):
+  // the opponent's word drops in (DROP_MS), its celebration plays (CELEBRATE_MS, indexed by
+  // Engine.celebrationTier(); tier 0 is the 1 s "+N" float), then the "YOUR TURN!" ribbon starts
+  // with the clock, so watching never costs turn time.
+  const DROP_MS = 700;
+  const CELEBRATE_MS = [1000, 2600, 2600, 3000, 4500];
   const SUDDEN_DEATH_MAX_ROUNDS = 3;
   const SEATS = ['A', 'B'];
 
@@ -273,7 +277,7 @@
     }
     const tier = Engine.celebrationTier(m.total, m.bingo);
     const wentOut = g.racks[seat].length === 0 && g.bag.length === 0;
-    return endTurn(r, seat, now, wentOut, CELEBRATE_MS[tier]);
+    return endTurn(r, seat, now, wentOut, DROP_MS + CELEBRATE_MS[tier]);
   }
 
   function applyPlay(room, seat, placements, { now, expectedMoveCount, unverified = false }) {
@@ -454,7 +458,7 @@
   }
 
   return {
-    CODE_ALPHABET, TURN_MS, INTRO_MS, CELEBRATE_MS, SUDDEN_DEATH_MAX_ROUNDS,
+    CODE_ALPHABET, TURN_MS, INTRO_MS, DROP_MS, CELEBRATE_MS, SUDDEN_DEATH_MAX_ROUNDS,
     generateRoomCode, formatCode, normalizeCode, isRoomRecord, createRoom, normalizeRoom,
     claimSeat, setReady, removePlayer, leaveSeat, rejoinSeat, withTeamNames, startMatch,
     prepareMove, applyPlay, applyPass, resolveTimeUp, finalize,

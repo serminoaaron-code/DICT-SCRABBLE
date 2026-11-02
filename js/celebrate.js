@@ -55,7 +55,7 @@
 
   // The approved mockup's length of each tier's scene, in ms (tier 0 is the small "+N" float).
   const NATURAL_MS = [1000, 2600, 2600, 2950, 4950];
-  const FALLBACK_CELEBRATE_MS = [0, 2600, 2600, 3000, 4500];
+  const FALLBACK_CELEBRATE_MS = [1000, 2600, 2600, 3000, 4500];
   function celebrateMs() {
     const M = root.Match || (typeof require === 'function' ? require('./match.js') : null);
     return (M && M.CELEBRATE_MS) || FALLBACK_CELEBRATE_MS;
@@ -64,7 +64,7 @@
   // How long a tier's scene runs, in ms. An overlay (tiers 1-4) is always fully gone by
   // Match.CELEBRATE_MS[tier], the delay before the next turn's clock starts, so a celebration
   // never costs the next player turn time; a timeline longer than that is compressed to fit.
-  // Tier 0 has no overlay and no turn delay: its float keeps its natural length.
+  // Tier 0 has no overlay: its float keeps its natural length (the next turn waits CELEBRATE_MS[0] for it).
   function durationFor(tier) {
     const natural = NATURAL_MS[tier];
     if (!natural) return 0;
