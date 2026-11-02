@@ -90,7 +90,7 @@
   }
 
   document.addEventListener('DOMContentLoaded', () => {
-    Theme.init();
+    // The theme is already applied: js/theme.js does it in <head>, before first paint.
     Store.init();
     playgroundBanner();
     wireHeaderToggles();

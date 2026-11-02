@@ -47,7 +47,8 @@
   }
 
   // Sets document.documentElement.dataset.theme from the stored choice or
-  // the device setting. Call once on boot.
+  // the device setting. Runs by itself when this file loads in <head>
+  // (below), so the page never paints in the wrong theme first.
   function init() {
     const theme = resolve(readStored(), prefersDarkScheme());
     apply(theme);
@@ -68,6 +69,10 @@
     writeStored(next);
     return next;
   }
+
+  // Browser only: <html> already exists while <head> scripts run, so apply the
+  // theme now, before the first paint. Node (the tests) has no document.
+  if (root.document && root.document.documentElement) init();
 
   return { resolve, init, current, toggle };
 });
