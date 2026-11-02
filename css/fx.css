@@ -16,6 +16,13 @@
 .fx-stage > *, .fx-content > * { position: absolute; }
 /* Text and tiles live under the score bar (--fx-top, set from the score element), like the mockup. */
 .fx-stage > .fx-content { left: 0; right: 0; bottom: 0; top: var(--fx-top, 0px); }
+/* Turn moments #10: the opponent's word drops onto the board tile by tile, then a glow sweeps along it.
+   The view sets each tile's animation-delay from the drop's start time, so a redraw resumes it. */
+@keyframes tile-drop { 0% { transform: translateY(-140%) scale(1.35); opacity: 0; } 70% { transform: translateY(4%) scale(1); opacity: 1; } 100% { transform: none; opacity: 1; } }
+@keyframes word-glow { 0%, 100% { box-shadow: 0 2px 3px rgba(0,0,0,.2); } 45% { box-shadow: 0 0 0 3px var(--yellow), 0 0 14px var(--yellow); } }
+.tile.tile-drop { position: relative; z-index: 1; animation: tile-drop 450ms cubic-bezier(.2,1.2,.4,1) both, word-glow 500ms ease both; }
+@media (prefers-reduced-motion: reduce) { .tile.tile-drop { animation: none; } }
+
 /* Desktop landscape (Layout.fitStage): the whole stage sits over the board, at board scale (--k inline). */
 .fx-on-board > .fx-stage { left: var(--fx-left); top: var(--fx-top); width: var(--fx-w); height: var(--fx-h); right: auto; bottom: auto; }
 .fx-on-board .fx-stage > .fx-content { top: 0; }

@@ -615,6 +615,7 @@
       pending: g.pending ? g.pending.placements : null,
       onSquare: (r, c) => onSquare(el, ctx, r, c)
     });
+    decorateDrop(el, ctx); // an opponent's word still dropping in keeps animating across redraws
 
     const rackEl = $('#rack');
     const shuffleBtn = $('#shuffleBtn');
@@ -745,16 +746,47 @@
     const ui = ctx.state.ui;
     if (!room.game) return;
     const c = Celebrate.detect(ui.lastSeenMove, room);
+    // Turn moments #10: a play from the other seat (every play, for spectators and the host) drops
+    // onto the board first; its celebration waits Match.DROP_MS. The mover placed the tiles themselves.
+    const lm = room.game.lastMove;
+    const isNew = ui.lastSeenMove !== null && ui.lastSeenMove !== undefined && room.game.moveCount > ui.lastSeenMove;
+    let dropped = false;
+    if (isNew && lm && lm.type === 'play' && lm.seat !== ctx.state.mySeat) {
+      const cells = Celebrate.newCells(lm);
+      if (cells.length) {
+        ui.drop = { moveCount: room.game.moveCount, cells, at: performance.now() };
+        dropped = true;
+        decorateDrop(el, ctx);
+      }
+    }
     if (c) {
       const seat = c.seat;
       Celebrate.show(c, {
         container: el.querySelector('#liveRoot'),
         scoreEl: el.querySelector('#side' + seat + ' .score'),
         areaEl: el.querySelector('#board-container'),
-        mine: seat === ctx.state.mySeat
+        mine: seat === ctx.state.mySeat,
+        delayMs: dropped ? Match.DROP_MS : 0
       });
     }
     ui.lastSeenMove = room.game.moveCount;
+  }
+
+  // Applies the word drop to the freshly drawn board. The board is redrawn on every room update, so
+  // each tile's animation-delay is set from the drop's start time: a redraw resumes it mid-way.
+  const DROP_EACH_MS = 450;
+  function decorateDrop(el, ctx) {
+    const ui = ctx.state.ui, d = ui.drop, room = ctx.state.room;
+    if (!d) return;
+    const elapsed = performance.now() - d.at;
+    if (!room || !room.game || room.game.moveCount !== d.moveCount || elapsed > Match.DROP_MS + 600) { ui.drop = null; return; }
+    const delays = Celebrate.stagger(d.cells.length, Match.DROP_MS, DROP_EACH_MS);
+    d.cells.forEach((cell, i) => {
+      const t = el.querySelector(`#board-container .sq[data-r="${cell.r}"][data-c="${cell.c}"] .tile`);
+      if (!t) return;
+      t.classList.add('tile-drop');
+      t.style.animationDelay = `${Math.round(delays[i] - elapsed)}ms, ${Math.round(Match.DROP_MS - 150 - elapsed)}ms`;
+    });
   }
 
   // VS intro + coin toss. The first live render (page load, refresh, or the waiting -> live
