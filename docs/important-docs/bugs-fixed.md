@@ -178,6 +178,28 @@ Every bug we've fixed is listed here with steps to **try to make it happen again
   2. Watch the intro on both players and the host without pressing **Skip**.
 - **Expected now:** the coin lands and "<TEAM> GOES FIRST!" stays on screen for about 2 seconds on every device before the board appears. The first player's turn clock starts only after that, about 6.5 seconds after **Start**. The caption under the turn pill names the same team.
 
+### BF-21: "AWESOME!" word looks dark instead of bright yellow
+- **Area:** live game · **Fixed in:** `feat/drag-drop` (QA pass, 2026-11-02) · **Found by:** QA pass
+- **Used to happen:** when a word scored 40–59 points, the big "AWESOME!" title appeared with its dark brown shadow painted over the yellow letters, so the word looked dark. It was most noticeable on laptops, where the celebration is drawn larger.
+- **Try to trigger it:**
+  1. Play a word worth 40 to 59 points, or have the host test it in the playground.
+  2. Watch "AWESOME!" on a laptop, a phone and the projector, in both light and dark mode.
+- **Expected now:** the letters are bright yellow with a brown outline and shadow behind them, and the shine still sweeps across. With reduced motion turned on, a calm yellow card shows instead.
+
+### BF-22: Long team or player names break pages and make phones zoom out
+- **Area:** all pages · **Fixed in:** `feat/drag-drop` (QA pass, 2026-11-02) · **Found by:** QA pass
+- **Used to happen:** a long name with no spaces (e.g. `TEST-wwwwwwwwwwwwwwwwwwwwww`) pushed pages wider than the screen. On phones the browser then zoomed out and everything became tiny. Team chips ran off the screen, "Play for …" buttons spilled over, the host's team dropdowns stretched the dashboard, and the intro and result screens filled up with long wrapped names.
+- **Try to trigger it:**
+  1. Add two teams with 40-character names without spaces, and join with 40-character player names.
+  2. On a phone, and on a laptop, open each of these in turn: the host dashboard (Teams, New room, room tabs, Standings), the seat choice after typing the code, the lobby, the VS intro, the game, and the result screen for winner, other player and host.
+- **Expected now:**
+  - Nothing is wider than the screen and phones never zoom out.
+  - Team chips end in "…".
+  - Long names in buttons, lists and standings wrap inside their box.
+  - Short labels stay whole: "Rename", "Void", "RANK", "W-L", "1-0".
+  - The intro shows the team in at most 2 lines and the player in 1.
+  - The result screen shows the winner in at most 2 lines and the "+1" pill in 2.
+
 ---
 
 ## Scrabble rules

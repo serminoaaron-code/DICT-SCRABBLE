@@ -70,7 +70,9 @@ html[data-theme="dark"] {
 }
 
 * { box-sizing: border-box; font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-body { margin: 0; background: var(--bg); color: var(--text); min-height: 100vh; padding-bottom: 40px; }
+/* overflow-wrap: anywhere is the safety net for long names with no spaces (e.g. "TEST-wwwwwwww…"):
+   a word that can't fit breaks instead of pushing the page wider than the screen (phones zoom out). */
+body { margin: 0; background: var(--bg); color: var(--text); min-height: 100vh; padding-bottom: 40px; overflow-wrap: anywhere; }
 a { color: var(--text); }
 
 h1, h2, h3, .disp { font-family: 'Archivo Black', Impact, sans-serif; }
@@ -82,6 +84,11 @@ body::after { width: 240px; height: 240px; left: -90px; bottom: -90px; backgroun
 html[data-theme="dark"] body::before, html[data-theme="dark"] body::after { opacity: .35; }
 
 button, input, select { font: inherit; padding: 11px 16px; border-radius: 12px; border: 0; outline: none; }
+select { max-width: 100%; text-overflow: ellipsis; } /* a long team name in the list never widens the form */
+/* Buttons: break-word (not the page's "anywhere") keeps a button at least as wide as its longest word,
+   so a long name beside it can't squeeze "Rename" into "Rena/me"; a button holding a long name is
+   capped at its row's width and wraps inside. */
+button { overflow-wrap: break-word; max-width: 100%; }
 button { background: var(--navy); color: #fff; font-weight: 800; cursor: pointer; box-shadow: 0 3px 0 rgba(0,0,0,.22); transition: filter .15s, transform .1s, box-shadow .1s; }
 button:hover { filter: brightness(1.14); }
 button:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(0,0,0,.22); }
@@ -135,7 +142,8 @@ html[data-theme="dark"] .panel, html[data-theme="dark"] .card { box-shadow: 0 10
 .warn-line .muted { color: var(--red-ink); }
 
 /* chips: team colour tags, consistent everywhere (Team A blue, Team B red) */
-.chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 11px; border-radius: 999px; font-weight: 800; font-size: 12px; letter-spacing: .2px; white-space: nowrap; line-height: 1.5; }
+/* Team chips stay one line; a long team name ends in "…" within the space it has. */
+.chip { display: inline-block; vertical-align: middle; max-width: 100%; overflow: hidden; text-overflow: ellipsis; padding: 4px 11px; border-radius: 999px; font-weight: 800; font-size: 12px; letter-spacing: .2px; white-space: nowrap; line-height: 1.5; }
 .chip-a { background: var(--blue); color: #fff; }
 .chip-b { background: var(--red); color: #fff; }
 
@@ -147,12 +155,13 @@ html[data-theme="dark"] .panel, html[data-theme="dark"] .card { box-shadow: 0 10
 .sheet { position: fixed; left: 50%; bottom: 0; transform: translateX(-50%); z-index: 9400; width: 100%; max-width: 520px; background: var(--surface); color: var(--text); border: 2px solid var(--line); border-bottom: 0; border-radius: 18px 18px 0 0; padding: 14px 16px calc(14px + env(safe-area-inset-bottom, 0px)); box-shadow: 0 -10px 26px rgba(0,0,0,.28); pointer-events: auto; }
 
 /* ---------- host dashboard ---------- */
-.dash { display: grid; grid-template-columns: 1fr 1.5fr 1fr; gap: 16px; align-items: start; }
+/* minmax(0, …): a column never grows to fit its widest content (a dropdown as long as a long team name). */
+.dash { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr) minmax(0, 1fr); gap: 16px; align-items: start; }
 .dash .panel + .panel, .dash .card + .card { margin-top: 0; }
 .list-item { display: flex; justify-content: space-between; align-items: center; gap: 8px; border: 2px solid var(--line); border-radius: 12px; padding: 8px 11px; margin: 6px 0; background: var(--bg); }
 .list-item .name { font-weight: 700; overflow-wrap: anywhere; }
 .room-card { border: 2px solid var(--line); border-radius: 14px; padding: 11px 12px; margin: 10px 0; background: var(--bg); }
-.room-card .teams { font-weight: 800; overflow-wrap: anywhere; }
+.room-card .teams { font-weight: 800; overflow-wrap: anywhere; min-width: 0; max-width: 100%; } /* long team chips end in "…" */
 .room-card .meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
 .room-card .actions { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
 /* Host room list: Active / Finished / Void tabs and the page buttons (feature #8). */
@@ -172,7 +181,10 @@ html[data-theme="dark"] .tabs .tab.on, html[data-theme="dark"] .pager button.on 
 
 table.standings { width: 100%; border-collapse: collapse; }
 table.standings th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .4px; color: var(--muted); border-bottom: 2px solid var(--line); padding: 7px 6px; }
-table.standings td { padding: 8px 6px; border-bottom: 1px solid var(--line); font-size: 14px; overflow-wrap: anywhere; }
+table.standings td { padding: 8px 6px; border-bottom: 1px solid var(--line); font-size: 14px; }
+/* Rank, W-L and points stay whole on one line; only the team name wraps (a long one breaks anywhere). */
+table.standings th, table.standings td { overflow-wrap: normal; white-space: nowrap; }
+table.standings td:nth-child(2) { width: 100%; white-space: normal; overflow-wrap: anywhere; }
 table.standings td.pts { font-weight: 800; color: var(--text); }
 table.standings tr:first-child td { font-weight: 700; }
 
@@ -556,7 +568,8 @@ html[data-theme="dark"] .bp-shape { opacity: .35; }
 .bp-winner .res-lbl { font-size: calc(var(--u) * 1.3); }
 .bp-winner .res-num { font-size: calc(var(--u) * 4); }
 .bp-winner .res-dash { font-size: calc(var(--u) * 3); }
-.bp-winner .res-plus { margin-top: calc(var(--u) * 1.3); font-size: calc(var(--u) * 2.2); padding: calc(var(--u) * .7) calc(var(--u) * 2); }
+.bp-winner .res-plus { margin-top: calc(var(--u) * 1.3); font-size: calc(var(--u) * 2.2); padding: 0 calc(var(--u) * 2);
+  border-top-width: calc(var(--u) * .7); border-bottom-width: calc(var(--u) * .7); }
 .bp-winner .res-plus.long { font-size: calc(var(--u) * 1.8); }
 .bp-winner .res-plus.xlong { font-size: calc(var(--u) * 1.4); }
 .bp-winner .res-best, .bp-winner .res-reason { font-size: calc(var(--u) * 1.4); margin-top: calc(var(--u) * 1); }
@@ -564,7 +577,7 @@ html[data-theme="dark"] .bp-shape { opacity: .35; }
 
 
 @media (max-width: 900px) {
-  .dash { grid-template-columns: 1fr; }
+  .dash { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* ---- Desktop landscape in-match layout (feature #9) ----
