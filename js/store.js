@@ -112,20 +112,26 @@
   }
 
   // role: 'A' | 'B' | 'watch' | 'host'. Removed automatically on disconnect.
+  // The returned stop function also blocks a write still in flight (`stopped`). The existence check can
+  // read this device's stale copy on a reconnect (the room was deleted while it was offline), so a
+  // presence-only "ghost" may be written for a moment; the room view then sees the room is gone and
+  // calls stop, which removes it (fix/ghost-presence, BF-27).
   function setPresence(code, role) {
     const ref = db.ref(`${ROOT}/rooms/${code}/presence/${clientId()}`);
     const connRef = db.ref('.info/connected');
+    let stopped = false;
     const onConn = snap => {
-      if (snap.val() !== true) return;
+      if (stopped || snap.val() !== true) return;
       // Only mark presence in a room that still exists (a reset/deleted room must not be recreated).
       db.ref(`${ROOT}/rooms/${code}/status`).once('value').then(s => {
-        if (!s.exists()) return;
+        if (stopped || !s.exists()) return;
         ref.onDisconnect().remove();
         ref.set(role);
       });
     };
     connRef.on('value', onConn);
     return () => {
+      stopped = true;
       connRef.off('value', onConn);
       ref.onDisconnect().cancel();
       ref.remove();
