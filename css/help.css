@@ -21,9 +21,11 @@
 .gh-role b { font-family: 'Archivo Black', Impact, sans-serif; font-size: 14px; }
 .gh-role .gh-long, .gh-role small { display: none; }
 .gh-role small { color: var(--muted); font-size: 14px; font-weight: 600; }
-.gh-role.gh-player.on { border-color: var(--green); box-shadow: 0 4px 0 var(--green); }
-.gh-role.gh-host.on { border-color: var(--yellow); box-shadow: 0 4px 0 var(--yellow); }
-.gh-role.gh-watch.on { border-color: var(--sky); box-shadow: 0 4px 0 var(--sky); }
+/* the chosen role: a strong border in the text colour (3:1+ in both themes), plus the role's colour underneath */
+.gh-role.on { border-color: var(--text); }
+.gh-role.gh-player.on { box-shadow: 0 4px 0 var(--green); }
+.gh-role.gh-host.on { box-shadow: 0 4px 0 var(--yellow); }
+.gh-role.gh-watch.on { box-shadow: 0 4px 0 var(--sky); }
 
 .gh-panel h2 { margin: 6px 0 12px; font-size: 20px; color: var(--text); }
 .gh-steps { list-style: none; counter-reset: gh; display: grid; grid-template-columns: 1fr; gap: 14px; padding: 0; margin: 0; }

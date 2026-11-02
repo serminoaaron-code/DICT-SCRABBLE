@@ -53,9 +53,9 @@
       player: {
         icon: '🎮', title: "I'm a player", short: 'Player', sub: "I'm playing for my team", h2: 'Playing for your team',
         steps: [
-          step('Join your room', inp('Code', 'K7Q-42M') + inp('Your name', 'Maria') + bt('blue', 'Join'),
+          step('Join your room', inp('Code', 'K7Q-42M') + inp('Your name', 'Maria') + bt('blue', 'Find room'),
             'Your host gives you a 6-character code. Type it on the <b>Home</b> page with your name.'),
-          step('Take your seat, press Ready', bt('blue', 'Sit for NCR') + bt('red', 'Sit for CAR') + bt('green', '✓ Ready'),
+          step('Take your seat, press Ready', bt('blue', 'Play for NCR') + bt('red', 'Play for CAR') + bt('green', "I'm ready"),
             "Pick your team's seat. When both players are ready, the host starts the game."),
           step('Watch the coin toss', '<span class="gh-team">NCR</span><b class="gh-vs">VS</b><span class="gh-team b">CAR</span><span class="gh-coin"></span>',
             'A coin decides who goes first. Get ready: the clocks start right after.'),
@@ -72,7 +72,7 @@
           step('Celebrate (and tease!)', chip('c1', `Not Bad! ${t1}+`) + chip('c2', `Cool! ${t2}+`) + chip('c3', `Awesome! ${t3}+`) + chip('c4', `IMPOSSIBLE!!! ${t4}+`),
             `Bigger words get bigger celebrations: Not Bad! at ${t1}+ points, Cool! ${t2}+, Awesome! ${t3}+, IMPOSSIBLE!!! ${t4}+ or any bingo. Tap 😀 to send your opponent 😠 😂 or 😭 — once every ${f.tauntSec} s.`),
           step('Win for your team', chip('c3', '🏆 +1 NCR'),
-            `When the match clock runs out, the higher score wins and earns <b>+1</b> for the team. <b>Tied?</b> ⚡ Sudden death: up to ${f.sdRounds} rounds more, then the host decides.`)
+            `When the match clock runs out, the higher score wins and earns <b>+1</b> for the team. <b>Tied?</b> ⚡ Sudden death: up to ${f.sdRounds} rounds more, then the host decides. A game also ends early when a player runs out of tiles and the bag is empty.`)
         ],
         tip: "💡 Keep the game on screen during your match (leaving it warns the host). You can refresh any time — you'll be put back in your seat."
       },
@@ -85,10 +85,10 @@
             'Add every team once. The standings update by themselves after each match.'),
           step('Create a match room', inp('NCR vs CAR', '10 min') + bt('blue', 'Create'),
             'Pick the two teams and the match length. You get a room code like <b>K7Q-42M</b> — give it to the two players.'),
-          step('Start the game', chip('c2', '✓ Maria ready') + chip('c2', '✓ Juan ready') + bt('green', '▶ Start'),
+          step('Start the game', chip('c2', '✓ Maria ready') + chip('c2', '✓ Juan ready') + bt('green', '▶ Start match'),
             'When both players are ready, press <b>Start</b>. The coin toss plays, then the clocks run.'),
-          step('Keep it fair', bt('gray', '⏸ Pause') + bt('gray', 'Award win') + bt('red', 'Void') + bt('gray', 'Free seat'),
-            "<b>Pause</b> if something goes wrong. <b>Free seat</b> lets a player switch devices. ⚠️ shows when a player leaves the game screen. You decide any dispute."),
+          step('Keep it fair', bt('gray', '⏸ Pause') + bt('gray', 'Award win → NCR') + bt('red', 'Void') + bt('gray', "Free Maria's seat"),
+            "<b>Pause</b> if something goes wrong. <b>Free … seat</b> lets a player switch devices. ⚠️ shows when a player leaves the game screen. You decide any dispute."),
           step('Answer word appeals', chip('c3', '⚖️ "QI" not found') + bt('green', 'Approve') + bt('red', 'Deny'),
             'When a player asks, the game pauses until you approve or deny the word.'),
           step('Put it on the big screen', bigBar('ROOM K7Q-42M · 4:12'),
@@ -96,12 +96,12 @@
           step('Follow the rooms', bt('ylw', 'Active') + bt('gray', 'Finished') + bt('gray', 'Void'),
             'Active rooms need you. Finished ones count in the standings automatically.')
         ],
-        tip: "💡 You can close the host page during a game — the players' screens keep the clocks running."
+        tip: "💡 You can close the host page during a game — the players' screens keep the clocks running. But come back for ⚖️ word appeals and ties: they wait for you."
       },
       watch: {
         icon: '👀', title: "I'm watching", short: 'Watch', sub: "I'm here to cheer", h2: 'Watching a match',
         steps: [
-          step('Open the room', inp('Code', 'K7Q-42M') + inp('Your name', 'Fan') + bt('blue', 'Join'),
+          step('Open the room', inp('Code', 'K7Q-42M') + inp('Your name', 'Fan') + bt('blue', 'Find room'),
             "Use the same code as the players, on the <b>Home</b> page."),
           step('Choose "Just watch"', bt('gray', '👁️ Just watch'),
             "You see the board, the scores and the clocks live — but you can't touch the tiles."),
