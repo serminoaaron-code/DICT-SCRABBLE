@@ -352,7 +352,7 @@
         </div>
         <div class="pill-row"><div class="pill pill-them" id="statusLine" role="status" aria-live="polite"><span class="pill-text"></span><span class="pill-clock" id="turnClock"></span></div></div>
         <div class="caption-row"><span class="caption-text"><span id="tossLine"></span><span id="lastMove"></span></span><button type="button" id="bonusBtn" class="caption-btn" aria-expanded="false" aria-controls="bonusCard">? Bonuses</button></div>
-        <div class="rack-row"><div class="rack hidden" id="rack"></div><button type="button" id="shuffleBtn" class="rack-shuffle hidden" aria-label="Shuffle tiles" title="Shuffle tiles">🔀</button></div>
+        <div class="rack-row"><span class="rack-bag" aria-hidden="true">👜</span><div class="rack hidden" id="rack"></div><button type="button" id="shuffleBtn" class="rack-shuffle hidden" aria-label="Shuffle tiles" title="Shuffle tiles">🔀</button></div>
         <div class="actions-row hidden" id="actions">
           <button id="playBtn" class="btn-primary">✅ Play word</button>
           <button id="recallBtn" class="secondary">↩ Recall</button>
@@ -426,6 +426,9 @@
     // Drag-and-drop tiles (feature #5), mouse and touch; tap-to-place keeps working.
     ui.dragDetach = Drag.attach($('#liveRoot'), dragHooks(el, ctx));
 
+    // Test hook for the browser checks, in the playground only (never on the real tournament data).
+    if (/_playground$/.test(Store.ROOT)) root.__room = { ui };
+
     $('#passBtn').onclick = async () => {
       const room = ctx.state.room;
       if (!myTurn(room, ctx) || !confirm('Pass your turn?')) return;
@@ -455,9 +458,13 @@
           ui.rejected = { placements, words: m.words, rejectedWords: check.rejected, total: m.total, expectedMoveCount };
           return;
         }
+        // Turn moments #3: which rack tiles this play uses, recorded before the write; the room update
+        // (local first) may arrive before mutateRoom resolves, and the refill needs it.
+        ui.lastUsed = ui.temp.map(t => t.rackIndex);
+        ui.lastRack = room.game.racks[seat].slice();
         const res = await Store.mutateRoom(ctx.code, r => Match.applyPlay(r, seat, placements, { now: Store.serverNow(), expectedMoveCount, unverified: check.unverified }));
         if (res.committed) { ui.temp = []; ui.selected = null; Sound.play('accept'); }
-        else { UI.toast('Move not accepted (time up or the game changed).', 'error'); ui.temp = []; }
+        else { UI.toast('Move not accepted (time up or the game changed).', 'error'); ui.temp = []; ui.lastUsed = null; ui.lastRack = null; }
       } finally {
         ui.busy = false;
         if ($('#playBtn')) $('#playBtn').textContent = '✅ Play word'; // gone if the play ended the game
@@ -473,12 +480,14 @@
         const rej = ui.rejected;
         const seat = ctx.state.mySeat;
         b.disabled = true;
+        ui.lastUsed = ui.temp.map(t => t.rackIndex);
+        ui.lastRack = ctx.state.room.game.racks[seat].slice();
         const res = await Store.mutateRoom(ctx.code, r => Match.requestAppeal(r, seat, rej.placements, {
           now: Store.serverNow(), expectedMoveCount: rej.expectedMoveCount, words: rej.words, rejectedWords: rej.rejectedWords, total: rej.total
         }));
         ui.rejected = null;
         if (res.committed) { ui.temp = []; ui.selected = null; UI.toast('Sent to the host for a decision.', 'ok'); }
-        else UI.toast('Could not send the appeal (time up or the game changed).', 'error');
+        else { UI.toast('Could not send the appeal (time up or the game changed).', 'error'); ui.lastUsed = null; ui.lastRack = null; }
         update(el, ctx.state.room, ctx);
       }
     };
@@ -622,8 +631,18 @@
     rackEl.classList.toggle('hidden', !isSeat(seat));
     shuffleBtn.classList.toggle('hidden', !isSeat(seat));
     if (isSeat(seat)) {
-      // This device's tile order (Shuffle); back to normal when the rack's letters change.
-      ui.rackOrder = Rack.sync(ui.rackOrder, g.racks[seat]);
+      // This device's tile order (Shuffle). After my own play (turn moments #3) the tiles I kept stay
+      // where they were and the drawn ones go into the used slots; any other change resets the order.
+      const rackNow = g.racks[seat];
+      if (ui.rackOrder && ui.lastUsed && ui.lastRack && ui.rackOrder.key !== rackNow.join(',')) {
+        const refilled = Rack.refill(ui.rackOrder, ui.lastRack, rackNow, ui.lastUsed);
+        if (refilled) {
+          ui.rackOrder = refilled;
+          if (refilled.fresh.length) ui.refill = { fresh: refilled.fresh, at: performance.now(), started: false };
+        }
+        ui.lastUsed = null; ui.lastRack = null;
+      }
+      ui.rackOrder = Rack.sync(ui.rackOrder, rackNow);
       const used = mine ? ui.temp.map(t => t.rackIndex) : [];
       if (ui.drag && ui.drag.kind === 'rack') used.push(ui.drag.index); // its slot stays empty while dragged
       UI.renderRack(rackEl, g.racks[seat], {
@@ -633,6 +652,7 @@
         onTile: i => { if (!myTurn(ctx.state.room, ctx) || ui.busy) return; ui.selected = ui.selected === i ? null : i; update(el, ctx.state.room, ctx); }
       });
       shuffleBtn.disabled = g.racks[seat].length - used.length < 2;
+      decorateRefill(el, ctx);
     }
 
     $('#actions').classList.toggle('hidden', !isSeat(seat));
@@ -770,6 +790,34 @@
       });
     }
     ui.lastSeenMove = room.game.moveCount;
+  }
+
+  // Turn moments #3: the tiles just drawn fly out of the tile bag, face-down, and flip face-up into
+  // the slots this player's play used. Like the drop, the delays come from the start time, so the
+  // rack being redrawn on a room update resumes the deal instead of restarting it.
+  const DEAL_TOTAL_MS = 900, DEAL_EACH_MS = 500, DEAL_SHOW_MS = 1100;
+  function decorateRefill(el, ctx) {
+    const ui = ctx.state.ui, f = ui.refill;
+    const bag = el.querySelector('.rack-bag');
+    if (!f) return;
+    const elapsed = performance.now() - f.at;
+    if (elapsed > DEAL_SHOW_MS) { ui.refill = null; if (bag) bag.classList.remove('on'); return; }
+    if (bag && !f.started) { bag.classList.remove('on'); void bag.offsetWidth; bag.classList.add('on'); }
+    f.started = true;
+    if (bag) bag.style.animationDelay = Math.round(-elapsed) + 'ms';
+    const from = bag ? bag.getBoundingClientRect() : null;
+    const delays = Celebrate.stagger(f.fresh.length, DEAL_TOTAL_MS, DEAL_EACH_MS);
+    f.fresh.forEach((idx, i) => {
+      const t = el.querySelector(`#rack .tile[data-i="${idx}"]`);
+      if (!t) return;
+      if (from) {
+        const r = t.getBoundingClientRect();
+        t.style.setProperty('--fx', Math.round(from.left + from.width / 2 - (r.left + r.width / 2)) + 'px');
+        t.style.setProperty('--fy', Math.round(from.top + from.height / 2 - (r.top + r.height / 2)) + 'px');
+      }
+      t.classList.add('tile-dealt');
+      t.style.animationDelay = Math.round(delays[i] - elapsed) + 'ms';
+    });
   }
 
   // Applies the word drop to the freshly drawn board. The board is redrawn on every room update, so
