@@ -86,7 +86,7 @@
       ghost.style.fontSize = p.fontSize;
       // A finger would hide the tile: it floats above the touch point, and lands where it is seen.
       const lift = p.type === 'mouse' ? 0 : Math.round(p.rect.height * 0.8 + 16);
-      drag = { from: p.from, id: p.id, ghost, lift, last: point(ev) };
+      drag = { from: p.from, id: p.id, ghost, lift, w: p.rect.width, last: point(ev) };
       press = null;
       doc.body.appendChild(ghost);
       doc.body.classList.add('tile-dragging');
@@ -97,8 +97,11 @@
     function place(ev) {
       const { x, y } = point(ev);
       drag.last = { x, y };
-      drag.ghost.style.transform = `translate(${x}px, ${y - drag.lift}px) translate(-50%, -50%) scale(1.15)`;
-      highlight(target(x, y - drag.lift));
+      const to = target(x, y - drag.lift);
+      // Over the board it shrinks to the square, so the green / red ring around the square shows.
+      const scale = to.kind === 'square' ? Math.max(0.5, to.el.getBoundingClientRect().width / drag.w) : 1.15;
+      drag.ghost.style.transform = `translate(${x}px, ${y - drag.lift}px) translate(-50%, -50%) scale(${scale})`;
+      highlight(to);
     }
 
     // What lies under (x, y): a board square, the rack (with the insertion position), or nothing.

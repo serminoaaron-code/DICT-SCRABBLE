@@ -287,8 +287,8 @@ table.standings tr:first-child td { font-weight: 700; }
 #rack .tile.room-r { transform: translateX(10px); }
 .drag-ghost { position: fixed; left: 0; top: 0; z-index: 9800; pointer-events: none; margin: 0; box-shadow: 0 12px 24px rgba(0,0,0,.4); will-change: transform; }
 body.tile-dragging, body.tile-dragging * { cursor: grabbing !important; user-select: none; -webkit-user-select: none; }
-.sq.drop-ok { outline: 3px solid var(--green); outline-offset: -3px; z-index: 1; }
-.sq.drop-bad { outline: 3px solid var(--red); outline-offset: -3px; z-index: 1; }
+.sq.drop-ok { outline: 3px solid var(--green); outline-offset: 1px; z-index: 2; }
+.sq.drop-bad { outline: 3px solid var(--red); outline-offset: 1px; z-index: 2; }
 .tile.drop-in { animation: tile-drop-in .22s cubic-bezier(.2,1.6,.4,1); }
 @keyframes tile-drop-in { from { transform: scale(1.25); } to { transform: none; } }
 @media (prefers-reduced-motion: reduce) {
