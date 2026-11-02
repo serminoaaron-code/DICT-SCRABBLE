@@ -33,7 +33,7 @@
 .gh-step::before { content: counter(gh); position: absolute; top: -10px; left: -6px; width: 30px; height: 30px; border-radius: 50%;
   font: 900 15px/30px 'Archivo Black', Impact, sans-serif; text-align: center; color: var(--navy); background: var(--green); box-shadow: 0 3px 0 rgba(0,0,0,.25); }
 .gh-host .gh-step::before { background: var(--yellow); }
-.gh-watch .gh-step::before { background: #6fb0ff; }
+.gh-watch .gh-step::before { background: var(--sky-soft); }
 .gh-step h3 { margin: 2px 0 8px 22px; font-size: 16px; }
 .gh-step p { margin: 8px 0 0; font-size: 15px; line-height: 1.45; }
 .gh-tip { margin: 14px 0 0; background: var(--surface); color: var(--text); border: 2px dashed var(--line); border-radius: 12px; padding: 10px 14px; font-size: 15px; line-height: 1.45; }
@@ -42,22 +42,22 @@
 /* the mini pictures: built from the game's own look */
 .gh-mini { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; max-width: 100%; }
 .gh-tl { display: inline-block; position: relative; width: 30px; height: 32px; border-radius: 5px; background: var(--cream); color: var(--navy);
-  font: 900 16px/32px 'Archivo Black', Impact, sans-serif; text-align: center; box-shadow: 0 3px 0 #c9b78a; }
+  font: 900 16px/32px 'Archivo Black', Impact, sans-serif; text-align: center; box-shadow: 0 3px 0 var(--tile-edge); }
 .gh-tl sub { position: absolute; right: 4px; bottom: 2px; font: 700 10px/1 Inter, sans-serif; }
-.gh-tl.sel { transform: translateY(-5px); box-shadow: 0 0 0 3px var(--yellow), 0 3px 0 #c9b78a; }
+.gh-tl.sel { transform: translateY(-5px); box-shadow: 0 0 0 3px var(--yellow), 0 3px 0 var(--tile-edge); }
 .gh-sq { width: 30px; height: 30px; border-radius: 4px; font: 800 11px/30px Inter, sans-serif; text-align: center; color: var(--navy); }
-.gh-sq.dl { background: var(--sq-dl, #4d90f7); } .gh-sq.tl { background: var(--sq-tl, var(--green)); } .gh-sq.dw, .gh-sq.st { background: var(--sq-dw, var(--yellow)); }
-.gh-sq.tw { background: var(--sq-tw, var(--red)); color: #fff; }
+.gh-sq.dl { background: var(--sq-dl); } .gh-sq.tl { background: var(--sq-tl); } .gh-sq.dw, .gh-sq.st { background: var(--sq-dw); }
+.gh-sq.tw { background: var(--sq-tw); color: #fff; }
 .gh-bt { border-radius: 10px; padding: 6px 10px; font-weight: 800; font-size: 13px; white-space: nowrap; color: #fff; background: var(--blue); }
-.gh-bt.red { background: var(--red); } .gh-bt.green { background: var(--green); color: var(--navy); } .gh-bt.gray { background: #24397a; } .gh-bt.ylw { background: var(--yellow); color: var(--navy); }
+.gh-bt.red { background: var(--red); } .gh-bt.green { background: var(--green); color: var(--navy); } .gh-bt.gray { background: var(--btn-muted); } .gh-bt.ylw { background: var(--yellow); color: var(--navy); }
 .gh-in { flex: 1 1 130px; min-width: 0; border: 2px solid var(--line); border-radius: 10px; padding: 6px 10px; background: var(--bg); color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .gh-in b { color: var(--text); font-family: ui-monospace, Consolas, monospace; letter-spacing: 1px; }
 .gh-chip { padding: 3px 9px; border-radius: 999px; font-weight: 800; font-size: 12px; color: var(--navy); white-space: nowrap; }
-.gh-chip.c1 { background: #9fd3ff; } .gh-chip.c2 { background: #7ee0a6; } .gh-chip.c3 { background: var(--yellow); } .gh-chip.c4 { background: #ff8a80; }
+.gh-chip.c1 { background: var(--tier-1); } .gh-chip.c2 { background: var(--tier-2); } .gh-chip.c3 { background: var(--tier-3); } .gh-chip.c4 { background: var(--tier-4); }
 .gh-team { background: var(--blue); color: #fff; padding: 5px 10px; border-radius: 8px; font: 800 12px Inter, sans-serif; }
 .gh-team.b { background: var(--red); }
 .gh-vs { font-family: 'Archivo Black', Impact, sans-serif; }
-.gh-coin { width: 30px; height: 30px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #ffe28a, var(--yellow) 60%, #c79300); box-shadow: 0 2px 0 #9b7300; animation: gh-flip 1.6s ease-in-out infinite; }
+.gh-coin { width: 30px; height: 30px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, var(--coin-hi), var(--yellow) 60%, var(--coin-lo)); box-shadow: 0 2px 0 var(--coin-edge); animation: gh-flip 1.6s ease-in-out infinite; }
 @keyframes gh-flip { 50% { transform: scaleX(.1); } }
 .gh-pill { background: var(--green); color: var(--navy); border-radius: 999px; padding: 4px 12px; font-weight: 800; font-size: 13px; white-space: nowrap; }
 .gh-face { font-size: 22px; }

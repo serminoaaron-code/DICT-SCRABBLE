@@ -127,6 +127,7 @@
 
     function render() {
       const room = state.room;
+      App.inLiveSeat = false; // set again by the live view's update() while I'm seated in a live game
       document.body.classList.remove('in-game'); // RoomLive.renderLive / renderFinal put it back
 
       if (room === null) {

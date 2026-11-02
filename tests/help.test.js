@@ -1,4 +1,4 @@
-﻿const test = require('node:test');
+const test = require('node:test');
 const assert = require('node:assert');
 const Help = require('../js/view-help.js');
 
@@ -17,4 +17,10 @@ test('roleOf: which guide a hash opens (null when it is not the help page)', () 
 
 test('facts: the numbers on the page come from the game itself', () => {
   assert.deepStrictEqual(Help.facts(), { turnSec: 60, tiers: [8, 15, 25, 40], bingo: 50, tauntSec: 10, sdRounds: 3 });
+});
+
+test('help.css uses the theme tokens (no fixed colours except white)', () => {
+  const css = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'css', 'help.css'), 'utf8');
+  const fixed = (css.match(/#[0-9a-fA-F]{3,8}\b/g) || []).filter(c => !/^#fff(fff)?$/i.test(c));
+  assert.deepStrictEqual(fixed, []);
 });

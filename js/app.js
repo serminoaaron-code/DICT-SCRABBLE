@@ -82,6 +82,8 @@
     const a = document.getElementById('helpLink');
     if (!a) return;
     a.addEventListener('click', ev => {
+      // already on the page: keep the open guide (no new history entry), just go back to the top
+      if (root.Help && Help.roleOf(location.hash.replace(/^#/, ''))) { ev.preventDefault(); root.scrollTo(0, 0); return; }
       if (!root.App.inLiveSeat) return;
       ev.preventDefault();
       root.open(location.pathname + location.search + '#gamehelp', '_blank', 'noopener');

@@ -46,6 +46,12 @@
   const bigBar = live => `<div class="gh-big"><div class="gh-big-row"><span>NCR 112</span><span>vs</span><span>98 CAR</span></div><div class="gh-big-live">● LIVE · ${live}</div></div>`;
   const step = (title, pic, text) => `<li class="gh-step"><h3>${title}</h3>${mini(pic)}<p>${text}</p></li>`;
 
+  // The big screen, keeping a ?db= choice from the address (playground vs live data) so it shows the same games.
+  function bigScreenHref() {
+    const db = root.location ? new URLSearchParams(root.location.search).get('db') : null;
+    return '?view=scoreboard' + (db ? '&db=' + encodeURIComponent(db) : '');
+  }
+
   function guides(f) {
     const turn = f.turnSec === 60 ? '1-minute' : `${f.turnSec}-second`;
     const [t1, t2, t3, t4] = f.tiers;
@@ -92,7 +98,7 @@
           step('Answer word appeals', chip('c3', '⚖️ "QI" not found') + bt('green', 'Approve') + bt('red', 'Deny'),
             'When a player asks, the game pauses until you approve or deny the word.'),
           step('Put it on the big screen', bigBar('ROOM K7Q-42M · 4:12'),
-            'Open <a class="gh-link" href="?view=scoreboard" target="_blank" rel="noopener">the big screen ↗</a> on the projector. It follows the live rooms by itself; <b>📌 Pin</b> a room to keep it on screen.'),
+            `Open <a class="gh-link" href="${bigScreenHref()}" target="_blank" rel="noopener">the big screen ↗</a> on the projector. It follows the live rooms by itself; <b>📌 Pin</b> a room to keep it on screen.`),
           step('Follow the rooms', bt('ylw', 'Active') + bt('gray', 'Finished') + bt('gray', 'Void'),
             'Active rooms need you. Finished ones count in the standings automatically.')
         ],

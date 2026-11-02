@@ -35,6 +35,12 @@
   /* ---- semantic tokens: light theme values, also the fallback before
      Theme.init() sets data-theme on <html> ---- */
   --focus: #0b1f4d; /* the keyboard focus ring: navy on light, yellow on dark (3:1 against the page) */
+  /* fixed pieces that look the same in both themes (tiles, tier chips, the How to play pictures) */
+  --tile-edge: #c9b78a;
+  --tier-1: #9fd3ff; --tier-2: #7ee0a6; --tier-3: var(--yellow); --tier-4: #ff8a80;
+  --btn-muted: #24397a;
+  --sky-soft: #6fb0ff;
+  --coin-hi: #ffe28a; --coin-lo: #c79300; --coin-edge: #9b7300;
   --bg: #ffffff;
   --surface: #f2f5fc;
   --text: #0b1f4d;

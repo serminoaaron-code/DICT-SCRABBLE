@@ -32,7 +32,7 @@ node --test tests/match.test.js         # one file
 node --test --test-name-pattern="sudden death" "tests/*.test.js"   # tests matching a name
 ```
 
-Routes: `#` = join page · `#room=CODE` = room · `#host` = host dashboard · `#gamehelp[=player|host|watch]` = the "How to play" page (password is the `HOST_ADMIN_PASSWORD` constant in `js/view-host.js`, client-side only).
+Routes: `#` = join page · `#room=CODE` = room · `#gamehelp[=player|host|watch]` = the "How to play" page · `#host` = host dashboard (password is the `HOST_ADMIN_PASSWORD` constant in `js/view-host.js`, client-side only).
 
 **Data areas (`js/env.js`):**
 - **Local runs use the playground**, `scrabble_playground/`, and show a yellow banner with **Reset playground**. "Local" means `localhost`, `127.0.0.1`, a LAN IP or `file://`.
