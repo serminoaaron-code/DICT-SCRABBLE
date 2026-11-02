@@ -42,5 +42,37 @@
     return next;
   }
 
-  return { sync, shuffle, move };
+  // After your own play (turn moments #3): the tiles you didn't use keep their places on this
+  // device (Shuffle / drag order included) and the tiles drawn from the bag go into the slots you
+  // used. The server keeps the unused letters first, in order (Engine.removeFromRack removes the
+  // first copy of each played letter), then the drawn ones; kept tiles are matched by letter, so it
+  // doesn't matter which copy of a repeated letter the server removed.
+  //   prev: { key, order } over prevRack, used: rack indices you played.
+  //   -> { key, order, fresh } (fresh: new rack indices that were just drawn), or null when the
+  //      new rack doesn't fit the play (the caller falls back to sync).
+  function refill(prev, prevRack, rack, used) {
+    if (!prev || !Array.isArray(prev.order) || prev.order.length !== prevRack.length) return null;
+    const usedSet = new Set(used);
+    const keptCount = prevRack.length - usedSet.size;
+    if (keptCount < 0 || keptCount > rack.length) return null;
+    const pool = {}; // letter -> new indices of the kept tiles, in order
+    for (let j = 0; j < keptCount; j++) (pool[rack[j]] = pool[rack[j]] || []).push(j);
+    const drawn = [];
+    for (let j = keptCount; j < rack.length; j++) drawn.push(j);
+    const order = [], fresh = [];
+    for (const o of prev.order) {
+      if (usedSet.has(o)) {
+        if (drawn.length) { const d = drawn.shift(); order.push(d); fresh.push(d); }
+        continue; // the bag ran out: this slot goes
+      }
+      const list = pool[prevRack[o]];
+      if (!list || !list.length) return null; // a kept letter is missing: not this play
+      order.push(list.shift());
+    }
+    for (const d of drawn) { order.push(d); fresh.push(d); }
+    if (order.length !== rack.length) return null;
+    return { key: rack.join(','), order, fresh };
+  }
+
+  return { sync, shuffle, move, refill };
 });
