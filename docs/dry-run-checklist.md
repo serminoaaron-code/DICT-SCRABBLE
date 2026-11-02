@@ -1,6 +1,8 @@
 # Dry-run checklist (Mon 2026-11-02 evening)
 
-**Goal:** prove one full tournament evening works with real people on real devices before the event on Tue 2026-11-03.
+**Goal:** prove one full tournament evening works with real people on real devices.
+
+> **Update 2026-11-02:** Tue 2026-11-03 is a **game test day**, not the tournament. The tournament date isn't set yet. Until then, keep testing in the playground and keep shipping game features through PRs.
 
 **Who:** 3–4 people, plus a projector/TV if you have one handy.
 - **Host:** a laptop.
