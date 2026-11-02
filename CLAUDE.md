@@ -44,7 +44,7 @@ Routes: `#` = join page · `#room=CODE` = room · `#host` = host dashboard (pass
 
 ## Architecture
 
-Script load order (in `index.html`): `theme.js → sound.js → scenes.js` (in `<head>`, so the theme applies before first paint) `→ engine.js → match.js → dictionary.js → env.js → pill.js → celebrate.js → director.js → rack.js → roomlist.js → store.js → ui.js → view-host.js → view-room.js → view-scoreboard.js → app.js`.
+Script load order (in `index.html`): `theme.js → sound.js → scenes.js` (in `<head>`, so the theme applies before first paint) `→ engine.js → match.js → dictionary.js → env.js → pill.js → celebrate.js → director.js → rack.js → roomlist.js → layout.js → store.js → ui.js → view-host.js → view-room.js → view-scoreboard.js → app.js`.
 
 | File | Role |
 |---|---|
@@ -58,20 +58,22 @@ Script load order (in `index.html`): `theme.js → sound.js → scenes.js` (in `
 | `js/scenes.js` | **Shared timed scenes** (global `Scenes`), used by both the room and the projector: the VS intro + coin toss, the round-start card, and `renderResult` (winner / respectful / neutral / void result screens). |
 | `js/director.js` | **Pure auto-director for the projector** (global `Director`, spec §5.7): `step(state, rooms, pinned, now)` decides which room is featured and which scene plays (intro/round-start/highlight/winner/idle), esports-observer style — highlights first, then drama (sudden death, last 60 s), then rotation with a minimum dwell; a host pin holds the room. |
 | `js/rack.js` | **Pure local rack order** (global `Rack`) for the 🔀 Shuffle button: `sync(prev, rack)` (keeps this device's order while the rack's letters are unchanged, else back to normal) and `shuffle(order, rng)` (always a different order). The order is rack indices, never written to Firebase. |
+| `js/layout.js` | **Desktop landscape in-match layout** (global `Layout`): `QUERY` (the same media query as `css/style.css`: ≥ 1024×560 and wider than tall), `isLandscape(w, h)`, `boardPx({ vh, top, width })` (board = the largest square below its top edge and beside the 420px panel), `stageBox(rect)`. Browser-only helpers: `landscapeNow()`, `fitStage(overlay, boardEl)` (puts a celebration / intro stage over the board at board scale). |
 | `js/roomlist.js` | **Pure host room-list tabs + pages** (global `RoomList`): `tabOf(phase)` (Active / Finished / Void), `view(sortedRooms, {tab, page}, phaseOf)` (Active never paged; Finished and Void `PER_PAGE` = 5, page clamped), `pageList(page, pages)`. |
 | `js/dictionary.js` | `checkWords()`: 404 = rejected; error/timeout (5 s) = accepted but `unverified`. |
 | `js/store.js` | Firebase wiring (global `Store`): watchers, `mutateRoom`, `createRoom`, presence, team CRUD, `serverNow()` (server-time estimate), `setPinned`/`watchPinned` (`<data root>/broadcast/pinned`, a plain set/read — not a room transaction), `local` (localStorage with fallback). |
 | `js/ui.js` | Shared rendering: `escapeHtml`, `formatClock`, `renderBoard`, `renderRack` (optional display `order` from `Rack`), `renderStandings`, `toast`, `bonusHelpHtml` (the "? Bonuses" card). |
 | `js/view-host.js` | Host login + dashboard (Teams, Fixture rooms with Active / Finished / Void tabs and pages, Standings, Reset, pin). |
-| `js/view-room.js` | Join page, room lobby, live game (`RoomLive`), host control bar, result screen, fair-play reporting. |
+| `js/view-room.js` | Join page, room lobby, live game (`RoomLive`; one column on phones, board + `.live-panel` in the desktop landscape layout), host control bar, result screen, fair-play reporting. |
 | `js/view-scoreboard.js` | `?view=scoreboard`: the **projector broadcast view** — `Director` auto-features a live room (or idle standings), plays the shared `Scenes`/`Celebrate` scenes at broadcast scale, and respects a host pin. Read-only: it never writes to Firebase. |
 | `js/app.js` | Router (`hashchange`) and the shared 250 ms ticker (`App.onTick`, cleared on every route change); wires the header's theme/sound toggles. |
 
-`engine.js`, `match.js`, `dictionary.js`, `theme.js`, `sound.js`, `pill.js`, `celebrate.js`, `scenes.js`, `director.js`, `rack.js` and `roomlist.js` use a small UMD wrapper so they load both as browser globals and via Node `require` (the tests).
+`engine.js`, `match.js`, `dictionary.js`, `theme.js`, `sound.js`, `pill.js`, `celebrate.js`, `scenes.js`, `director.js`, `rack.js`, `roomlist.js` and `layout.js` use a small UMD wrapper so they load both as browser globals and via Node `require` (the tests).
 
 ### Visual tokens and contrast (`css/style.css`, `css/fx.css`)
 - Brand and theme colours are CSS custom properties on `:root` and the `html[data-theme="light"|"dark"]` blocks (`--navy`, `--blue`, `--sky`, `--red`, `--yellow`, `--green`, `--cream`; `--bg`, `--surface`, `--text`, `--muted`). Use these, not new hard-coded colours.
 - **Contrast rule:** a light background always gets dark text and a dark background gets light text, on every pill, chip, badge, button and card. Everything meets **WCAG AA** in both themes — 4.5:1 for normal text, 3:1 for large text/UI (≥ 24px, or ≥ 18.66px bold). A scripted check (`contrast AA in both themes` in `.superpowers/e2e/revamp.js`) sweeps every `.pill, .chip, .badge, button, .card` on the join page, lobby, game screen, result screen and dashboard, in both themes. An element behind its own gradient/image backdrop (the result hero's fixed, hand-checked colours) is exempt from this sweep.
+- **Desktop landscape in-match layout** (`@media (min-width: 1024px) and (min-height: 560px) and (orientation: landscape)`, the same rule as `Layout.QUERY`): the board is a square on the left (sized by `fitBoard()` via `Layout.boardPx`, letters scale with `--cell`) and `.live-panel` (420px) on the right holds the score bar, pill, caption, rack + 🔀 and actions, plus the host bar. On phones `.live-panel` is `display: contents` and CSS `order` keeps the one-column layout. Celebrations and the VS intro get `areaEl` (the board) and sit over it in landscape.
 - `prefers-reduced-motion: reduce` turns off shake, flash, confetti, spinning rays and the coin flip; scenes become simple fades with the same information. Never more than one flash per scene.
 - `Match.INTRO_MS` (`6500`) delays the first turn after `startMatch` for the VS intro + coin toss (VS 2.6 s, coin flip 1.9 s, then "<TEAM> GOES FIRST!" holds 2 s; `Scenes.COIN_RESULT_AT`). `Match.CELEBRATE_MS` (`[0, 2600, 2600, 3000, 4500]`, indexed by celebration tier) delays the start of the next turn's clock, so the celebration never costs the next player turn time (every overlay is gone by then; `Celebrate.durationFor(tier)`). It does not block moves: the opponent may still play during the celebration.
 
@@ -121,7 +123,7 @@ This project uses the **Superpowers** plugin (`superpowers@claude-plugins-offici
 | New feature, change in game rules or behaviour, UI addition | `superpowers:brainstorming` → `superpowers:writing-plans` → `superpowers:executing-plans` (or `superpowers:subagent-driven-development` for plans whose tasks are independent of each other) |
 | Bug, unexpected behaviour, desync between clients | `superpowers:systematic-debugging`: reproduce it, find the root cause and state it before proposing a fix. No guess-and-patch. **After the fix, add a QA re-test entry to `docs/important-docs/bugs-fixed.md`** (template at the end of that file; plain-language steps a playtester can follow). |
 | Starting a feature branch | `superpowers:using-git-worktrees` (or at least `git switch -c feat/…` off `main`) |
-| Rules or room logic (`engine.js`, `match.js`, `dictionary.js`, `pill.js`, `celebrate.js`, `director.js`, `theme.js`, `sound.js`, `rack.js`, `roomlist.js`) | `superpowers:test-driven-development`: write the failing test in `tests/` first |
+| Rules or room logic (`engine.js`, `match.js`, `dictionary.js`, `pill.js`, `celebrate.js`, `director.js`, `theme.js`, `sound.js`, `rack.js`, `roomlist.js`, `layout.js`) | `superpowers:test-driven-development`: write the failing test in `tests/` first |
 | Before saying anything is done or fixed | `superpowers:verification-before-completion`: unit tests, plus the browser (2+ windows for multiplayer). Show the evidence. |
 | Work is finished | `/security-review`, then `superpowers:requesting-code-review`, then `superpowers:finishing-a-development-branch` to open the PR |
 | Responding to PR feedback | `superpowers:receiving-code-review` |
