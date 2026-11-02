@@ -1,0 +1,84 @@
+/* "How to play" page (#gamehelp, js/view-help.js). Theme tokens only, so it follows ☀️/🌙.
+   Mobile first: one column and a compact role row; from 640px the role cards show in full and the
+   steps sit in a grid. The mini pictures are decorative (aria-hidden); the step text says it all. */
+/* its own solid backdrop (like the cards on other pages), so the site's decorative shapes never sit behind text */
+.gh { position: relative; z-index: 1; max-width: 1000px; margin: 0 auto 24px; padding: 4px 12px 16px; background: var(--bg); border-radius: 18px; }
+.gh-hero { text-align: center; padding: 18px 8px 4px; }
+.gh-tiles { display: flex; justify-content: center; gap: 6px; margin-bottom: 8px; }
+.gh-tiles .gh-tl { width: 44px; height: 48px; font-size: 24px; line-height: 48px; animation: gh-drop .6s cubic-bezier(.2,1.3,.4,1) both; }
+.gh-tiles .gh-tl:nth-child(2) { animation-delay: .08s; } .gh-tiles .gh-tl:nth-child(3) { animation-delay: .16s; } .gh-tiles .gh-tl:nth-child(4) { animation-delay: .24s; }
+@keyframes gh-drop { from { transform: translateY(-40px) scale(1.3); opacity: 0; } }
+.gh-hero h1 { margin: 6px 0 4px; font-size: 30px; color: var(--text); }
+.gh-hero p { margin: 0; color: var(--muted); font-size: 15px; }
+.gh-facts { list-style: none; display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; padding: 12px 0 4px; margin: 0; }
+.gh-facts li { background: var(--surface); color: var(--text); border: 2px solid var(--line); border-radius: 999px; padding: 5px 12px; font-size: 14px; font-weight: 700; }
+
+/* role picker: a real tablist. Phones: one compact row; from 640px: full cards. */
+.gh-roles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 14px 0; }
+.gh-role { min-height: 44px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 8px 4px; text-align: center;
+  background: var(--surface); color: var(--text); border: 3px solid var(--line); border-radius: 14px; box-shadow: none; font-size: 14px; }
+.gh-role .gh-ico { font-size: 22px; line-height: 1; }
+.gh-role b { font-family: 'Archivo Black', Impact, sans-serif; font-size: 14px; }
+.gh-role .gh-long, .gh-role small { display: none; }
+.gh-role small { color: var(--muted); font-size: 14px; font-weight: 600; }
+.gh-role.gh-player.on { border-color: var(--green); box-shadow: 0 4px 0 var(--green); }
+.gh-role.gh-host.on { border-color: var(--yellow); box-shadow: 0 4px 0 var(--yellow); }
+.gh-role.gh-watch.on { border-color: var(--sky); box-shadow: 0 4px 0 var(--sky); }
+
+.gh-panel h2 { margin: 6px 0 12px; font-size: 20px; color: var(--text); }
+.gh-steps { list-style: none; counter-reset: gh; display: grid; grid-template-columns: 1fr; gap: 14px; padding: 0; margin: 0; }
+.gh-step { counter-increment: gh; position: relative; background: var(--surface); color: var(--text); border: 2px solid var(--line); border-radius: 14px; padding: 12px 14px; min-width: 0; }
+.gh-step::before { content: counter(gh); position: absolute; top: -10px; left: -6px; width: 30px; height: 30px; border-radius: 50%;
+  font: 900 15px/30px 'Archivo Black', Impact, sans-serif; text-align: center; color: var(--navy); background: var(--green); box-shadow: 0 3px 0 rgba(0,0,0,.25); }
+.gh-host .gh-step::before { background: var(--yellow); }
+.gh-watch .gh-step::before { background: #6fb0ff; }
+.gh-step h3 { margin: 2px 0 8px 22px; font-size: 16px; }
+.gh-step p { margin: 8px 0 0; font-size: 15px; line-height: 1.45; }
+.gh-tip { margin: 14px 0 0; background: var(--surface); color: var(--text); border: 2px dashed var(--line); border-radius: 12px; padding: 10px 14px; font-size: 15px; line-height: 1.45; }
+.gh-link { display: inline-flex; align-items: center; min-height: 44px; padding: 0 4px; color: var(--text); font-weight: 800; text-decoration: underline; }
+
+/* the mini pictures: built from the game's own look */
+.gh-mini { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; max-width: 100%; }
+.gh-tl { display: inline-block; position: relative; width: 30px; height: 32px; border-radius: 5px; background: var(--cream); color: var(--navy);
+  font: 900 16px/32px 'Archivo Black', Impact, sans-serif; text-align: center; box-shadow: 0 3px 0 #c9b78a; }
+.gh-tl sub { position: absolute; right: 4px; bottom: 2px; font: 700 10px/1 Inter, sans-serif; }
+.gh-tl.sel { transform: translateY(-5px); box-shadow: 0 0 0 3px var(--yellow), 0 3px 0 #c9b78a; }
+.gh-sq { width: 30px; height: 30px; border-radius: 4px; font: 800 11px/30px Inter, sans-serif; text-align: center; color: var(--navy); }
+.gh-sq.dl { background: var(--sq-dl, #4d90f7); } .gh-sq.tl { background: var(--sq-tl, var(--green)); } .gh-sq.dw, .gh-sq.st { background: var(--sq-dw, var(--yellow)); }
+.gh-sq.tw { background: var(--sq-tw, var(--red)); color: #fff; }
+.gh-bt { border-radius: 10px; padding: 6px 10px; font-weight: 800; font-size: 13px; white-space: nowrap; color: #fff; background: var(--blue); }
+.gh-bt.red { background: var(--red); } .gh-bt.green { background: var(--green); color: var(--navy); } .gh-bt.gray { background: #24397a; } .gh-bt.ylw { background: var(--yellow); color: var(--navy); }
+.gh-in { flex: 1 1 130px; min-width: 0; border: 2px solid var(--line); border-radius: 10px; padding: 6px 10px; background: var(--bg); color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gh-in b { color: var(--text); font-family: ui-monospace, Consolas, monospace; letter-spacing: 1px; }
+.gh-chip { padding: 3px 9px; border-radius: 999px; font-weight: 800; font-size: 12px; color: var(--navy); white-space: nowrap; }
+.gh-chip.c1 { background: #9fd3ff; } .gh-chip.c2 { background: #7ee0a6; } .gh-chip.c3 { background: var(--yellow); } .gh-chip.c4 { background: #ff8a80; }
+.gh-team { background: var(--blue); color: #fff; padding: 5px 10px; border-radius: 8px; font: 800 12px Inter, sans-serif; }
+.gh-team.b { background: var(--red); }
+.gh-vs { font-family: 'Archivo Black', Impact, sans-serif; }
+.gh-coin { width: 30px; height: 30px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #ffe28a, var(--yellow) 60%, #c79300); box-shadow: 0 2px 0 #9b7300; animation: gh-flip 1.6s ease-in-out infinite; }
+@keyframes gh-flip { 50% { transform: scaleX(.1); } }
+.gh-pill { background: var(--green); color: var(--navy); border-radius: 999px; padding: 4px 12px; font-weight: 800; font-size: 13px; white-space: nowrap; }
+.gh-face { font-size: 22px; }
+.gh-arrow { color: var(--muted); }
+.gh-big { width: 100%; background: var(--navy); color: #fff; border-radius: 10px; padding: 8px 10px; font-size: 12px; }
+.gh-big-row { display: flex; justify-content: space-between; font-family: 'Archivo Black', Impact, sans-serif; font-size: 14px; }
+.gh-big-live { color: var(--yellow); font-size: 11px; margin-top: 4px; }
+
+@media (min-width: 640px) {
+  .gh-hero h1 { font-size: 36px; }
+  .gh-roles { gap: 12px; }
+  .gh-role { align-items: flex-start; text-align: left; padding: 14px; }
+  .gh-role .gh-ico { font-size: 30px; }
+  .gh-role b { font-size: 18px; }
+  .gh-role .gh-long, .gh-role small { display: block; }
+  .gh-role .gh-short { display: none; }
+  .gh-steps { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+}
+
+/* the header link: "How to play", or "Help" on phones */
+#helpLink .nav-short { display: none; }
+@media (max-width: 479px) { #helpLink .nav-long { display: none; } #helpLink .nav-short { display: inline; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .gh-tiles .gh-tl, .gh-coin { animation: none; }
+}

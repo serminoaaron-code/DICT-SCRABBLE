@@ -60,6 +60,8 @@
     }
     document.body.classList.remove('bigscreen');
     const help = root.Help ? Help.roleOf(hash) : null; // #gamehelp, #gamehelp=player|host|watch
+    const helpLink = document.getElementById('helpLink');
+    if (helpLink) { if (help) helpLink.setAttribute('aria-current', 'page'); else helpLink.removeAttribute('aria-current'); }
     if (help) {
       cleanup = HelpView.show(el(), help);
     } else if (hash === 'host') {
