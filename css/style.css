@@ -539,6 +539,9 @@ html[data-theme="dark"] .bp-shape { opacity: .35; }
   padding: calc(var(--u) * .5) calc(var(--u) * 1.2); font-weight: 800; font-size: calc(var(--u) * 1.2); }
 .bp-dot { color: #ff6b61; }
 .bp-badges { position: absolute; right: calc(var(--u) * 2); bottom: calc(var(--u) * 7.3); z-index: 3; display: flex; align-items: center; gap: calc(var(--u) * .6); }
+/* the big screen's "Click to start music" (browsers need one click before any sound) */
+.bp-start { position: absolute; right: calc(var(--u) * 2); bottom: calc(var(--u) * 7.5); z-index: 30; padding: calc(var(--u) * .5) calc(var(--u) * 1.2);
+  border-radius: 999px; background: var(--navy); color: #fff; border: 2px solid var(--yellow); font-weight: 800; font-size: calc(var(--u) * 1.1); pointer-events: none; }
 .bp-mode { border-radius: 99px; padding: calc(var(--u) * .4) calc(var(--u) * 1); font-weight: 800; font-size: calc(var(--u) * 1.1);
   background: var(--surface); color: var(--text); border: 2px solid var(--line); white-space: nowrap; }
 .bp-mode.pinned { background: var(--yellow); color: var(--navy); border-color: var(--yellow); }
