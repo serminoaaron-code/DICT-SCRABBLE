@@ -72,6 +72,15 @@ Every bug we've fixed is listed here with steps to **try to make it happen again
   2. Then close the tab entirely and reopen the room link on the same device.
 - **Expected now:** both times, Player A is back in seat A with the same tiles, and it's still their turn if it was.
 
+### BF-19: Long player name breaks the lobby seat row
+- **Area:** lobby · **Fixed in:** `feat/ui-revamp` (QA pass #1) · **Found by:** QA pass #1
+- **Used to happen:** in the room lobby, a long player name wrapped onto several lines and pushed the team chip, the **Ready** badge and the host's **Remove** button onto new lines.
+- **Try to trigger it:**
+  1. Add a team with a long name (about 40 characters).
+  2. Join its seat with a 40-character player name, e.g. `MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM`, on a phone (or a 360px-wide window).
+  3. Look at the lobby as that player and as the host.
+- **Expected now:** each seat row stays on one line. The long name (and a long team chip) ends in "…", while "(you)", the **Ready / Not ready** badge and **Remove** stay whole. Hovering the name on a laptop shows the full name.
+
 ---
 
 ## Host dashboard and results

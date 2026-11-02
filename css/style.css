@@ -170,6 +170,13 @@ table.standings tr:first-child td { font-weight: 700; }
 .seat { display: flex; justify-content: space-between; align-items: center; gap: 8px; border: 2px solid var(--line); border-radius: 12px; padding: 10px 12px; background: var(--bg); }
 .seat.ready { border-color: var(--green); background: var(--green-bg); color: var(--navy); }
 .seat.empty { border-style: dashed; color: var(--muted); }
+/* Lobby seat row stays on one line: long team/player names end in "…" (full name in the title). */
+.seat-who { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.seat-who .dot { flex: none; margin-right: 0; }
+.seat-who .chip { display: block; flex: 0 1 auto; min-width: 0; max-width: 45%; overflow: hidden; text-overflow: ellipsis; }
+.seat-who .seat-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.seat-who .seat-sep, .seat-who .seat-you { flex: none; }
+.seat > .seat-side { flex: none; flex-wrap: nowrap; }
 .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #9aa5b8; margin-right: 6px; vertical-align: middle; }
 .dot.on { background: var(--green); }
 

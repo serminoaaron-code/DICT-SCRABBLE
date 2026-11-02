@@ -199,11 +199,12 @@
       const seatRow = seat => {
         const s = room.seats[seat];
         const team = chip(seat, nameOf(room, seat));
-        if (!s) return `<div class="seat empty"><span>${team}</span><span class="small-text">Waiting for player…</span></div>`;
+        if (!s) return `<div class="seat empty"><span class="seat-who">${team}</span><span class="small-text seat-side">Waiting for player…</span></div>`;
         const online = Match.isSeatOnline(room, seat);
+        // One line: a long team or player name ends in "…" (full name on hover) instead of wrapping the row.
         return `<div class="seat ${s.ready ? 'ready' : ''}" data-seat-row="${seat}">
-          <span><span class="dot ${online ? 'on' : ''}"></span>${team} · <b>${esc(s.name)}</b>${state.mySeat === seat ? ' (you)' : ''}</span>
-          <span class="row">
+          <span class="seat-who"><span class="dot ${online ? 'on' : ''}"></span>${team}<span class="seat-sep">·</span><b class="seat-name" title="${esc(s.name)}">${esc(s.name)}</b>${state.mySeat === seat ? '<span class="seat-you">(you)</span>' : ''}</span>
+          <span class="row seat-side">
             <span class="badge ${s.ready ? 'live' : ''}">${s.ready ? 'Ready' : 'Not ready'}</span>
             ${host ? `<button class="btn-secondary small" data-remove="${seat}">Remove</button>` : ''}
           </span></div>`;
