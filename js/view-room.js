@@ -322,8 +322,10 @@
   function detachLive(ui) {
     if (ui.onDocClick) document.removeEventListener('click', ui.onDocClick);
     if (ui.onResize) window.removeEventListener('resize', ui.onResize);
+    if (ui.onKey) document.removeEventListener('keydown', ui.onKey);
     ui.onDocClick = null;
     ui.onResize = null;
+    ui.onKey = null;
   }
 
   function buildLive(el, ctx) {
@@ -338,9 +340,9 @@
           <div class="side right" id="sideB"></div>
         </div>
         <div class="pill-row"><div class="pill pill-them" id="statusLine" role="status" aria-live="polite"><span class="pill-text"></span><span class="pill-clock" id="turnClock"></span></div></div>
-        <div class="caption-row"><span id="tossLine"></span><span id="lastMove"></span></div>
+        <div class="caption-row"><span class="caption-text"><span id="tossLine"></span><span id="lastMove"></span></span><button type="button" id="bonusBtn" class="caption-btn" aria-expanded="false" aria-controls="bonusCard">? Bonuses</button></div>
         <div id="board-container"></div>
-        <div class="rack hidden" id="rack"></div>
+        <div class="rack-row"><div class="rack hidden" id="rack"></div><button type="button" id="shuffleBtn" class="rack-shuffle hidden" aria-label="Shuffle tiles" title="Shuffle tiles">🔀</button></div>
         <div class="actions-row hidden" id="actions">
           <button id="playBtn" class="btn-primary">✅ Play word</button>
           <button id="recallBtn" class="secondary">↩ Recall</button>
@@ -358,10 +360,13 @@
           <button class="link small-text hidden" id="stopWatching">Stop watching / take a seat</button></div>
         <div id="noticeBox" class="sheet sheet-notice"></div>
         <div id="rejectBox" class="sheet sheet-reject"></div>
+        <div class="bonus-backdrop hidden" id="bonusBackdrop"><div class="card bonus-card" id="bonusCard" role="dialog" aria-label="Bonus squares">
+          <div class="bonus-head"><b>Bonus squares</b><button type="button" class="bonus-close" aria-label="Close">✕</button></div>
+          ${UI.bonusHelpHtml()}</div></div>
       </div></div>`;
     el.querySelector('#stopWatching').onclick = () => ctx.stopWatching();
     const ui = ctx.state.ui;
-    Object.assign(ui, { temp: [], selected: null, busy: false, rejected: null, seenMove: -1, tried: {}, pillKind: null, noticeHidden: null, sideHtml: {}, lastSeenMove: null });
+    Object.assign(ui, { temp: [], selected: null, busy: false, rejected: null, seenMove: -1, tried: {}, pillKind: null, noticeHidden: null, sideHtml: {}, lastSeenMove: null, rackOrder: null });
     const $ = s => el.querySelector(s);
 
     // ⋯ menu: Leave lives here so it can't be tapped by accident.
@@ -380,6 +385,31 @@
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => fitBoard(el, ctx));
 
     $('#recallBtn').onclick = () => { ui.temp = []; ui.selected = null; ui.rejected = null; update(el, ctx.state.room, ctx); };
+
+    // Shuffle (feature #6): re-orders this device's view of the rack only (nothing is written);
+    // each tile slides from where it was to its new place.
+    $('#shuffleBtn').onclick = () => {
+      const rackEl = $('#rack');
+      if (!ui.rackOrder || ui.rackOrder.order.length < 2) return;
+      const before = {};
+      rackEl.querySelectorAll('.tile').forEach(t => { before[t.dataset.i] = t.getBoundingClientRect().left; });
+      ui.rackOrder = { key: ui.rackOrder.key, order: Rack.shuffle(ui.rackOrder.order) };
+      update(el, ctx.state.room, ctx);
+      if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      rackEl.querySelectorAll('.tile').forEach(t => {
+        const dx = (before[t.dataset.i] ?? 0) - t.getBoundingClientRect().left;
+        if (dx && t.animate) t.animate([{ transform: `translateX(${dx}px)` }, { transform: 'none' }], { duration: 300, easing: 'cubic-bezier(.2,.8,.2,1)' });
+      });
+    };
+
+    // "? Bonuses" help card (feature #7). update() never touches it, so it stays open while the game moves on.
+    const bonus = $('#bonusBackdrop');
+    const bonusBtn = $('#bonusBtn');
+    const setBonus = open => { bonus.classList.toggle('hidden', !open); bonusBtn.setAttribute('aria-expanded', String(open)); };
+    bonusBtn.onclick = () => setBonus(bonus.classList.contains('hidden'));
+    bonus.onclick = ev => { if (!ev.target.closest('.bonus-card') || ev.target.closest('.bonus-close')) setBonus(false); };
+    ui.onKey = ev => { if (ev.key === 'Escape') setBonus(false); };
+    document.addEventListener('keydown', ui.onKey);
 
     $('#passBtn').onclick = async () => {
       const room = ctx.state.room;
@@ -487,13 +517,20 @@
     });
 
     const rackEl = $('#rack');
+    const shuffleBtn = $('#shuffleBtn');
     rackEl.classList.toggle('hidden', !isSeat(seat));
+    shuffleBtn.classList.toggle('hidden', !isSeat(seat));
     if (isSeat(seat)) {
+      // This device's tile order (Shuffle); back to normal when the rack's letters change.
+      ui.rackOrder = Rack.sync(ui.rackOrder, g.racks[seat]);
+      const used = mine ? ui.temp.map(t => t.rackIndex) : [];
       UI.renderRack(rackEl, g.racks[seat], {
         selectedIndex: ui.selected,
-        usedIndices: mine ? ui.temp.map(t => t.rackIndex) : [],
+        usedIndices: used,
+        order: ui.rackOrder.order,
         onTile: i => { if (!myTurn(ctx.state.room, ctx) || ui.busy) return; ui.selected = ui.selected === i ? null : i; update(el, ctx.state.room, ctx); }
       });
+      shuffleBtn.disabled = g.racks[seat].length - used.length < 2;
     }
 
     $('#actions').classList.toggle('hidden', !isSeat(seat));
