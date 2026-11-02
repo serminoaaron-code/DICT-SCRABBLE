@@ -36,3 +36,16 @@ test('ribbonBox: the whose-turn ribbon is centred on the board; full width on a 
   assert.deepStrictEqual(Layout.ribbonBox({ left: 8, top: 205, width: 344, height: 344 }, 360, false), { top: 377, left: 0, width: 360 });
   assert.strictEqual(Layout.ribbonBox(null, 360, false), null, 'no board: the CSS default place');
 });
+
+// ---------- polish pass (C1, C2) ----------
+test('QUERY matches the media query in css/style.css', () => {
+  const css = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'css', 'style.css'), 'utf8');
+  assert.ok(css.includes('@media ' + Layout.QUERY), 'style.css uses @media ' + Layout.QUERY);
+});
+
+test('hasArea: a hidden or 0x0 board gives no stage', () => {
+  assert.strictEqual(Layout.hasArea({ width: 0, height: 0 }), false);
+  assert.strictEqual(Layout.hasArea({ width: 0.5, height: 507 }), false);
+  assert.strictEqual(Layout.hasArea({ width: 507, height: 507 }), true);
+  assert.strictEqual(Layout.hasArea(null), false);
+});

@@ -39,11 +39,16 @@
     return { left: r(rect.left), top: r(rect.top), width: r(rect.width), height: r(rect.height), k: rect.width / 280 };
   }
 
+  // A board that is actually on screen (a hidden one measures 0x0).
+  const hasArea = rect => !!rect && rect.width >= 1 && rect.height >= 1;
+
   // Desktop landscape only: puts an .fx-overlay's stage over areaEl (the board) at board scale.
   // Returns false, and changes nothing, on phones or without a board.
   function fitStage(overlay, areaEl) {
     if (!overlay || !areaEl || !areaEl.isConnected || !landscapeNow()) return false;
-    const b = stageBox(areaEl.getBoundingClientRect());
+    const rect = areaEl.getBoundingClientRect();
+    if (!hasArea(rect)) return false; // a hidden or 0x0 board: no stage
+    const b = stageBox(rect);
     overlay.classList.add('fx-on-board');
     overlay.style.setProperty('--fx-left', b.left + 'px');
     overlay.style.setProperty('--fx-top', b.top + 'px');
@@ -74,5 +79,5 @@
     return true;
   }
 
-  return { QUERY, PANEL_PX, GAP_PX, MARGIN_PX, isLandscape, boardPx, landscapeNow, stageBox, fitStage, ribbonBox, placeRibbon };
+  return { QUERY, PANEL_PX, GAP_PX, MARGIN_PX, isLandscape, boardPx, landscapeNow, stageBox, hasArea, fitStage, ribbonBox, placeRibbon };
 });
