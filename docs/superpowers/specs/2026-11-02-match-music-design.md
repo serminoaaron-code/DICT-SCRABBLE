@@ -20,8 +20,8 @@ A match should feel like a game show. A light, original 8-bit loop under the pla
 - **Order:** the music stops first, then the bell plays. On the winner's device, the existing win fanfare (a sound effect, if 🔊 is on) comes after the bell, not on top of it.
 - **Plays once per result,** when the change to `final` is seen live (keyed by `result.decidedAt`). A refresh or a late join on the result screen never rings it.
 - **No bell for a voided room** *(my call: nothing was won)*.
-- It follows the **🎵 switch** (it's part of the match audio) *(my call)*.
-- **The big screen** rings it when its featured room ends, as the winner card comes up.
+- **It is a sound effect** (the user's rule): it follows the existing **🔇/🔊 sound-effects switch**, like the tile and turn sounds, **not** the 🎵 music switch. Sound effects are off by default on the game pages, so a phone or laptop rings it only when its 🔊 is on.
+- **The big screen** rings it when its featured room ends, as the winner card comes up. The big screen gets its own **🔊 sound-effects switch** next to its 🎵, **on by default** and remembered separately (`localStorage scrabble.sound.bigscreen`), so the hall hears the bell *(my call: today the big screen plays no effects at all)*. The bell is the only effect it plays.
 
 ## How it works
 
@@ -43,7 +43,7 @@ A match should feel like a game show. A light, original 8-bit loop under the pla
 - **A new 🎵 switch** in the header next to 🔇/🔊. It is **on by default**, and the choice is remembered per device (`localStorage scrabble.music`, off only when `'0'`). Its label is "Music on" / "Music off" (`aria-pressed`).
 - **The big screen** gets its **own** 🎵 switch next to its ☀️/🌙 button, remembered separately (`localStorage scrabble.music.bigscreen`), so muting a room view on the host's laptop never silences the projector (the user's answer, builder check).
 - **Starting the big screen:** nobody touches the projector once it's on the wall, so until its first click it shows a small **"🔊 Click to start music"** chip in a corner. It disappears for good on the first click anywhere on the page (the user's answer, builder check). The chip is AA in both themes and never covers the scores. It isn't shown when the big screen's 🎵 is off.
-- **The existing 🔇/🔊 sound effects are unchanged:** still off by default, with their own switch.
+- **🎵 controls the music tracks only** (the user's rule). Every other sound, including the new match-end bell, is a sound effect under the existing **🔇/🔊** switch, which is unchanged: still off by default on the game pages.
 - **Loudness:** quiet, below the sound effects (master gain around 0.12 of full; tuned by ear).
 - **Starting:** browsers only allow sound after a tap or click on the page. The music starts on the first gesture, reusing `sound.js`'s gesture handling, and never shows an error before that.
 
@@ -56,12 +56,13 @@ A match should feel like a game show. A light, original 8-bit loop under the pla
     - `TRACKS` (the two loops as note lists, from the sample);
     - `LAST_MINUTE_MS = 60000`.
   - **Browser only:**
-    - `enabled(key)`, `toggle(key)`, where `key` is `'scrabble.music'` (the game pages) or `'scrabble.music.bigscreen'` (the projector);
+    - `enabled(key)`, `toggle(key)` (music only), where `key` is `'scrabble.music'` (the game pages) or `'scrabble.music.bigscreen'` (the projector);
     - `set(track, level)`, which switches tracks on the next beat;
     - `dip(ms)`, `stop()`.
 
   It uses its own `AudioContext` or shares `Sound`'s, at the builder's choice, and creates nothing before a user gesture.
 - **The room view's 250 ms tick:** `Music.set(Music.trackFor(room, now), Music.levelFor(room, now))`; `renderFinal`, teardown and leaving the room call `Music.stop()`; a word celebration calls `Music.dip(...)`.
+- **The bell** is a new effect in `js/sound.js`, `Sound.play('bell')`, next to `turn`, `place` and `win`. On the big screen, `Sound` reads the big screen's own setting (`scrabble.sound.bigscreen`, on by default).
 - **The big screen:**
   - music follows the **featured** room;
   - the intro, round start and winner scenes stop it;
