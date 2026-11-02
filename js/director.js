@@ -153,10 +153,14 @@
   }
 
   // Play one dequeued event as a scene. Returns true when a timed scene started.
-  function play(s, ev, rooms, pinned, now) {
+  // A highlight in the room already on screen, played in the step its move arrived, waits for the
+  // word to drop in (the view drops it on that render); a cut-in or a late (queued) one shows the board as it is.
+  function play(s, ev, rooms, pinned, now, arrived) {
     if (ev.type === 'highlight') {
+      const dropped = s.featured === ev.code && !!arrived && arrived.includes(ev);
       setFeatured(s, ev.code, now);
-      setScene(s, 'highlight', now + (Match.CELEBRATE_MS[ev.move.tier] || 0) + HIGHLIGHT_PAD_MS, ev.move);
+      const len = (Match.CELEBRATE_MS[ev.move.tier] || 0) + HIGHLIGHT_PAD_MS + (dropped ? Match.DROP_MS : 0);
+      setScene(s, 'highlight', now + len, { ...ev.move, dropped });
       return true;
     }
     if (ev.type === 'end') {
@@ -214,7 +218,7 @@
         if (ev.type === 'highlight') s.corner = { code: ev.code, move: ev.move, until: now + CORNER_MS };
         continue;
       }
-      if (play(s, ev, rooms, pinned, now)) return s;
+      if (play(s, ev, rooms, pinned, now, d.events)) return s;
     }
 
     // 2. Pinned room.

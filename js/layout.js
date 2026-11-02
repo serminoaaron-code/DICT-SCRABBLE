@@ -53,5 +53,26 @@
     return true;
   }
 
-  return { QUERY, PANEL_PX, GAP_PX, MARGIN_PX, isLandscape, boardPx, landscapeNow, stageBox, fitStage };
+  // Where the whose-turn ribbon sits (QA pass): its middle on the board's middle; across the board
+  // on a desktop (like the celebrations), the whole window width on a phone. null = no board.
+  function ribbonBox(boardRect, viewportW, landscape) {
+    if (!boardRect) return null;
+    const top = Math.round(boardRect.top + boardRect.height / 2);
+    if (landscape) return { top, left: Math.round(boardRect.left), width: Math.round(boardRect.width) };
+    return { top, left: 0, width: Math.round(viewportW) };
+  }
+
+  // Browser only: places a .turn-ribbon with ribbonBox (fixed, so viewport px). Returns false without a board.
+  function placeRibbon(ribbonEl, areaEl) {
+    if (!ribbonEl || !areaEl || !areaEl.isConnected) return false;
+    const box = ribbonBox(areaEl.getBoundingClientRect(), root.innerWidth || 0, landscapeNow());
+    if (!box) return false;
+    ribbonEl.classList.add('tr-placed');
+    ribbonEl.style.top = box.top + 'px';
+    ribbonEl.style.left = box.left + 'px';
+    ribbonEl.style.width = box.width + 'px';
+    return true;
+  }
+
+  return { QUERY, PANEL_PX, GAP_PX, MARGIN_PX, isLandscape, boardPx, landscapeNow, stageBox, fitStage, ribbonBox, placeRibbon };
 });

@@ -36,7 +36,7 @@ The app is single-use for the DICT sportsfest. There's no hard deadline pressure
 7. A **broadcast projector view** with an **auto-director** that switches between rooms, and a **host pin**.
 
 **Non-goals**
-- 3D / Three.js. That's the next project (P2), and it will plug into the projector view built here.
+- 3D / Three.js. This was planned as a later project (P2) for the projector, but it was **dropped on 2026-11-02**: a 3D view would cost too much performance, and the 2D revamp and animations already give the audience what it needs.
 - Tailwind, shadcn or any CSS framework or build step.
 - Changing game rules, scoring or tournament results, apart from the small data additions in §7.
 

@@ -545,8 +545,47 @@
     run.later(5000, () => pieces.forEach(c => c.remove()));
   }
 
+  // ---- whose-turn ribbon (turn moments #4) ----
+  // A band sweeps across the middle of the screen and away: green "YOUR TURN!" for the player whose
+  // turn it is, navy "<NAME>'S TURN" for everyone else. Never blocks a tap (pointer-events: none).
+  // info: Pill.ribbon(room, mySeat) -> { text, mine, sudden }.
+  const RIBBON_MS = 1200;
+  let ribbonEl = null, ribbonTimer = null;
+  // areaEl (the board, optional): the ribbon is centred on it (Layout.placeRibbon); without it, the CSS place.
+  function ribbon(container, info, areaEl) {
+    clearRibbon();
+    if (!container || !doc() || !info) return false;
+    const wrap = el('div', 'turn-ribbon' + (info.mine ? ' mine' : '') + (reducedMotion() ? ' fx-reduced' : ''));
+    wrap.setAttribute('role', 'status');
+    wrap.setAttribute('aria-live', 'polite');
+    const band = el('div', 'tr-band');
+    if (info.sudden) band.appendChild(el('div', 'tr-sd', '⚡ SUDDEN DEATH'));
+    const text = el('div', 'tr-text disp');
+    if (info.name) {
+      // A narrow screen cuts the name ("…") and always keeps "'S TURN" readable.
+      text.appendChild(el('span', 'tr-name', info.name));
+      text.appendChild(el('span', 'tr-suf', "'S TURN"));
+    } else {
+      text.textContent = info.text;
+    }
+    band.appendChild(text);
+    wrap.appendChild(band);
+    container.appendChild(wrap);
+    if (areaEl && root.Layout) root.Layout.placeRibbon(wrap, areaEl);
+    ribbonEl = wrap;
+    ribbonTimer = setTimeout(clearRibbon, RIBBON_MS);
+    return true;
+  }
+  function clearRibbon() {
+    clearTimeout(ribbonTimer);
+    ribbonTimer = null;
+    if (ribbonEl) ribbonEl.remove();
+    ribbonEl = null;
+  }
+
   return {
     INTRO_VS_MS, COIN_RESULT_AT, ROUND_MS, introRemaining, playIntro, clearIntro, introSkipped, holdIntro, roundStart, clearRound,
-    RESULT_FRESH_MS, resultViewer, resultReason, bestWordText, resultFresh, endingCelebration, renderResult, clearResult
+    RESULT_FRESH_MS, resultViewer, resultReason, bestWordText, resultFresh, endingCelebration, renderResult, clearResult,
+    RIBBON_MS, ribbon, clearRibbon
   };
 });

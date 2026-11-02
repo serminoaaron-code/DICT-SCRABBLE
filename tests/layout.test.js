@@ -29,3 +29,10 @@ test('boardPx: the largest square that fits below its top edge and beside the pa
 test('stageBox: a celebration / intro stage over the board, in whole px, scaled like the 280px mockup phone', () => {
   assert.deepStrictEqual(Layout.stageBox({ left: 30.4, top: 60, width: 568, height: 568 }), { left: 30, top: 60, width: 568, height: 568, k: 568 / 280 });
 });
+
+test('ribbonBox: the whose-turn ribbon is centred on the board; full width on a phone, across the board on a desktop', () => {
+  const board = { left: 146, top: 113, width: 635, height: 635 };
+  assert.deepStrictEqual(Layout.ribbonBox(board, 1366, true), { top: 431, left: 146, width: 635 });
+  assert.deepStrictEqual(Layout.ribbonBox({ left: 8, top: 205, width: 344, height: 344 }, 360, false), { top: 377, left: 0, width: 360 });
+  assert.strictEqual(Layout.ribbonBox(null, 360, false), null, 'no board: the CSS default place');
+});

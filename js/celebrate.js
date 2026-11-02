@@ -55,7 +55,7 @@
 
   // The approved mockup's length of each tier's scene, in ms (tier 0 is the small "+N" float).
   const NATURAL_MS = [1000, 2600, 2600, 2950, 4950];
-  const FALLBACK_CELEBRATE_MS = [0, 2600, 2600, 3000, 4500];
+  const FALLBACK_CELEBRATE_MS = [1000, 2600, 2600, 3000, 4500];
   function celebrateMs() {
     const M = root.Match || (typeof require === 'function' ? require('./match.js') : null);
     return (M && M.CELEBRATE_MS) || FALLBACK_CELEBRATE_MS;
@@ -64,7 +64,7 @@
   // How long a tier's scene runs, in ms. An overlay (tiers 1-4) is always fully gone by
   // Match.CELEBRATE_MS[tier], the delay before the next turn's clock starts, so a celebration
   // never costs the next player turn time; a timeline longer than that is compressed to fit.
-  // Tier 0 has no overlay and no turn delay: its float keeps its natural length.
+  // Tier 0 has no overlay: its float keeps its natural length (the next turn waits CELEBRATE_MS[0] for it).
   function durationFor(tier) {
     const natural = NATURAL_MS[tier];
     if (!natural) return 0;
@@ -125,17 +125,29 @@
     setTimeout(() => e.classList.remove('fx-bump'), 600);
   }
 
-  // Public: queue a detected move. opts: { container, scoreEl (Element or () => Element), mine }.
+  // Public: queue a detected move. opts: { container, scoreEl (Element or () => Element), mine,
+  // areaEl, delayMs }. delayMs (turn moments): the score is held at once, but the celebration is
+  // queued only after the opponent's word has dropped in.
+  const pending = new Set(); // delayed show() calls: { timer, hold }
   function show(c, opts = {}) {
     if (!c || !doc()) return;
     const reduced = reducedMotion();
     const hold = reduced ? null : holdScore(opts.scoreEl, c.total);
-    queue.push({ c, opts, reduced, hold, at: Date.now() });
-    if (!current) next();
+    const enqueue = () => {
+      queue.push({ c, opts, reduced, hold, at: Date.now() });
+      if (!current) next();
+    };
+    const delay = Number(opts.delayMs) || 0;
+    if (delay <= 0) return enqueue();
+    const p = { hold };
+    p.timer = setTimeout(() => { pending.delete(p); enqueue(); }, delay);
+    pending.add(p);
   }
 
   // Public: drop everything (route change / teardown).
   function clear() {
+    for (const p of pending) { clearTimeout(p.timer); releaseScore(p.hold, false); }
+    pending.clear();
     let item;
     while ((item = queue.shift())) releaseScore(item.hold, false);
     if (current) finish(current, false);
@@ -445,5 +457,24 @@
     end(total);
   }
 
-  return { TITLES, tierFor, detect, createQueue, durationFor, show, clear };
+  // ---- turn moments (pure) ----
+  // The squares a play filled, in reading order (row, then column). lastMove.cells is recorded by
+  // Match.applyPlay; older moves (and test fixtures) only have isNew cells inside their words.
+  function newCells(lastMove) {
+    if (!lastMove || lastMove.type !== 'play') return [];
+    const seen = {}, out = [];
+    const add = c => { const k = c.r + '_' + c.c; if (!seen[k]) { seen[k] = true; out.push({ r: Number(c.r), c: Number(c.c) }); } };
+    if (Array.isArray(lastMove.cells) && lastMove.cells.length) lastMove.cells.forEach(add);
+    else for (const w of lastMove.words || []) for (const c of (w && w.cells) || []) if (c && c.isNew) add(c);
+    return out.sort((a, b) => a.r - b.r || a.c - b.c);
+  }
+
+  // Start delays for n tiles animating eachMs each, all done by totalMs (at most 120 ms apart).
+  function stagger(n, totalMs, eachMs) {
+    if (n <= 0) return [];
+    const step = n > 1 ? Math.min(120, Math.max(0, totalMs - eachMs) / (n - 1)) : 0;
+    return Array.from({ length: n }, (_, i) => Math.round(i * step));
+  }
+
+  return { TITLES, tierFor, detect, createQueue, durationFor, show, clear, newCells, stagger };
 });

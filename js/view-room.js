@@ -352,7 +352,7 @@
         </div>
         <div class="pill-row"><div class="pill pill-them" id="statusLine" role="status" aria-live="polite"><span class="pill-text"></span><span class="pill-clock" id="turnClock"></span></div></div>
         <div class="caption-row"><span class="caption-text"><span id="tossLine"></span><span id="lastMove"></span></span><button type="button" id="bonusBtn" class="caption-btn" aria-expanded="false" aria-controls="bonusCard">? Bonuses</button></div>
-        <div class="rack-row"><div class="rack hidden" id="rack"></div><button type="button" id="shuffleBtn" class="rack-shuffle hidden" aria-label="Shuffle tiles" title="Shuffle tiles">🔀</button></div>
+        <div class="rack-row"><span class="rack-bag" aria-hidden="true">👜</span><div class="rack hidden" id="rack"></div><button type="button" id="shuffleBtn" class="rack-shuffle hidden" aria-label="Shuffle tiles" title="Shuffle tiles">🔀</button></div>
         <div class="actions-row hidden" id="actions">
           <button id="playBtn" class="btn-primary">✅ Play word</button>
           <button id="recallBtn" class="secondary">↩ Recall</button>
@@ -426,6 +426,9 @@
     // Drag-and-drop tiles (feature #5), mouse and touch; tap-to-place keeps working.
     ui.dragDetach = Drag.attach($('#liveRoot'), dragHooks(el, ctx));
 
+    // Test hook for the browser checks, in the playground only (never on the real tournament data).
+    if (/_playground$/.test(Store.ROOT)) root.__room = { ui };
+
     $('#passBtn').onclick = async () => {
       const room = ctx.state.room;
       if (!myTurn(room, ctx) || !confirm('Pass your turn?')) return;
@@ -455,9 +458,13 @@
           ui.rejected = { placements, words: m.words, rejectedWords: check.rejected, total: m.total, expectedMoveCount };
           return;
         }
+        // Turn moments #3: which rack tiles this play uses, recorded before the write; the room update
+        // (local first) may arrive before mutateRoom resolves, and the refill needs it.
+        ui.lastUsed = ui.temp.map(t => t.rackIndex);
+        ui.lastRack = room.game.racks[seat].slice();
         const res = await Store.mutateRoom(ctx.code, r => Match.applyPlay(r, seat, placements, { now: Store.serverNow(), expectedMoveCount, unverified: check.unverified }));
         if (res.committed) { ui.temp = []; ui.selected = null; Sound.play('accept'); }
-        else { UI.toast('Move not accepted (time up or the game changed).', 'error'); ui.temp = []; }
+        else { UI.toast('Move not accepted (time up or the game changed).', 'error'); ui.temp = []; ui.lastUsed = null; ui.lastRack = null; }
       } finally {
         ui.busy = false;
         if ($('#playBtn')) $('#playBtn').textContent = '✅ Play word'; // gone if the play ended the game
@@ -473,12 +480,14 @@
         const rej = ui.rejected;
         const seat = ctx.state.mySeat;
         b.disabled = true;
+        ui.lastUsed = ui.temp.map(t => t.rackIndex);
+        ui.lastRack = ctx.state.room.game.racks[seat].slice();
         const res = await Store.mutateRoom(ctx.code, r => Match.requestAppeal(r, seat, rej.placements, {
           now: Store.serverNow(), expectedMoveCount: rej.expectedMoveCount, words: rej.words, rejectedWords: rej.rejectedWords, total: rej.total
         }));
         ui.rejected = null;
         if (res.committed) { ui.temp = []; ui.selected = null; UI.toast('Sent to the host for a decision.', 'ok'); }
-        else UI.toast('Could not send the appeal (time up or the game changed).', 'error');
+        else { UI.toast('Could not send the appeal (time up or the game changed).', 'error'); ui.lastUsed = null; ui.lastRack = null; }
         update(el, ctx.state.room, ctx);
       }
     };
@@ -615,14 +624,25 @@
       pending: g.pending ? g.pending.placements : null,
       onSquare: (r, c) => onSquare(el, ctx, r, c)
     });
+    decorateDrop(el, ctx); // an opponent's word still dropping in keeps animating across redraws
 
     const rackEl = $('#rack');
     const shuffleBtn = $('#shuffleBtn');
     rackEl.classList.toggle('hidden', !isSeat(seat));
     shuffleBtn.classList.toggle('hidden', !isSeat(seat));
     if (isSeat(seat)) {
-      // This device's tile order (Shuffle); back to normal when the rack's letters change.
-      ui.rackOrder = Rack.sync(ui.rackOrder, g.racks[seat]);
+      // This device's tile order (Shuffle). After my own play (turn moments #3) the tiles I kept stay
+      // where they were and the drawn ones go into the used slots; any other change resets the order.
+      const rackNow = g.racks[seat];
+      if (ui.rackOrder && ui.lastUsed && ui.lastRack && ui.rackOrder.key !== rackNow.join(',')) {
+        const refilled = Rack.refill(ui.rackOrder, ui.lastRack, rackNow, ui.lastUsed);
+        if (refilled) {
+          ui.rackOrder = refilled;
+          if (refilled.fresh.length) ui.refill = { fresh: refilled.fresh, at: performance.now(), started: false };
+        }
+        ui.lastUsed = null; ui.lastRack = null;
+      }
+      ui.rackOrder = Rack.sync(ui.rackOrder, rackNow);
       const used = mine ? ui.temp.map(t => t.rackIndex) : [];
       if (ui.drag && ui.drag.kind === 'rack') used.push(ui.drag.index); // its slot stays empty while dragged
       UI.renderRack(rackEl, g.racks[seat], {
@@ -632,6 +652,7 @@
         onTile: i => { if (!myTurn(ctx.state.room, ctx) || ui.busy) return; ui.selected = ui.selected === i ? null : i; update(el, ctx.state.room, ctx); }
       });
       shuffleBtn.disabled = g.racks[seat].length - used.length < 2;
+      decorateRefill(el, ctx);
     }
 
     $('#actions').classList.toggle('hidden', !isSeat(seat));
@@ -692,12 +713,8 @@
     const ui = ctx.state.ui;
     const kind = p ? p.kind : 'none';
     if (kind !== ui.pillKind) {
-      pill.className = 'pill pill-' + kind;
-      // Pop once when it becomes this player's turn.
-      if (kind === 'you' && ui.pillKind !== null) {
-        void pill.offsetWidth; pill.classList.add('pill-pop');
-        Sound.play('turn'); Sound.buzz();
-      }
+      // Keeps a pop that is still running (the ribbon in tick() pops it when this player's turn starts).
+      pill.className = 'pill pill-' + kind + (pill.classList.contains('pill-pop') ? ' pill-pop' : '');
       ui.pillKind = kind;
     }
     const text = p ? p.text : '';
@@ -712,6 +729,20 @@
     const room = ctx.state.room;
     if (!room || !room.clock || !el.querySelector('#liveRoot')) return;
     const now = Store.serverNow();
+    // Turn moments #4: the whose-turn ribbon, once per turn, when its clock starts (not on a refresh).
+    const ribbon = Pill.ribbon(room, ctx.state.mySeat);
+    if (Pill.ribbonDue(ribbon, ctx.state.ui.ribbonKey, now)) {
+      Scenes.ribbon(el.querySelector('#liveRoot'), ribbon, el.querySelector('#board-container'));
+      ctx.state.ui.ribbonKey = ribbon.key;
+      // The pill pop, "turn" sound and vibration come with "YOUR TURN!" (spec), not when the move arrives.
+      const pill = el.querySelector('#statusLine');
+      if (ribbon.mine && pill) {
+        pill.classList.remove('pill-pop'); void pill.offsetWidth; pill.classList.add('pill-pop');
+        clearTimeout(ctx.state.ui.popTimer);
+        ctx.state.ui.popTimer = setTimeout(() => pill.classList.remove('pill-pop'), 450); // .pill-pop runs .38 s
+        Sound.play('turn'); Sound.buzz();
+      }
+    }
     const c = room.clock;
     const phase = Match.roomPhase(room);
     const matchMs = c.paused ? c.paused.matchRemainingMs : c.endsAt - now;
@@ -745,16 +776,79 @@
     const ui = ctx.state.ui;
     if (!room.game) return;
     const c = Celebrate.detect(ui.lastSeenMove, room);
+    // Turn moments #10: a play from the other seat (every play, for spectators and the host) drops
+    // onto the board first; its celebration waits Match.DROP_MS. The mover placed the tiles themselves.
+    const lm = room.game.lastMove;
+    const isNew = ui.lastSeenMove !== null && ui.lastSeenMove !== undefined && room.game.moveCount > ui.lastSeenMove;
+    let dropped = false;
+    // A move during the ribbon: the newest moment wins. A pass or timeout starts the next turn at once,
+    // so its ribbon may already be up for that new turn: only an older turn's ribbon is cleared (QA pass).
+    const nowRibbon = isNew ? Pill.ribbon(room, ctx.state.mySeat) : null;
+    if (isNew && (!nowRibbon || ui.ribbonKey !== nowRibbon.key)) Scenes.clearRibbon();
+    if (isNew && lm && lm.type === 'play' && lm.seat !== ctx.state.mySeat) {
+      const cells = Celebrate.newCells(lm);
+      if (cells.length) {
+        ui.drop = { moveCount: room.game.moveCount, cells, at: performance.now() };
+        dropped = true;
+        decorateDrop(el, ctx);
+      }
+    }
     if (c) {
       const seat = c.seat;
       Celebrate.show(c, {
         container: el.querySelector('#liveRoot'),
         scoreEl: el.querySelector('#side' + seat + ' .score'),
         areaEl: el.querySelector('#board-container'),
-        mine: seat === ctx.state.mySeat
+        mine: seat === ctx.state.mySeat,
+        delayMs: dropped ? Match.DROP_MS : 0
       });
     }
     ui.lastSeenMove = room.game.moveCount;
+  }
+
+  // Turn moments #3: the tiles just drawn fly out of the tile bag, face-down, and flip face-up into
+  // the slots this player's play used. Like the drop, the delays come from the start time, so the
+  // rack being redrawn on a room update resumes the deal instead of restarting it.
+  const DEAL_TOTAL_MS = 900, DEAL_EACH_MS = 500, DEAL_SHOW_MS = 1100;
+  function decorateRefill(el, ctx) {
+    const ui = ctx.state.ui, f = ui.refill;
+    const bag = el.querySelector('.rack-bag');
+    if (!f) return;
+    const elapsed = performance.now() - f.at;
+    if (elapsed > DEAL_SHOW_MS) { ui.refill = null; if (bag) bag.classList.remove('on'); return; }
+    if (bag && !f.started) { bag.classList.remove('on'); void bag.offsetWidth; bag.classList.add('on'); }
+    f.started = true;
+    if (bag) bag.style.animationDelay = Math.round(-elapsed) + 'ms';
+    const from = bag ? bag.getBoundingClientRect() : null;
+    const delays = Celebrate.stagger(f.fresh.length, DEAL_TOTAL_MS, DEAL_EACH_MS);
+    f.fresh.forEach((idx, i) => {
+      const t = el.querySelector(`#rack .tile[data-i="${idx}"]`);
+      if (!t) return;
+      if (from) {
+        const r = t.getBoundingClientRect();
+        t.style.setProperty('--fx', Math.round(from.left + from.width / 2 - (r.left + r.width / 2)) + 'px');
+        t.style.setProperty('--fy', Math.round(from.top + from.height / 2 - (r.top + r.height / 2)) + 'px');
+      }
+      t.classList.add('tile-dealt');
+      t.style.animationDelay = Math.round(delays[i] - elapsed) + 'ms';
+    });
+  }
+
+  // Applies the word drop to the freshly drawn board. The board is redrawn on every room update, so
+  // each tile's animation-delay is set from the drop's start time: a redraw resumes it mid-way.
+  const DROP_EACH_MS = 450;
+  function decorateDrop(el, ctx) {
+    const ui = ctx.state.ui, d = ui.drop, room = ctx.state.room;
+    if (!d) return;
+    const elapsed = performance.now() - d.at;
+    if (!room || !room.game || room.game.moveCount !== d.moveCount || elapsed > Match.DROP_MS + 600) { ui.drop = null; return; }
+    const delays = Celebrate.stagger(d.cells.length, Match.DROP_MS, DROP_EACH_MS);
+    d.cells.forEach((cell, i) => {
+      const t = el.querySelector(`#board-container .sq[data-r="${cell.r}"][data-c="${cell.c}"] .tile`);
+      if (!t) return;
+      t.classList.add('tile-drop');
+      t.style.animationDelay = `${Math.round(delays[i] - elapsed)}ms, ${Math.round(Match.DROP_MS - 150 - elapsed)}ms`;
+    });
   }
 
   // VS intro + coin toss. The first live render (page load, refresh, or the waiting -> live
@@ -808,6 +902,7 @@
       ui.finalKey = key;
       Celebrate.clear();
       Scenes.clearIntro();
+      Scenes.clearRibbon();
       detachLive(ui);
       const ending = Scenes.endingCelebration(ui.lastSeenMove, room);
       if (room.game) ui.lastSeenMove = room.game.moveCount; // nothing replays on a later rebuild
@@ -943,6 +1038,7 @@
       document.body.classList.remove('in-game');
       detachLive(ctx.state.ui);
       Scenes.clearIntro();
+      Scenes.clearRibbon();
       Scenes.clearResult();
       if (ctx.state.ui.standings) ctx.state.ui.standings.off();
     }

@@ -50,5 +50,40 @@
     return { kind: mine ? 'you' : 'them', text: who, ms };
   }
 
-  return { state, LOW_MS };
+  // ---- whose-turn ribbon (turn moments #4) ----
+  const RIBBON_WINDOW_MS = 1500; // shown from the turn start for this long; later (refresh, late join) nothing
+  const RIBBON_STATUSES = ['live', 'suddenDeath'];
+
+  // The ribbon for the turn now in play, or null (no game, paused, appeal pending, game over).
+  // key = "<status>:<turn>@<moveCount>": each new turn (sudden death's first turn included) has its own,
+  // and a host Resume (which moves turnStartedAt) keeps it, so the ribbon never plays twice for one turn.
+  // Players see "YOUR TURN!" or the opponent's player name; spectators and the host see the team.
+  function ribbon(room, mySeat) {
+    if (!room || !room.game || !room.clock || !RIBBON_STATUSES.includes(room.status)) return null;
+    if (room.clock.paused || room.game.pending) return null;
+    const turn = room.game.turn;
+    const mine = mySeat === turn;
+    const seated = mySeat === 'A' || mySeat === 'B';
+    let who;
+    if (seated) who = nameOf(room, turn);
+    else {
+      const team = (turn === 'A' ? room.teamAName : room.teamBName) || 'Player';
+      who = Names ? Names.short(team) : team;
+    }
+    const name = mine ? null : who.toUpperCase();
+    return {
+      key: `${room.status}:${turn}@${room.game.moveCount || 0}`,
+      at: room.clock.turnStartedAt,
+      mine,
+      text: mine ? 'YOUR TURN!' : `${name}'S TURN`,
+      name, // shown apart from "'S TURN", so a narrow screen cuts the name and keeps the suffix
+      sudden: room.status === 'suddenDeath'
+    };
+  }
+
+  function ribbonDue(info, lastKey, now) {
+    return !!info && info.key !== lastKey && now >= info.at && now - info.at < RIBBON_WINDOW_MS;
+  }
+
+  return { state, LOW_MS, ribbon, ribbonDue, RIBBON_WINDOW_MS };
 });

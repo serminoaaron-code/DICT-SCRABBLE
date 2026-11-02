@@ -108,8 +108,13 @@ test('durationFor: every overlay tier is fully gone by Match.CELEBRATE_MS[tier] 
     assert.ok(Number.isFinite(d) && d > 0, `tier ${tier}: a positive duration (${d})`);
     assert.ok(d <= M.CELEBRATE_MS[tier], `tier ${tier}: ${d} ms <= CELEBRATE_MS ${M.CELEBRATE_MS[tier]} ms`);
   }
-  // Tier 0 is the small "+N" float: no overlay, and no turn delay (CELEBRATE_MS[0] = 0).
-  assert.ok(Celebrate.durationFor(0) <= 1000, 'tier 0 float lasts at most 1 s');
+  // Tier 0 is the small "+N" float: no overlay; the next turn waits for it (CELEBRATE_MS[0] = 1000).
+  assert.ok(Celebrate.durationFor(0) <= M.CELEBRATE_MS[0], 'tier 0 float ends by CELEBRATE_MS[0]');
+});
+
+test('turn moments: the word drop (DROP_MS 700) and the tier-0 float (1000) are part of the turn delay', () => {
+  assert.strictEqual(M.DROP_MS, 700);
+  assert.strictEqual(M.CELEBRATE_MS[0], 1000);
 });
 
 test('detect cuts long player and team names to 25 characters + "…" (the BY line, the projector corner)', () => {
@@ -119,4 +124,27 @@ test('detect cuts long player and team names to 25 characters + "…" (the BY li
   const c = Celebrate.detect(0, r);
   assert.strictEqual(c.playerName, 'w'.repeat(25) + '…');
   assert.strictEqual(c.teamName, 'TEST-' + 'w'.repeat(20) + '…');
+});
+// ---- turn moments: which tiles drop, and when ----
+test('newCells: the squares a play filled (lastMove.cells), in reading order; [] for a pass', () => {
+  assert.deepStrictEqual(Celebrate.newCells({ type: 'play', cells: [{ r: 7, c: 8 }, { r: 7, c: 6 }, { r: 6, c: 9 }] }),
+    [{ r: 6, c: 9 }, { r: 7, c: 6 }, { r: 7, c: 8 }]);
+  assert.deepStrictEqual(Celebrate.newCells({ type: 'pass', words: [], cells: [] }), []);
+  assert.deepStrictEqual(Celebrate.newCells(null), []);
+});
+
+test('newCells: older moves without cells fall back to the isNew cells of their words (unique)', () => {
+  const lm = { type: 'play', words: [
+    { word: 'CAT', cells: [{ r: 7, c: 6, isNew: true }, { r: 7, c: 7, isNew: false }, { r: 7, c: 8, isNew: true }] },
+    { word: 'TO', cells: [{ r: 7, c: 8, isNew: true }, { r: 8, c: 8, isNew: false }] }] };
+  assert.deepStrictEqual(Celebrate.newCells(lm), [{ r: 7, c: 6 }, { r: 7, c: 8 }]);
+});
+
+test('stagger: start delays that fit the total time, at most 120 ms apart', () => {
+  assert.deepStrictEqual(Celebrate.stagger(1, 700, 450), [0]);
+  assert.deepStrictEqual(Celebrate.stagger(3, 700, 450), [0, 120, 240]);
+  const seven = Celebrate.stagger(7, 700, 450);
+  assert.strictEqual(seven.length, 7);
+  assert.ok(seven[6] + 450 <= 700, 'the last tile lands by the total time: ' + seven[6]);
+  assert.deepStrictEqual(Celebrate.stagger(0, 700, 450), []);
 });

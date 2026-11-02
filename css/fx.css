@@ -16,6 +16,35 @@
 .fx-stage > *, .fx-content > * { position: absolute; }
 /* Text and tiles live under the score bar (--fx-top, set from the score element), like the mockup. */
 .fx-stage > .fx-content { left: 0; right: 0; bottom: 0; top: var(--fx-top, 0px); }
+/* Turn moments #10: the opponent's word drops onto the board tile by tile, then a glow sweeps along it.
+   The view sets each tile's animation-delay from the drop's start time, so a redraw resumes it. */
+@keyframes tile-drop { 0% { transform: translateY(-140%) scale(1.35); opacity: 0; } 70% { transform: translateY(4%) scale(1); opacity: 1; } 100% { transform: none; opacity: 1; } }
+@keyframes word-glow { 0%, 100% { box-shadow: 0 2px 3px rgba(0,0,0,.2); } 45% { box-shadow: 0 0 0 3px var(--yellow), 0 0 14px var(--yellow); } }
+.tile.tile-drop { position: relative; z-index: 1; animation: tile-drop 450ms cubic-bezier(.2,1.2,.4,1) both, word-glow 500ms ease both; }
+@media (prefers-reduced-motion: reduce) { .tile.tile-drop { animation: none; } }
+
+/* Turn moments #4: whose turn it is. A band sweeps across the middle of the window and away (1.2 s);
+   green with navy text for "YOUR TURN!", navy with white text for "<NAME>'S TURN". Never blocks a tap. */
+.turn-ribbon { position: fixed; left: 0; right: 0; top: 42%; z-index: 9450; pointer-events: none; overflow: hidden; }
+.tr-band { padding: 10px 16px; text-align: center; background: var(--navy); color: #fff; box-shadow: 0 6px 0 rgba(0,0,0,.25);
+  animation: tr-sweep 1200ms cubic-bezier(.2,.8,.2,1) both; }
+.turn-ribbon.mine .tr-band { background: var(--green); color: var(--navy); }
+/* inside the game area: not the 520px phone column (.arena > *), and centred on the board (Layout.placeRibbon) */
+.arena > .turn-ribbon { width: auto; max-width: none; }
+.turn-ribbon.tr-placed { right: auto; transform: translateY(-50%); }
+.tr-text { font-family: 'Archivo Black', Impact, sans-serif; font-size: clamp(22px, 7vw, 46px); line-height: 1.15; letter-spacing: 1px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* the name and "'S TURN" spans: the display font too (the global `* { font-family: Inter }` would win) */
+.tr-text * { font-family: inherit; }
+/* the name is cut first ("…"); "'S TURN" (about 4.6em in Archivo Black) always fits beside it */
+.tr-name { display: inline-block; max-width: calc(100% - 5em); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+.tr-sd { font-weight: 800; font-size: 12px; letter-spacing: 2px; color: var(--yellow); }
+.turn-ribbon.mine .tr-sd { color: var(--navy); }
+@keyframes tr-sweep { 0% { transform: translateX(-105%); } 15%, 65% { transform: none; } 100% { transform: translateX(105%); } }
+@keyframes tr-fade { 0%, 100% { opacity: 0; } 15%, 75% { opacity: 1; } }
+.turn-ribbon.fx-reduced .tr-band { animation: tr-fade 1200ms ease both; }
+@media (prefers-reduced-motion: reduce) { .tr-band { animation: tr-fade 1200ms ease both; } }
+
 /* Desktop landscape (Layout.fitStage): the whole stage sits over the board, at board scale (--k inline). */
 .fx-on-board > .fx-stage { left: var(--fx-left); top: var(--fx-top); width: var(--fx-w); height: var(--fx-h); right: auto; bottom: auto; }
 .fx-on-board .fx-stage > .fx-content { top: 0; }
@@ -369,11 +398,18 @@ body.bigscreen .fx-tier-3 .fx-title { top: 22%; }
 body.bigscreen .fx-tier-3 .fx-pts { top: 49%; }
 body.bigscreen .fx-tier-3 .fx-word { top: 69%; }
 body.bigscreen.fx-active .bp-top { z-index: 9600; }
+/* turn moments on the projector: the new word drops in, then glows as before (two delays set inline) */
+.bp-board .tile.bp-new.tile-drop { animation: tile-drop 450ms cubic-bezier(.2,1.2,.4,1) both, bp-glow 1.4s ease 2; }
+/* the whose-turn ribbon sits on the 16:9 stage, across the board, at broadcast size */
+body.bigscreen .turn-ribbon { position: absolute; top: 46%; }
+body.bigscreen .tr-band { padding: calc(var(--u) * .9) calc(var(--u) * 2); }
+body.bigscreen .tr-text { font-size: calc(var(--u) * 4.2); }
+body.bigscreen .tr-sd { font-size: calc(var(--u) * 1.2); }
 
 @media (prefers-reduced-motion: reduce) {
   .bp-wipe { transform: none; opacity: 0; background: var(--navy); }
   .bp-wipe.go { animation: bp-fade .7s ease; }
-  .bp-board .tile.bp-new { animation: none; }
+  .bp-board .tile.bp-new, .bp-board .tile.bp-new.tile-drop { animation: none; }
   .bp-corner.in { animation: bp-corner-fade .4s ease both; }
   .bp-items.scroll { animation: none; }
 }

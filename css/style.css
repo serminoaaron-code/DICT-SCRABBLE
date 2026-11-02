@@ -293,7 +293,14 @@ table.standings tr:first-child td { font-weight: 700; }
 .rack .tile.selected { transform: translateY(-5px); box-shadow: 0 0 10px var(--dict-yellow); border-color: var(--dict-yellow); }
 .rack .tile.used { opacity: .25; cursor: default; }
 /* Rack + 🔀 Shuffle (feature #6): the button sits on the right end of the rack. */
-.rack-row { display: flex; gap: 6px; align-items: center; }
+.rack-row { display: flex; gap: 6px; align-items: center; position: relative; }
+/* Turn moments #3: new tiles are dealt from this bag; it only shows while that happens (no layout space). */
+.rack-bag { position: absolute; right: 50px; top: -24px; font-size: 22px; line-height: 1; opacity: 0; pointer-events: none; z-index: 2; }
+.rack-bag.on { animation: bag-show 1100ms ease both; }
+@keyframes bag-show { 0% { opacity: 0; transform: scale(.6); } 12%, 80% { opacity: 1; transform: none; } 100% { opacity: 0; transform: none; } }
+@keyframes tile-dealt { 0% { transform: translate(var(--fx, 0px), var(--fy, -40px)) rotateY(180deg) scale(.6); opacity: 0; } 30% { opacity: 1; } 100% { transform: none; opacity: 1; } }
+#rack .tile.tile-dealt { animation: tile-dealt 500ms cubic-bezier(.2,.8,.3,1) both; }
+@media (prefers-reduced-motion: reduce) { .rack-bag.on { animation: none; } #rack .tile.tile-dealt { animation: none; } }
 .rack-row .rack { flex: 1; min-width: 0; }
 /* Drag-and-drop (feature #5): draggable tiles don't scroll the page on touch; the floating copy
    follows the pointer; the square under it shows green (drop here) or red (not allowed). */
@@ -423,7 +430,7 @@ html[data-theme="dark"] .bp-shape { opacity: .35; }
 .bp-feature { position: absolute; left: calc(var(--u) * 2); top: calc(var(--u) * 10.1); width: calc(var(--u) * 39.4); height: calc(var(--u) * 39.4); z-index: 1; }
 .bp-board { width: 100%; height: 100%; padding: calc(var(--u) * .3); border-radius: calc(var(--u) * .8); background: var(--gridbg); }
 .bp-board .scrabble-grid { gap: calc(var(--u) * .12); padding: 0; background: transparent; }
-.bp-board .sq { font-size: calc(var(--u) * .62); border-radius: calc(var(--u) * .15); cursor: default; }
+.bp-board .sq { font-size: calc(var(--u) * 1.05); font-weight: 800; letter-spacing: -.02em; border-radius: calc(var(--u) * .15); cursor: default; }
 .bp-board .tile { width: 100%; height: 100%; border: 0; border-radius: calc(var(--u) * .2); font-size: calc(var(--u) * 1.35);
   box-shadow: 0 calc(var(--u) * .15) 0 #c9b78a; }
 .bp-board .tile .sub { font-size: calc(var(--u) * .55); right: calc(var(--u) * .15); }
