@@ -611,15 +611,16 @@ html[data-theme="dark"] .bp-shape { opacity: .35; }
   /* only the board and the panel's pieces lose the phone column cap; the fixed sheets keep 520px */
   .live-panel, .live-panel > * { max-width: none; }
   .arena > #board-container { grid-column: 1; grid-row: 1; max-width: none; }
-  .live-panel { grid-column: 2; grid-row: 1; display: flex; flex-direction: column; gap: 10px; height: var(--board-px, auto); overflow: auto; }
+  .live-panel { grid-column: 2; grid-row: 1; display: flex; flex-direction: column; gap: 10px; height: var(--board-px, auto); overflow: auto; padding: 0 2px 4px; } /* room for the buttons' 3px shadow */
   .live-panel > * { order: 0; flex: none; }
   .live-panel > .rack-row { margin-top: auto; }
   .live-panel .rack .tile, .live-panel .rack-shuffle { width: 44px; height: 44px; font-size: 20px; }
   .live-panel .rack .tile .sub { font-size: 10px; }
   .live-panel .actions-row button { padding: 13px 8px; font-size: 14px; }
-  #board-container .sq { font-size: calc(var(--cell, 30px) * .3); }
-  #board-container .tile { font-size: calc(var(--cell, 30px) * .55); }
-  #board-container .tile .sub { font-size: calc(var(--cell, 30px) * .22); }
+  /* the live board only (the result screen's "View board" uses the same id and keeps its own sizes) */
+  .arena > #board-container .sq { font-size: calc(var(--cell, 30px) * .3); }
+  .arena > #board-container .tile { font-size: calc(var(--cell, 30px) * .55); }
+  .arena > #board-container .tile .sub { font-size: calc(var(--cell, 30px) * .22); }
 }
 @media (max-width: 480px) {
   main, .site-header { padding: 0 8px; }
