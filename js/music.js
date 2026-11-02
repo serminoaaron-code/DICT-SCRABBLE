@@ -35,6 +35,7 @@
   function trackFor(room, now) {
     if (!room || !PLAYING.includes(room.status) || !room.clock) return null;
     if (now < room.clock.startedAt) return null;
+    if (room.clock.paused && room.clock.paused.introRemainingMs > 0) return null; // a pause froze the VS intro
     if (room.status === 'suddenDeath') return 'tense';
     if (room.status === 'hostDecision') return room.game && room.game.suddenDeath ? 'tense' : 'rush';
     const c = room.clock;
@@ -64,19 +65,20 @@
   // ---------- browser part: a tiny chiptune sequencer (pulse lead, triangle bass, noise drums) ----------
   const GAIN = { full: 0.12, low: 0.035 };   // quieter than the sound effects
   let ctx = null, master = null, pulse = null, noise = null, timer = null;
-  let current = null, pending = null, level = 'full', step = 0, nextAt = 0, wanted = null, dipUntil = 0, gestured = false;
+  let current = null, pending = null, level = 'full', step = 0, nextAt = 0, wanted = null, dipUntil = 0, gestured = false, dipTimer = null;
 
   const midi = s => { const m = /^([A-G])(#?)(\d)$/.exec(s || ''); if (!m) return null;
     return 12 * (Number(m[3]) + 1) + { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }[m[1]] + (m[2] ? 1 : 0); };
   const hz = n => 440 * Math.pow(2, (n - 69) / 12);
 
-  // The context is made only on a user gesture (browsers block sound before one).
+  // The context is made only on a user gesture (browsers block sound before one). It is the page's one
+  // AudioContext, shared with the sound effects (Sound.sharedContext) when sound.js is loaded.
   function ensureCtx() {
     if (!ctx) {
       try {
-        const AC = root.AudioContext || root.webkitAudioContext;
-        if (!AC) return null;
-        ctx = new AC();
+        if (root.Sound && root.Sound.sharedContext) ctx = root.Sound.sharedContext();
+        else { const AC = root.AudioContext || root.webkitAudioContext; if (AC) ctx = new AC(); }
+        if (!ctx) return null;
         master = ctx.createGain(); master.gain.value = 0; master.connect(ctx.destination);
         const n = 64, real = new Float32Array(n), imag = new Float32Array(n);
         for (let k = 1; k < n; k++) real[k] = (2 / (k * Math.PI)) * Math.sin(k * Math.PI * 0.25); // a 25% pulse
@@ -88,8 +90,10 @@
     try { if (ctx.state === 'suspended') ctx.resume(); } catch (e) { /* ignore */ }
     return ctx;
   }
-  function onGesture() { gestured = true; if (wanted && wanted.track) set(wanted.track, wanted.level); }
-  try { if (root.document) ['pointerdown', 'keydown'].forEach(t => root.document.addEventListener(t, onGesture, true)); } catch (e) { /* no document */ }
+  // A gesture starts music only if a match screen still wants it and 🎵 is on (stop() forgets the wish).
+  // pointerup too: on a phone, a touch only counts as a gesture when the finger lifts (as in sound.js).
+  function onGesture() { gestured = true; if (wanted && wanted.track && enabled()) set(wanted.track, wanted.level); }
+  try { if (root.document) ['pointerdown', 'pointerup', 'keydown'].forEach(t => root.document.addEventListener(t, onGesture, true)); } catch (e) { /* no document */ }
 
   function tone(type, freq, t, dur, gain) {
     const o = ctx.createOscillator(), g = ctx.createGain();
@@ -111,6 +115,7 @@
 
   function schedule() {
     if (!ctx || !current) return;
+    if (nextAt < ctx.currentTime) nextAt = ctx.currentTime + 0.02; // after a stall: pick up from now, no burst of missed notes
     while (nextAt < ctx.currentTime + 0.12) {
       if (pending) { current = pending; pending = null; step = 0; } // a hard cut, on the beat
       const tr = TRACKS[current], i = step % tr.lead.length, eighth = 60 / tr.bpm / 2;
@@ -129,8 +134,8 @@
   // The track for now ('rush' | 'tense' | null = silence) and its level ('full' | 'low').
   // Starts on the first gesture; a new track cuts in on the next beat.
   function set(track, lvl = 'full') {
+    if (!track || !enabled()) return stop(); // 🎵 off: silence, whatever the page asks
     wanted = { track, level: lvl };
-    if (!track) return stop();
     if (!gestured || !ensureCtx()) return;
     if (lvl !== level) { level = lvl; applyGain(); }
     if (!current) {
@@ -143,14 +148,21 @@
   // The music ducks for a celebration, then comes back.
   function dip(ms) {
     if (!ctx || !current) return;
+    if (!ms) return;
     dipUntil = ctx.currentTime + ms / 1000; applyGain();
-    setTimeout(applyGain, ms + 20);
+    clearTimeout(dipTimer); dipTimer = setTimeout(applyGain, ms + 20);
+  }
+  // How long the music dips for a word celebration: tiers 1-4 (the same rule on every screen), none for a +N float.
+  function dipFor(tier) {
+    const C = root.Celebrate || (typeof require === 'function' ? require('./celebrate.js') : null);
+    return tier >= 1 && C ? C.durationFor(tier) : 0;
   }
   function stop() {
-    clearInterval(timer); timer = null; current = null; pending = null;
+    clearInterval(timer); timer = null; current = null; pending = null; wanted = null;
+    clearTimeout(dipTimer); dipTimer = null;
     if (master && ctx) { master.gain.cancelScheduledValues(ctx.currentTime); master.gain.setValueAtTime(0, ctx.currentTime); }
   }
   function status() { return { track: current ? (pending || current) : null, level, playing: !!(timer && current && ctx && ctx.state === 'running') }; }
 
-  return { TRACKS, LAST_MINUTE_MS, trackFor, levelFor, useKey, enabled, toggle, set, dip, stop, status };
+  return { TRACKS, LAST_MINUTE_MS, trackFor, levelFor, useKey, enabled, toggle, set, dip, dipFor, stop, status };
 });

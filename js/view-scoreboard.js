@@ -53,6 +53,9 @@
       <div class="bp-wipe" id="bigWipe" aria-hidden="true"></div>
     </div>`;
 
+  // The page has had its first click (sound may play): kept across re-shows of the view, so the chip never comes back.
+  let bigGestured = false;
+
   function show(el) {
     el.innerHTML = TEMPLATE;
     const $ = sel => el.querySelector(sel);
@@ -416,7 +419,7 @@
         const k = room.code + '@' + room.result.decidedAt;
         if (st.bellFor !== k) { st.bellFor = k; Music.stop(); Sound.play('bell'); }
       }
-      if (d.scene === 'highlight' && d.move && room) Music.dip(Match.CELEBRATE_MS[d.move.tier] || 0);
+      if (d.scene === 'highlight' && d.move && room) Music.dip(Music.dipFor(d.move.tier)); // the same rule as the room view
       if (d.scene === 'highlight' && d.move && room) {
         const seat = d.move.seat;
         st.hlCode = d.featured;
@@ -497,16 +500,15 @@
     Music.useKey('scrabble.music.bigscreen');
     Sound.useKey('scrabble.sound.bigscreen', true);
     const musicBtn = $('#bigMusic'), soundBtn = $('#bigSound'), startChip = $('#bigStart');
-    let gestured = false;
     const paintAudio = () => {
       const m = Music.enabled(), s = Sound.enabled();
       musicBtn.classList.toggle('is-off', !m); musicBtn.setAttribute('aria-pressed', String(m)); musicBtn.setAttribute('aria-label', m ? 'Music: on' : 'Music: off');
       soundBtn.textContent = s ? '🔊' : '🔇'; soundBtn.setAttribute('aria-pressed', String(s)); soundBtn.setAttribute('aria-label', s ? 'Sound effects: on' : 'Sound effects: off');
-      startChip.classList.toggle('hidden', gestured || !m);
+      startChip.classList.toggle('hidden', bigGestured || !m);
     };
     musicBtn.onclick = () => { Music.toggle(); paintAudio(); };
     soundBtn.onclick = () => { Sound.toggle(); paintAudio(); };
-    const onFirstGesture = () => { gestured = true; paintAudio(); document.removeEventListener('pointerdown', onFirstGesture, true); document.removeEventListener('keydown', onFirstGesture, true); };
+    const onFirstGesture = () => { bigGestured = true; paintAudio(); document.removeEventListener('pointerdown', onFirstGesture, true); document.removeEventListener('keydown', onFirstGesture, true); };
     document.addEventListener('pointerdown', onFirstGesture, true);
     document.addEventListener('keydown', onFirstGesture, true);
     paintAudio();

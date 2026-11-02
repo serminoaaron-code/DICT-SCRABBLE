@@ -57,6 +57,10 @@
     return ctx;
   }
 
+  // The page's one AudioContext, shared with the match music (js/music.js): made (or resumed) on demand,
+  // whether sound effects are on or not. Only called from a user gesture.
+  function sharedContext() { return ensureCtx(); }
+
   function ready() { return !!ctx; }
 
   // Read-only, for checks: the AudioContext's state, or 'none' before one exists.
@@ -185,5 +189,5 @@
     } catch (e) { /* ignore */ }
   }
 
-  return { enabled, toggle, play, buzz, ready, state, useKey, PRESETS };
+  return { enabled, toggle, play, buzz, ready, state, useKey, PRESETS, sharedContext };
 });

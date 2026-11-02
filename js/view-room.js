@@ -914,7 +914,7 @@
     }
     if (c) {
       const seat = c.seat;
-      if (c.tier >= 1) Music.dip(Celebrate.durationFor(c.tier)); // the celebration stands out over the music
+      Music.dip(Music.dipFor(c.tier)); // the celebration stands out over the music (tiers 1-4, as on the big screen)
       Celebrate.show(c, {
         container: el.querySelector('#liveRoot'),
         scoreEl: el.querySelector('#side' + seat + ' .score'),
