@@ -12,7 +12,7 @@
 
   const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
   const TURN_MS = 60000;
-  const INTRO_MS = 5000;
+  const INTRO_MS = 6500; // VS intro 2.6 s + coin flip 1.9 s, then "<TEAM> GOES FIRST!" holds 2 s (Scenes.COIN_RESULT_AT)
   // Delay (ms) before the next turn's clock starts, indexed by Engine.celebrationTier().
   const CELEBRATE_MS = [0, 2600, 2600, 3000, 4500];
   const SUDDEN_DEATH_MAX_ROUNDS = 3;

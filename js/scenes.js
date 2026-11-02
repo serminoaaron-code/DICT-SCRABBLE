@@ -14,16 +14,17 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function (root) {
   'use strict';
 
-  const INTRO_VS_MS = 2600;   // VS intro 0–2600 ms, coin toss 2600–INTRO_MS
+  const INTRO_VS_MS = 2600;   // VS intro 0–2600 ms, coin toss 2600–INTRO_MS (6500)
   const COIN_FLIP_MS = 1800;  // the coin lands 1800 ms into the toss
   const COIN_RESULT_MS = 1900; // "<TEAM> GOES FIRST!" pops 100 ms after landing
   const VS_LAND_MS = 1100;    // the VS badge finishes spinning in (.6 s delay + .5 s)
+  const COIN_RESULT_AT = INTRO_VS_MS + COIN_RESULT_MS; // the result pops 4500 ms into the intro; it stays until INTRO_MS
   const ROUND_MS = 5000;
   const FADE_OUT_MS = 250;
 
   // ---------- pure ----------
 
-  const introMs = () => (root.Match && root.Match.INTRO_MS) || 5000;
+  const introMs = () => (root.Match && root.Match.INTRO_MS) || 6500;
 
   // Time left before the clocks start (0 once the match is under way).
   function introRemaining(room, now) {
@@ -521,7 +522,7 @@
   }
 
   return {
-    INTRO_VS_MS, ROUND_MS, introRemaining, playIntro, clearIntro, introSkipped, holdIntro, roundStart, clearRound,
+    INTRO_VS_MS, COIN_RESULT_AT, ROUND_MS, introRemaining, playIntro, clearIntro, introSkipped, holdIntro, roundStart, clearRound,
     RESULT_FRESH_MS, resultViewer, resultReason, bestWordText, resultFresh, endingCelebration, renderResult, clearResult
   };
 });

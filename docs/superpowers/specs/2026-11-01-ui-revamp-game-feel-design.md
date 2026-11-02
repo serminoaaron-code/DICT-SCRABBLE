@@ -175,7 +175,7 @@ From top to bottom:
 - **VS intro (~2.6 s):** the Team A panel (blue, top) and the Team B panel (red, bottom) slam in from opposite sides, and the yellow **VS** badge spins in and pulses. A tag shows "ROOM · N MIN MATCH".
 - **Coin toss (~2.4 s):** a 3D CSS coin, with Team A's name on the yellow face and Team B's on the red face, flips and lands on `game.firstSeat`, then "**<TEAM> GOES FIRST!**".
 - **Every screen shows the same result**, because it comes from room data; the coin isn't random in the browser.
-- **The clocks start after the intro (user approved the guess).** `startMatch` sets `clock.startedAt = now + INTRO_MS` (5000), with `endsAt` and `turnStartedAt` counted from `startedAt`. Moves before `startedAt` are rejected (§7).
+- **The clocks start after the intro (user approved the guess).** `startMatch` sets `clock.startedAt = now + INTRO_MS` (6500; was 5000 until QA pass #1 found the coin result showed for only 0.5 s), with `endsAt` and `turnStartedAt` counted from `startedAt`. Moves before `startedAt` are rejected (§7).
 - **Late arrival or refresh during the intro:** if `serverNow() < startedAt`, play the remaining part of the intro. If not, go straight to the board.
 - It also plays on the projector when that room is featured.
 
@@ -238,7 +238,7 @@ From top to bottom:
 | `index.html` | Google Fonts link and the new script tags |
 
 ## 7. Data changes (all small)
-- **`clock.startedAt`** is set `INTRO_MS = 5000` in the future by `startMatch`. `endsAt = startedAt + matchLengthSec*1000`, and `turnStartedAt = startedAt`. Plays, passes, appeals and timeouts are rejected while `now < startedAt`.
+- **`clock.startedAt`** is set `INTRO_MS = 6500` in the future by `startMatch`. `endsAt = startedAt + matchLengthSec*1000`, and `turnStartedAt = startedAt`. Plays, passes, appeals and timeouts are rejected while `now < startedAt`.
 - **`game.lastMove.bingo`** (boolean) is added in `playCore`, so clients can pick the tier without recomputing.
 - **`game.bestMove`** = `{ seat, words: [..], total, bingo }`, the highest-scoring play so far, updated in `playCore`. Ties keep the earlier move **[call]**.
 - **`<data root>/broadcast/pinned`** (the root comes from `Env.dataRoot()`, so it's the playground or live data) = room code or null. It's written by the host through a small `Store.setPinned(code|null)`. It's a plain set, not a room transaction, because it isn't room state.

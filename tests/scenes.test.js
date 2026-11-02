@@ -9,6 +9,13 @@ test('introRemaining before, during, after', () => {
   assert.strictEqual(Scenes.introRemaining(room, 7000), 0);
 });
 
+test('the coin result ("<TEAM> GOES FIRST!") stays on screen at least 2 s before the clocks start', () => {
+  const Match = require('../js/match.js');
+  assert.strictEqual(typeof Scenes.COIN_RESULT_AT, 'number', 'Scenes.COIN_RESULT_AT: when the result pops, ms into the intro');
+  const shown = Match.INTRO_MS - Scenes.COIN_RESULT_AT;
+  assert.ok(shown >= 2000, `result shows ${shown} ms (INTRO_MS ${Match.INTRO_MS} - pop at ${Scenes.COIN_RESULT_AT})`);
+});
+
 // ---- result scenes (Task 10) ----
 const finalRoom = (winner = 'A', extra = {}) => Object.assign({
   status: 'final', teamAName: 'NCR', teamBName: 'IV-A',
