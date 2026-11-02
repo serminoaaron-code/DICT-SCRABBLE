@@ -56,6 +56,19 @@ test('shuffle: 0 or 1 tiles stay as they are; the input is not mutated', () => {
   assert.deepStrictEqual(input, [0, 1, 2]);
 });
 
+test('move: a dragged tile lands at its insertion position (measured before it is removed)', () => {
+  assert.deepStrictEqual(Rack.move([0, 1, 2, 3], 0, 4), [1, 2, 3, 0], 'first to the end');
+  assert.deepStrictEqual(Rack.move([0, 1, 2, 3], 3, 0), [3, 0, 1, 2], 'last to the front');
+  assert.deepStrictEqual(Rack.move([2, 0, 1], 0, 2), [0, 2, 1], 'one step right');
+});
+
+test('move: dropping a tile where it already is changes nothing; the input is not mutated', () => {
+  const input = [0, 1, 2, 3];
+  assert.deepStrictEqual(Rack.move(input, 1, 1), [0, 1, 2, 3]);
+  assert.deepStrictEqual(Rack.move(input, 1, 2), [0, 1, 2, 3]);
+  assert.deepStrictEqual(input, [0, 1, 2, 3]);
+});
+
 test('shuffle: repeated letters still shuffle by index', () => {
   const s = Rack.sync(null, ['E', 'E', 'E']);
   assert.deepStrictEqual(sorted(Rack.shuffle(s.order, seeded(3))), [0, 1, 2]);

@@ -33,5 +33,14 @@
     return order.slice(1).concat(order[0]); // rotate by one: always different
   }
 
-  return { sync, shuffle };
+  // Drag within the rack (feature #5): the tile at display position `from` goes to insertion
+  // position `to` (0..length, counted before it is removed). Returns a new order.
+  function move(order, from, to) {
+    const next = order.slice();
+    const [tile] = next.splice(from, 1);
+    next.splice(to > from ? to - 1 : to, 0, tile);
+    return next;
+  }
+
+  return { sync, shuffle, move };
 });
