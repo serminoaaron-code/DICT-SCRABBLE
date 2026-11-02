@@ -271,7 +271,8 @@
     g.racks[seat] = rack.concat(d.drawn);
     g.bag = d.bag;
     g.scores[seat] += m.total;
-    g.lastMove = { seat, type: 'play', words: m.words, total: m.total, bingo: m.bingo, unverified: !!unverified, at: now };
+    // cells: the squares this play filled (the word drop / projector glow); words carry no positions
+    g.lastMove = { seat, type: 'play', words: m.words, cells: placements.map(p => ({ r: p.r, c: p.c })), total: m.total, bingo: m.bingo, unverified: !!unverified, at: now };
     if (!g.bestMove || m.total > g.bestMove.total) {
       g.bestMove = { seat, words: m.words, total: m.total, bingo: m.bingo };
     }

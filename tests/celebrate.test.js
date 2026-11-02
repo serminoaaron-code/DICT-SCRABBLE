@@ -125,3 +125,26 @@ test('detect cuts long player and team names to 25 characters + "…" (the BY li
   assert.strictEqual(c.playerName, 'w'.repeat(25) + '…');
   assert.strictEqual(c.teamName, 'TEST-' + 'w'.repeat(20) + '…');
 });
+// ---- turn moments: which tiles drop, and when ----
+test('newCells: the squares a play filled (lastMove.cells), in reading order; [] for a pass', () => {
+  assert.deepStrictEqual(Celebrate.newCells({ type: 'play', cells: [{ r: 7, c: 8 }, { r: 7, c: 6 }, { r: 6, c: 9 }] }),
+    [{ r: 6, c: 9 }, { r: 7, c: 6 }, { r: 7, c: 8 }]);
+  assert.deepStrictEqual(Celebrate.newCells({ type: 'pass', words: [], cells: [] }), []);
+  assert.deepStrictEqual(Celebrate.newCells(null), []);
+});
+
+test('newCells: older moves without cells fall back to the isNew cells of their words (unique)', () => {
+  const lm = { type: 'play', words: [
+    { word: 'CAT', cells: [{ r: 7, c: 6, isNew: true }, { r: 7, c: 7, isNew: false }, { r: 7, c: 8, isNew: true }] },
+    { word: 'TO', cells: [{ r: 7, c: 8, isNew: true }, { r: 8, c: 8, isNew: false }] }] };
+  assert.deepStrictEqual(Celebrate.newCells(lm), [{ r: 7, c: 6 }, { r: 7, c: 8 }]);
+});
+
+test('stagger: start delays that fit the total time, at most 120 ms apart', () => {
+  assert.deepStrictEqual(Celebrate.stagger(1, 700, 450), [0]);
+  assert.deepStrictEqual(Celebrate.stagger(3, 700, 450), [0, 120, 240]);
+  const seven = Celebrate.stagger(7, 700, 450);
+  assert.strictEqual(seven.length, 7);
+  assert.ok(seven[6] + 450 <= 700, 'the last tile lands by the total time: ' + seven[6]);
+  assert.deepStrictEqual(Celebrate.stagger(0, 700, 450), []);
+});

@@ -208,12 +208,11 @@
       if (pill.className !== cls) pill.className = cls;
     }
 
+    // The squares the last play filled (lastMove.cells, recorded by Match.applyPlay; real games' words
+    // carry no positions, so the glow only worked with test fixtures before).
     function newCells(room) {
-      const lm = room.game && room.game.lastMove;
       const set = {};
-      if (lm && lm.type === 'play') {
-        for (const w of lm.words || []) for (const c of w.cells || []) if (c && c.isNew) set[c.r + '_' + c.c] = true;
-      }
+      for (const c of Celebrate.newCells(room.game && room.game.lastMove)) set[c.r + '_' + c.c] = true;
       return set;
     }
 

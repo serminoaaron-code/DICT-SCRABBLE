@@ -228,7 +228,7 @@ test('applyPlay applies score, refills rack, switches turn', () => {
   assert.strictEqual(n.game.moveCount, 1);
   assert.strictEqual(n.clock.turnStartedAt, 6700, 'now (5000) + DROP_MS (700) + CELEBRATE_MS[0] (1000)');
   assert.deepStrictEqual(n.game.board, { '7_6': 'C', '7_7': 'A', '7_8': 'T' });
-  assert.deepStrictEqual(n.game.lastMove, { seat: 'A', type: 'play', words: [{ word: 'CAT', score: 10 }], total: 10, bingo: false, unverified: false, at: 5000 });
+  assert.deepStrictEqual(n.game.lastMove, { seat: 'A', type: 'play', words: [{ word: 'CAT', score: 10 }], cells: [{ r: 7, c: 6 }, { r: 7, c: 7 }, { r: 7, c: 8 }], total: 10, bingo: false, unverified: false, at: 5000 });
 });
 
 test('applyPlay rejected on wrong turn, stale moveCount, after endsAt, while paused, while pending', () => {
