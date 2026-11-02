@@ -202,6 +202,42 @@ Every bug we've fixed is listed here with steps to **try to make it happen again
 
 ---
 
+## Turn moments and the big screen
+
+### BF-23: "Whose turn" ribbon stuck on the left of a laptop screen
+- **Area:** live game · **Fixed in:** the turn-moments PR · **Found by:** QA pass 1 (turn moments)
+- **Used to happen:** on a laptop the "YOUR TURN!" / "<NAME>'S TURN" band was only part-width and pinned to the left edge. On a phone it sat above the middle of the board instead of across it.
+- **Try to trigger it:**
+  1. Start a game with one player on a laptop (full-screen browser) and one on a phone.
+  2. Play a word, and watch both screens when the next player's clock starts.
+  3. Open the same room as the host (Host dashboard → the room) and watch it there too.
+- **Expected now:** on the laptop and the host's screen, the band sweeps across the board, through the board's middle. On the phone it crosses the whole screen width, through the middle of the board.
+
+### BF-24: No "whose turn" ribbon after a Pass or a timeout
+- **Area:** live game · **Fixed in:** the turn-moments PR · **Found by:** QA pass 1 (turn moments)
+- **Used to happen:** the ribbon showed after a word was played, but never when a player pressed **Pass** or let their 1-minute turn run out, on the players' screens and in the host's room view.
+- **Try to trigger it:**
+  1. In a live game, the player whose turn it is presses **⏭ Pass** and confirms.
+  2. Watch both players' screens and the host's room view.
+  3. Then let the next player's turn clock run out without playing.
+- **Expected now:** both times the ribbon shows straight away on every screen: "YOUR TURN!" for the next player, "<NAME>'S TURN" for the other player, and the team name for the host and spectators.
+
+### BF-25: Bonus squares not labelled on the big screen
+- **Area:** big screen · **Fixed in:** the turn-moments PR · **Found by:** QA pass 1 (turn moments)
+- **Used to happen:** on `?view=scoreboard` (including a pinned room) the bonus squares were only coloured, with no 3W / 2W / 3L / 2L / ★, so the audience couldn't tell them apart.
+- **Try to trigger it:**
+  1. Open `http://localhost:8000/?view=scoreboard` on the projector or a big window.
+  2. Pin a live room from the host dashboard.
+  3. Switch the big screen between light and dark with its ☀️/🌙 button.
+- **Expected now:** every bonus square shows its label, big enough to read from the back of the room, in both themes.
+
+### BF-26: Opponent's name on the ribbon in the wrong (thin) font
+- **Area:** live game · **Fixed in:** the turn-moments PR · **Found by:** checks while fixing BF-23
+- **Used to happen:** "YOUR TURN!" used the heavy display font, but "<NAME>'S TURN" (other player, host, spectators) showed in the normal thin text font.
+- **Try to trigger it:**
+  1. Play a word, and look at the ribbon on the screen of the player who just played.
+- **Expected now:** "<NAME>'S TURN" uses the same heavy display font as "YOUR TURN!". A very long name is cut with "…" and "'S TURN" stays readable, even on a phone.
+
 ## Scrabble rules
 
 ### BF-15: Middle-row triple-word square in the wrong place

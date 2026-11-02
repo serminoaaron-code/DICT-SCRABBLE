@@ -732,7 +732,7 @@
     // Turn moments #4: the whose-turn ribbon, once per turn, when its clock starts (not on a refresh).
     const ribbon = Pill.ribbon(room, ctx.state.mySeat);
     if (Pill.ribbonDue(ribbon, ctx.state.ui.ribbonKey, now)) {
-      Scenes.ribbon(el.querySelector('#liveRoot'), ribbon);
+      Scenes.ribbon(el.querySelector('#liveRoot'), ribbon, el.querySelector('#board-container'));
       ctx.state.ui.ribbonKey = ribbon.key;
       // The pill pop, "turn" sound and vibration come with "YOUR TURN!" (spec), not when the move arrives.
       const pill = el.querySelector('#statusLine');
@@ -781,7 +781,10 @@
     const lm = room.game.lastMove;
     const isNew = ui.lastSeenMove !== null && ui.lastSeenMove !== undefined && room.game.moveCount > ui.lastSeenMove;
     let dropped = false;
-    if (isNew) Scenes.clearRibbon(); // a move during the ribbon: the newest moment wins
+    // A move during the ribbon: the newest moment wins. A pass or timeout starts the next turn at once,
+    // so its ribbon may already be up for that new turn: only an older turn's ribbon is cleared (QA pass).
+    const nowRibbon = isNew ? Pill.ribbon(room, ctx.state.mySeat) : null;
+    if (isNew && (!nowRibbon || ui.ribbonKey !== nowRibbon.key)) Scenes.clearRibbon();
     if (isNew && lm && lm.type === 'play' && lm.seat !== ctx.state.mySeat) {
       const cells = Celebrate.newCells(lm);
       if (cells.length) {

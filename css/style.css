@@ -430,7 +430,7 @@ html[data-theme="dark"] .bp-shape { opacity: .35; }
 .bp-feature { position: absolute; left: calc(var(--u) * 2); top: calc(var(--u) * 10.1); width: calc(var(--u) * 39.4); height: calc(var(--u) * 39.4); z-index: 1; }
 .bp-board { width: 100%; height: 100%; padding: calc(var(--u) * .3); border-radius: calc(var(--u) * .8); background: var(--gridbg); }
 .bp-board .scrabble-grid { gap: calc(var(--u) * .12); padding: 0; background: transparent; }
-.bp-board .sq { font-size: calc(var(--u) * .62); border-radius: calc(var(--u) * .15); cursor: default; }
+.bp-board .sq { font-size: calc(var(--u) * 1.05); font-weight: 800; letter-spacing: -.02em; border-radius: calc(var(--u) * .15); cursor: default; }
 .bp-board .tile { width: 100%; height: 100%; border: 0; border-radius: calc(var(--u) * .2); font-size: calc(var(--u) * 1.35);
   box-shadow: 0 calc(var(--u) * .15) 0 #c9b78a; }
 .bp-board .tile .sub { font-size: calc(var(--u) * .55); right: calc(var(--u) * .15); }

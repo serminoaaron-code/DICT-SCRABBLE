@@ -551,7 +551,8 @@
   // info: Pill.ribbon(room, mySeat) -> { text, mine, sudden }.
   const RIBBON_MS = 1200;
   let ribbonEl = null, ribbonTimer = null;
-  function ribbon(container, info) {
+  // areaEl (the board, optional): the ribbon is centred on it (Layout.placeRibbon); without it, the CSS place.
+  function ribbon(container, info, areaEl) {
     clearRibbon();
     if (!container || !doc() || !info) return false;
     const wrap = el('div', 'turn-ribbon' + (info.mine ? ' mine' : '') + (reducedMotion() ? ' fx-reduced' : ''));
@@ -570,6 +571,7 @@
     band.appendChild(text);
     wrap.appendChild(band);
     container.appendChild(wrap);
+    if (areaEl && root.Layout) root.Layout.placeRibbon(wrap, areaEl);
     ribbonEl = wrap;
     ribbonTimer = setTimeout(clearRibbon, RIBBON_MS);
     return true;

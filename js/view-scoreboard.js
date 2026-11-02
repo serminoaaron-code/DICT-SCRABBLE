@@ -240,8 +240,8 @@
       if (st.keys.board === key) return;
       st.keys.board = key;
       UI.renderBoard(board, (g && g.board) || {}, { pending });
-      // Like the mockup, the premium squares speak by colour alone (tiny labels are unreadable on a projector).
-      board.querySelectorAll('.sq').forEach(sq => { if (!sq.firstElementChild) sq.textContent = ''; });
+      // The premium squares keep their 3W / 2W / 3L / 2L / ★ labels, at broadcast size (QA pass: the audience
+      // could not tell the bonuses apart by colour alone).
       if (!room) return;
       const fresh = newCells(room);
       for (const k of Object.keys(fresh)) {
@@ -261,7 +261,11 @@
       const g = room && room.game;
       const prev = st.boardSeen;
       st.boardSeen = g ? { code: room.code, moveCount: g.moveCount } : null;
-      if (g && prev && prev.code === room.code && g.moveCount > prev.moveCount) Scenes.clearRibbon(); // the newest moment wins
+      if (g && prev && prev.code === room.code && g.moveCount > prev.moveCount) {
+        // the newest moment wins, but a pass / timeout's own (immediate) next-turn ribbon stays
+        const info = Pill.ribbon(named(room), null);
+        if (!info || st.ribbonKey !== room.code + '|' + info.key) Scenes.clearRibbon();
+      }
       if (!g || !prev || prev.code !== room.code || g.moveCount !== prev.moveCount + 1) return;
       const cells = g.lastMove && g.lastMove.type === 'play' ? Celebrate.newCells(g.lastMove) : [];
       if (cells.length) st.drop = { code: room.code, moveCount: g.moveCount, cells, at: performance.now() };
