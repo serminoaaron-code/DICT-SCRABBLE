@@ -704,3 +704,13 @@ test('taunt then applyPlay on the same room: the play applies and the taunt stay
   assert.strictEqual(n.game.moveCount, 1);
   assert.deepStrictEqual(n.taunts.A, { e: 'lol', at: T0 });
 });
+
+test('tauntWindow: the game screen, after the intro, not frozen', () => {
+  const intro = M.normalizeRoom(M.startMatch(readyRoom(), 1000, constRng(0.2), 5000)); // clocks start at 6000
+  assert.strictEqual(M.tauntWindow(intro, 6000), true, 'live, after the intro');
+  assert.strictEqual(M.tauntWindow(intro, 5999), false, 'during the intro');
+  assert.strictEqual(M.tauntWindow(M.pauseClocks(intro, 3000), 7000), false, 'paused during the intro (frozen)');
+  assert.strictEqual(M.tauntWindow(M.pauseClocks(intro, 7000), 7500), true, 'paused after the intro');
+  for (const status of ['final', 'waiting']) assert.strictEqual(M.tauntWindow(Object.assign(M.normalizeRoom(liveRoom()), { status }), T0), false, status);
+  assert.strictEqual(M.tauntWindow(Object.assign(M.normalizeRoom(liveRoom()), { status: 'hostDecision' }), T0), true, 'hostDecision');
+});

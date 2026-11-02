@@ -799,7 +799,7 @@
     const wrap = el.querySelector('#tauntWrap');
     if (!wrap) return;
     const seat = ctx.state.mySeat, now = Store.serverNow();
-    const on = isSeat(seat) && !!room && !!room.clock && Match.TAUNT_STATUSES.includes(room.status) && now >= room.clock.startedAt && !(room.clock.paused && room.clock.paused.introRemainingMs > 0);
+    const on = isSeat(seat) && Match.tauntWindow(room, now);
     wrap.classList.toggle('hidden', !on);
     const can = on && Taunt.canSend(room, seat, now);
     const btn = el.querySelector('#tauntBtn');

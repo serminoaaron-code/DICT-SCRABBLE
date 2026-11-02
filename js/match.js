@@ -424,11 +424,16 @@
   // changes, so a taunt's transaction racing with a play or a pass never loses the move.
   // The guard on its own, with no copy (the 😀 button asks it 4 times a second): the game screen, the
   // VS intro over (and not frozen by a pause), a seated player, and this seat's cooldown over.
-  function tauntAllowed(room, seat, now) {
-    if (!room || !TAUNT_STATUSES.includes(room.status) || !room.clock) return false;
-    if (!SEATS.includes(seat) || typeof now !== 'number') return false;
+  // The game screen is up for taunting: a playing status, the VS intro over and not frozen by a pause.
+  // Shared by tauntAllowed and the room view's 😀 button.
+  function tauntWindow(room, now) {
+    if (!room || !TAUNT_STATUSES.includes(room.status) || !room.clock || typeof now !== 'number') return false;
     if (now < room.clock.startedAt) return false;
-    if (room.clock.paused && room.clock.paused.introRemainingMs > 0) return false;
+    return !(room.clock.paused && room.clock.paused.introRemainingMs > 0);
+  }
+
+  function tauntAllowed(room, seat, now) {
+    if (!SEATS.includes(seat) || !tauntWindow(room, now)) return false;
     const last = room.taunts && room.taunts[seat];
     return !(last && now - last.at < TAUNT_COOLDOWN_MS);
   }
@@ -494,7 +499,7 @@
     prepareMove, applyPlay, applyPass, resolveTimeUp, finalize,
     requestAppeal, resolveAppeal, pauseClocks, resumeClocks,
     resign, awardWin, walkover, voidRoom, correctResult, recordScreenLeave,
-    TAUNTS, TAUNT_COOLDOWN_MS, TAUNT_STATUSES, tauntAllowed, taunt,
+    TAUNTS, TAUNT_COOLDOWN_MS, TAUNT_STATUSES, tauntWindow, tauntAllowed, taunt,
     roomPhase, computeStandings, isSeatOnline, watcherCount,
     _internal: { clone, other, playCore, enterSuddenDeath }
   };
