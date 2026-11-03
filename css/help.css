@@ -56,6 +56,14 @@
 .gh-chip.c1 { background: var(--tier-1); } .gh-chip.c2 { background: var(--tier-2); } .gh-chip.c3 { background: var(--tier-3); } .gh-chip.c4 { background: var(--tier-4); }
 .gh-team { background: var(--blue); color: #fff; padding: 5px 10px; border-radius: 8px; font: 800 12px Inter, sans-serif; }
 .gh-team.b { background: var(--red); }
+.gh-team.c { background: var(--green); color: var(--navy); }
+.gh-or { color: var(--muted); font-weight: 700; font-size: 12px; }
+/* a small roulette wheel (3-4 player rooms), seat colours as the real one */
+.gh-wheel { width: 30px; height: 30px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px var(--line);
+  background: conic-gradient(var(--blue) 0 90deg, var(--red) 90deg 180deg, var(--green) 180deg 270deg, var(--yellow) 270deg 360deg);
+  animation: gh-spin 2.4s cubic-bezier(.12,.6,.18,1) infinite; }
+@keyframes gh-spin { to { transform: rotate(720deg); } }
+.gh-tag { background: #fff; color: var(--navy); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; font-weight: 900; font-size: 11px; letter-spacing: 1px; }
 .gh-vs { font-family: 'Archivo Black', Impact, sans-serif; }
 .gh-coin { width: 30px; height: 30px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, var(--coin-hi), var(--yellow) 60%, var(--coin-lo)); box-shadow: 0 2px 0 var(--coin-edge); animation: gh-flip 1.6s ease-in-out infinite; }
 @keyframes gh-flip { 50% { transform: scaleX(.1); } }
@@ -82,5 +90,5 @@
 @media (max-width: 479px) { #helpLink .nav-long { display: none; } #helpLink .nav-short { display: inline; } }
 
 @media (prefers-reduced-motion: reduce) {
-  .gh-tiles .gh-tl, .gh-coin { animation: none; }
+  .gh-tiles .gh-tl, .gh-coin, .gh-wheel { animation: none; }
 }

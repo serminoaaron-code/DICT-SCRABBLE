@@ -38,3 +38,15 @@ test('the guides mention 2-4 players and the roulette (3-4 player rooms)', () =>
   assert.ok(host.includes('2, 3 or 4'), 'host guide: pick 2, 3 or 4 players');
   assert.ok(/all players are ready/i.test(host), 'host guide: start when all players are ready');
 });
+
+test('the guides picture and explain 3-4 player rooms (wheel, LEFT / OUT, podium)', () => {
+  const g = Help.guides(Help.facts());
+  const player = g.player.steps.join('');
+  assert.ok(player.includes('Coin toss or roulette'), 'the intro step is titled "Coin toss or roulette"');
+  assert.ok(player.includes('gh-wheel'), 'a small roulette wheel next to the coin');
+  assert.ok(/LEFT/.test(player) && /OUT/.test(player) && /podium/.test(player), 'LEFT, OUT and the podium are explained');
+  assert.ok(/roulette/.test(g.watch.steps.join('')) && /podium/.test(g.watch.steps.join('')), 'spectators hear about the wheel and the podium');
+  const host = g.host.steps.join('');
+  assert.ok(host.includes('IV-A'), 'the host pictures show a third team');
+  assert.ok(/pick the team/i.test(host), 'host: Award win / Walkover / Correct result pick the team in 3-4 player rooms');
+});
