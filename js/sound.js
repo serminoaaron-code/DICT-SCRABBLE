@@ -39,9 +39,19 @@
   // gesture resumes a suspended context until it is running.
   let ctx = null;
   let gestured = false;
+  // iPhone (Safari and every iPhone browser on its engine, Brave too): Web Audio follows the silent
+  // switch unless the page says its sound is media (iOS 17+). Set just before the page's first sound,
+  // never on load, so opening a page never stops a player's own music. Older iPhones lack it: no-op.
+  function playAsMedia() {
+    try {
+      const s = root.navigator && root.navigator.audioSession;
+      if (s && s.type !== 'playback') s.type = 'playback';
+    } catch (e) { /* ignore */ }
+  }
   function ensureCtx() {
     if (!ctx) {
       try {
+        playAsMedia();
         const AC = root.AudioContext || root.webkitAudioContext;
         if (AC) ctx = new AC();
       } catch (e) {
@@ -80,9 +90,10 @@
   // '1' from an earlier session) gets no running AudioContext until some
   // gesture happens on the new page — toggle() isn't called again. Every
   // pointerdown/pointerup/keydown resumes it (pointerup: a touch only counts
-  // as a gesture when the finger lifts), and the listeners stay until the
+  // as a gesture when the finger lifts; touchend and click too, the only taps
+  // older iPhone Safari unlocks audio on), and the listeners stay until the
   // context is running, then remove themselves.
-  const GESTURES = ['pointerdown', 'pointerup', 'keydown'];
+  const GESTURES = ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown'];
   function onGesture() {
     gestured = true;
     if (enabled()) ensureCtx();

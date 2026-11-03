@@ -280,6 +280,18 @@ Every bug we've fixed is listed here with steps to **try to make it happen again
   1. Play a word, and look at the ribbon on the screen of the player who just played.
 - **Expected now:** "<NAME>'S TURN" uses the same heavy display font as "YOUR TURN!". A very long name is cut with "…" and "'S TURN" stays readable, even on a phone.
 
+### BF-31: No sound on iPhones (Safari and Brave)
+- **Area:** live game · **Fixed in:** PR #18 · **Found by:** QA, iPhone (Safari and Brave)
+- **Used to happen:** on an iPhone, the match music and the sound effects stayed silent while the phone was on silent (the side switch, or the Action button set to Silent). Every iPhone browser works this way, Brave included, because they all use Safari's engine. (The fix also lets a normal tap start the sound, for older Safari versions that ignore the touch types the game listened for.)
+- **Before you start:** sound effects are **off on purpose** on a new device. Tap 🔇 in the header so it shows 🔊. 🎵 (music) is on unless it's greyed out. Turn the media volume up.
+- **Try to trigger it:** on an iPhone (iOS 17 or later), in Safari and again in Brave:
+  1. Put the phone on **silent**.
+  2. Join a room, tap 🔇 so it shows 🔊, get ready, and let the host start the match.
+  3. Once the game screen is up, tap a tile.
+  4. Play a word.
+  5. Do it again with the phone on **ring**.
+- **Expected now:** the music starts with your first tap on the game screen, and you hear the tile clicks, the "your turn" beep and the word sounds, whether the phone is on silent or on ring. If you had music playing in another app, it pauses when the game's sound starts, as it does for a video. On an iPhone older than iOS 17, silent mode still mutes the game (Apple doesn't allow anything else there); on ring it plays after your first tap.
+
 ## Scrabble rules
 
 ### BF-15: Middle-row triple-word square in the wrong place
