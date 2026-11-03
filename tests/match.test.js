@@ -896,3 +896,199 @@ test('withTeamNames refreshes every seat', () => {
   assert.strictEqual(r.teamCName, 'Region IV-A');
   assert.strictEqual(r.teamDName, 'Bangsamoro');
 });
+
+// ---------- 3–4 player rooms: rules (2026-11-03) ----------
+
+// A started 4-player room: constRng(0.8) -> D goes first; every rack holds C, A, T, S, R, N, O.
+function live4(scores) {
+  const r = M.startMatch(ready4(), 1000, constRng(0.8));
+  for (const s of M.ALL_SEATS) r.game.racks[s] = RACK_CAT.slice();
+  if (scores) Object.assign(r.game.scores, scores);
+  return r;
+}
+const pass = (r, seat, now = 6000, extra = {}) => M.applyPass(r, seat, { now, expectedMoveCount: r.game.moveCount, ...extra });
+
+test('rotation goes around the seats from the first player', () => {
+  let r = live4();
+  assert.strictEqual(r.game.turn, 'D');
+  r = M.applyPlay(r, 'D', CAT, { now: 5000, expectedMoveCount: 0 });
+  assert.strictEqual(r.game.turn, 'A');
+  r = pass(r, 'A'); assert.strictEqual(r.game.turn, 'B');
+  r = pass(r, 'B'); assert.strictEqual(r.game.turn, 'C');
+  r = pass(r, 'C'); assert.strictEqual(r.game.turn, 'D');
+  assert.strictEqual(M.nextSeat(r, 'D'), 'A');
+});
+
+test('out seats are skipped and cannot act', () => {
+  let r = pass(live4(), 'D'); // turn A
+  const bag = r.game.bag.length;
+  r = M.resign(r, 'B', 7000);
+  assert.strictEqual(r.status, 'live');
+  assert.strictEqual(r.game.out.B, 'left');
+  assert.deepStrictEqual(r.game.racks.B, []);
+  assert.strictEqual(r.game.bag.length, bag, 'the leaver\'s tiles leave the game, the bag is unchanged');
+  assert.deepStrictEqual(M.activeSeats(r), ['A', 'C', 'D']);
+  assert.strictEqual(r.game.turn, 'A');
+  r = pass(r, 'A');
+  assert.strictEqual(r.game.turn, 'C', 'B is skipped');
+  assert.strictEqual(pass(r, 'B'), null);
+  assert.strictEqual(M.applyPlay(r, 'B', CAT, { now: 8000, expectedMoveCount: r.game.moveCount }), null);
+  assert.strictEqual(M.resign(r, 'B', 8000), null, 'cannot leave twice');
+});
+
+test('resign on your own turn passes the turn', () => {
+  const r = M.resign(pass(live4(), 'D'), 'A', 9000);
+  assert.strictEqual(r.game.turn, 'B');
+  assert.strictEqual(r.clock.turnStartedAt, 9000);
+});
+
+test('last player left wins', () => {
+  let r = live4({ A: 5, B: 40, C: 3, D: 9 });
+  r = M.resign(r, 'B', 7000);
+  r = M.resign(r, 'C', 7100);
+  r = M.resign(r, 'D', 7200);
+  assert.strictEqual(r.status, 'final');
+  assert.strictEqual(r.result.winner, 'A');
+  assert.strictEqual(r.result.reason, 'resign');
+  assert.strictEqual(r.result.teamId, 'tA');
+  assert.deepStrictEqual([r.result.scoreA, r.result.scoreB, r.result.scoreC, r.result.scoreD], [5, 40, 3, 9]);
+});
+
+test('time up: highest score wins', () => {
+  const r = M.resolveTimeUp(live4({ A: 40, B: 20, C: 10, D: 5 }), 601000);
+  assert.strictEqual(r.status, 'final');
+  assert.strictEqual(r.result.winner, 'A');
+  assert.strictEqual(r.result.reason, 'time');
+  assert.strictEqual(r.result.scoreC, 10);
+});
+
+test('time up: a leaver with the top score does not win', () => {
+  let r = M.resign(live4({ A: 10, B: 50, C: 20, D: 5 }), 'B', 7000);
+  r = M.resolveTimeUp(r, 601000);
+  assert.strictEqual(r.result.winner, 'C');
+});
+
+function sd4() {
+  const r = live4({ A: 30, B: 30, C: 10, D: 30 });
+  r.game.firstSeat = 'C';
+  return M.resolveTimeUp(r, 601000);
+}
+
+test('time up: tie at the top -> sudden death between the tied only', () => {
+  const r = sd4();
+  assert.strictEqual(r.status, 'suddenDeath');
+  assert.deepStrictEqual(r.game.suddenDeath.seats, ['A', 'B', 'D']);
+  assert.strictEqual(r.game.out.C, 'sd');
+  assert.strictEqual(r.game.turn, 'D', 'the first tied seat at or after firstSeat (C)');
+  assert.strictEqual(r.clock.turnStartedAt, 601000);
+  assert.strictEqual(r.result, null);
+});
+
+test('sudden death: a player who falls behind is out; the count keeps going', () => {
+  let r = sd4();
+  r = pass(r, 'D', 602000); assert.strictEqual(r.game.turn, 'A');
+  r = pass(r, 'A', 603000); assert.strictEqual(r.game.turn, 'B');
+  Object.assign(r.game.scores, { A: 35, B: 30, D: 35 });
+  r = pass(r, 'B', 604000);
+  assert.strictEqual(r.status, 'suddenDeath');
+  assert.deepStrictEqual(r.game.suddenDeath.seats, ['A', 'D']);
+  assert.strictEqual(r.game.out.B, 'sd');
+  assert.strictEqual(r.game.suddenDeath.rounds, 1);
+  assert.strictEqual(r.game.turn, 'D');
+  r.game.scores.D = 40;
+  r = pass(r, 'D', 605000);
+  assert.strictEqual(r.status, 'suddenDeath', 'no result mid-round');
+  r = pass(r, 'A', 606000);
+  assert.strictEqual(r.status, 'final');
+  assert.strictEqual(r.result.winner, 'D');
+  assert.strictEqual(r.result.reason, 'suddenDeath');
+});
+
+test('sudden death: 3 tied rounds -> hostDecision', () => {
+  let r = sd4();
+  for (let i = 0; i < 9; i++) r = pass(r, r.game.turn, 602000 + i);
+  assert.strictEqual(r.status, 'hostDecision');
+  assert.strictEqual(r.game.suddenDeath.rounds, 3);
+  assert.deepStrictEqual(r.game.suddenDeath.seats, ['A', 'B', 'D']);
+});
+
+test('sudden death: resign mid-round', () => {
+  let r = sd4();
+  r = pass(r, 'D', 602000);                // D played; turn A
+  r = M.resign(r, 'B', 602500);            // B leaves before its turn
+  assert.deepStrictEqual(r.game.suddenDeath.seats, ['A', 'D']);
+  assert.strictEqual(r.game.suddenDeath.rounds, 0, 'A has not played yet');
+  r = pass(r, 'A', 603000);
+  assert.strictEqual(r.game.suddenDeath.rounds, 1, 'the round is evaluated over A and D');
+  assert.strictEqual(r.status, 'suddenDeath');
+});
+
+test('2-player sudden death state shape unchanged', () => {
+  let r = suddenDeathRoom();
+  assert.deepStrictEqual(r.game.suddenDeath, { startMove: 0, rounds: 0 });
+  r = M.applyPass(r, 'B', { now: 602000, expectedMoveCount: 0 });
+  assert.deepStrictEqual(r.game.suddenDeath, { startMove: 0, rounds: 0 });
+  assert.strictEqual('out' in r.game, false);
+});
+
+test('bag out in a 4-player room', () => {
+  const r = live4({ A: 3, B: 4, C: 5 });
+  r.game.bag = [];
+  r.game.racks.D = ['C', 'A', 'T'];
+  const n = M.applyPlay(r, 'D', CAT, { now: 5000, expectedMoveCount: 0 });
+  assert.strictEqual(n.status, 'final');
+  assert.strictEqual(n.result.reason, 'bagOut');
+  assert.strictEqual(n.result.winner, 'D');
+});
+
+test('timeout twice in a 4-player room: second is rejected', () => {
+  const r = live4();
+  const t = r.clock.turnStartedAt;
+  const opts = { now: t + M.TURN_MS, expectedMoveCount: 0, timeout: true, expectedTurnStartedAt: t };
+  const n = M.applyPass(r, 'D', opts);
+  assert.strictEqual(n.game.turn, 'A');
+  assert.strictEqual(M.applyPass(n, 'D', opts), null);
+});
+
+test('resolveTimeUp twice: second is rejected', () => {
+  const n = M.resolveTimeUp(live4({ A: 1 }), 601000);
+  assert.strictEqual(n.status, 'final');
+  assert.strictEqual(M.resolveTimeUp(n, 601001), null);
+});
+
+test('awardWin / walkover: any seat of the room, never a foreign seat', () => {
+  assert.strictEqual(M.awardWin(live4(), 'C', 5000).result.winner, 'C');
+  assert.strictEqual(M.awardWin(live4(), 'C', 5000).result.teamId, 'tC');
+  assert.strictEqual(M.awardWin(liveRoom(), 'C', 5000), null);
+  assert.strictEqual(M.walkover(room4(), 'D', 5).result.winner, 'D');
+  assert.strictEqual(M.walkover(baseRoom(), 'D', 5), null);
+});
+
+test('correctResult in a 4-player room needs a target seat', () => {
+  const fin = M.walkover(room4(), 'A', 5);
+  assert.strictEqual(M.correctResult(fin, 9), null);
+  assert.strictEqual(M.correctResult(fin, 9, '', 'A'), null);
+  assert.strictEqual(M.correctResult(fin, 9, '', 'X'), null);
+  const n = M.correctResult(fin, 9, 'Typo', 'C');
+  assert.strictEqual(n.result.winner, 'C');
+  assert.strictEqual(n.result.teamId, 'tC');
+  assert.strictEqual(n.result.reason, 'corrected');
+  assert.strictEqual(n.result.originalReason, 'walkover');
+  assert.strictEqual(M.correctResult(finalRoom('R1', 'tA', 'tB', 'A'), 9).result.winner, 'B', '2 players: still a swap');
+});
+
+test('computeStandings: a 4-player room gives 1 win and 3 losses', () => {
+  const teams = { tA: { name: 'NCR' }, tB: { name: 'CAR' }, tC: { name: 'IV-A' }, tD: { name: 'BARMM' } };
+  const s = M.computeStandings(teams, { R: M.walkover(room4(), 'D', 5) });
+  const by = Object.fromEntries(s.map(t => [t.teamId, [t.wins, t.losses, t.points]]));
+  assert.deepStrictEqual(by, { tD: [1, 0, 1], tA: [0, 1, 0], tB: [0, 1, 0], tC: [0, 1, 0] });
+});
+
+test('ranking: winner first, ties share, leavers last', () => {
+  let r = live4({ A: 50, B: 20, C: 20, D: 60 });
+  r = M.resign(r, 'D', 7000);
+  r = M.awardWin(r, 'B', 8000);
+  assert.deepStrictEqual(M.ranking(r).map(x => [x.seat, x.place, x.left]), [['B', 1, false], ['A', 2, false], ['C', 3, false], ['D', 4, true]]);
+  const t = M.awardWin(live4({ A: 20, B: 90, C: 20, D: 5 }), 'B', 8000);
+  assert.deepStrictEqual(M.ranking(t).map(x => [x.seat, x.score, x.place]), [['B', 90, 1], ['A', 20, 2], ['C', 20, 2], ['D', 5, 4]]);
+});
