@@ -320,7 +320,7 @@ Every bug we've fixed is listed here with steps to **try to make it happen again
 - **Expected now:** you never see more than one of each of those letters in a game.
 
 ### BF-30: Words spelled bottom to top shown backwards (YFIREV)
-- **Area:** rules · **Fixed in:** PR #<n> · **Found by:** QA, desktop
+- **Area:** rules · **Fixed in:** PR #15 · **Found by:** QA, desktop
 - **Used to happen:** a word spelled upward, from the bottom tile to the top (V at the bottom, Y at the top), was read top to bottom only. The log said "played **YFIREV**", and it only counted if the dictionary was slow or the host approved it on appeal.
 - **Try to trigger it:** use a game where you can play these. Run them one at a time, in any order.
   1. **Left to right:** play **CAT** across. It's accepted and the log says "played CAT".
