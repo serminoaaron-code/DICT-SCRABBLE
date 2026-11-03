@@ -148,3 +148,9 @@ test('stagger: start delays that fit the total time, at most 120 ms apart', () =
   assert.ok(seven[6] + 450 <= 700, 'the last tile lands by the total time: ' + seven[6]);
   assert.deepStrictEqual(Celebrate.stagger(0, 700, 450), []);
 });
+test('detect keeps alt (a vertical word that reads both ways)', () => {
+  const r = roomAfterCAT();
+  r.game.lastMove.words = [{ word: 'STOP', score: 6, alt: 'POTS' }];
+  assert.deepStrictEqual(Celebrate.detect(0, r).words[0], { word: 'STOP', score: 6, alt: 'POTS' });
+  assert.deepStrictEqual(Celebrate.detect(0, roomAfterCAT()).words[0], { word: 'CAT', score: 10 });
+});

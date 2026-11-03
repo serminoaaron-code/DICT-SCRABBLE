@@ -335,7 +335,7 @@
         if (lm.type === 'pass') html = `${who} passed`;
         else if (lm.type === 'timeout') html = `${who} ran out of time`;
         else {
-          const words = (lm.words || []).map(w => `<b>${esc(w.word)}</b>`).join(', ');
+          const words = (lm.words || []).map(w => `<b>${esc(ScrabbleEngine.shownWord(w))}</b>`).join(', ');
           const tier = Celebrate.tierFor({ total: lm.total, bingo: lm.bingo });
           const title = tier > 0 ? ` · <span class="bp-tier t${tier}">${esc(Celebrate.TITLES[tier])}</span>` : '';
           html = `${who} played ${words} (${Number(lm.total) || 0})${lm.bingo ? ' · BINGO' : ''}${title}`;
@@ -382,7 +382,7 @@
         return;
       }
       const mv = c.move;
-      const word = (mv.words && mv.words[0] && mv.words[0].word) || '';
+      const word = (mv.words && mv.words[0] && ScrabbleEngine.shownWord(mv.words[0])) || '';
       const html = `<div class="bp-cn-head">🔥 ${esc(Celebrate.TITLES[mv.tier] || '')} in <span class="bp-nw">ROOM ${esc(pretty(c.code))}</span></div>
         <div class="bp-cn-line">${esc(mv.teamName || teamName(room, mv.seat))} · <b>${esc(word)}</b> +${Number(mv.total) || 0}</div>`;
       const key = c.code + '|' + mv.moveCount + '|' + html;

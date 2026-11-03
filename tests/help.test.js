@@ -24,3 +24,8 @@ test('help.css uses the theme tokens (no fixed colours except white)', () => {
   const fixed = (css.match(/#[0-9a-fA-F]{3,8}\b/g) || []).filter(c => !/^#fff(fff)?$/i.test(c));
   assert.deepStrictEqual(fixed, []);
 });
+
+test('the player guide says which ways words read (the engine hint, not retyped)', () => {
+  const E = require('../js/engine.js');
+  assert.ok(Help.guides(Help.facts()).player.steps.join('').includes(E.READ_HINT));
+});

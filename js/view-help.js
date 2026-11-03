@@ -2,7 +2,7 @@
 // Static: reads no game data. Its numbers come from the game itself (Help.facts), so they never drift.
 // Mobile first: one column and a compact Player / Host / Watch row on phones; a step grid on laptops.
 //
-// Pure parts (Node-testable): ROLES, roleOf(hash), facts().
+// Pure parts (Node-testable): ROLES, roleOf(hash), facts(), guides(facts) (the static guide markup).
 // DOM part: HelpView.show(el, role) (browser global HelpView). Loads as a browser global (Help) or a Node module.
 (function (root, factory) {
   const api = factory(root);
@@ -66,7 +66,7 @@
           step('Watch the coin toss', '<span class="gh-team">NCR</span><b class="gh-vs">VS</b><span class="gh-team b">CAR</span><span class="gh-coin"></span>',
             'A coin decides who goes first. Get ready: the clocks start right after.'),
           step('Make a word', tl('C') + tl('A', 'sel') + tl('T') + tl('S') + '<span class="gh-arrow">→</span>' + sq('st', '★'),
-            '<b>Tap a tile, then a square</b> — or just drag it. The first word must cover the ★. After that, every new word must touch tiles already on the board.'),
+            '<b>Tap a tile, then a square</b> — or just drag it. The first word must cover the ★. After that, every new word must touch tiles already on the board. ' + Engine.READ_HINT),
           step('Play, recall, pass or shuffle', bt('red', '✅ Play word') + bt('gray', '↩ Recall') + bt('gray', '⏭ Pass') + bt('ylw', '🔀'),
             '<b>Recall</b> takes your tiles back. <b>🔀</b> mixes your rack to help you spot new words.'),
           step('Beat the clock', '<span class="gh-pill">● Your turn 0:42</span>' + chip('c3', '4:58 match'),
@@ -169,5 +169,5 @@
     return () => {};
   }
 
-  return { ROLES, roleOf, facts, show };
+  return { ROLES, roleOf, facts, guides, show };
 });

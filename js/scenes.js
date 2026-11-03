@@ -4,7 +4,7 @@
 // (.superpowers/brainstorm/.../intro-coin-winner-v2.html).
 //
 // Pure parts (Node-testable): introRemaining, INTRO_VS_MS, ROUND_MS, resultViewer,
-// resultReason, bestWordText, resultFresh, RESULT_FRESH_MS, endingCelebration.
+// resultReason, bestWord, bestWordText, resultFresh, RESULT_FRESH_MS, endingCelebration.
 // DOM parts: playIntro, clearIntro, roundStart, clearRound, renderResult, clearResult.
 // Nothing touches the DOM at load time. Loads as a browser global (Scenes) or a Node module.
 (function (root, factory) {
@@ -72,7 +72,9 @@
     const Engine = lib('ScrabbleEngine', './engine.js');
     const Cel = lib('Celebrate', './celebrate.js');
     const tier = Engine ? Engine.celebrationTier(total, !!bm.bingo) : 0;
-    return { word: String(bm.words[0].word || ''), total, title: (tier && Cel && Cel.TITLES[tier]) || '' };
+    const w = bm.words[0] || {};
+    const word = Engine ? Engine.shownWord(w) : String(w.word || ''); // "VERIFY", or "STOP/POTS" (both readings)
+    return { word, total, title: (tier && Cel && Cel.TITLES[tier]) || '' };
   }
 
   // "⭐ Best word: WORD · N pts (<tier title>)", no parenthesis for tier 0, '' without a best move.
@@ -586,7 +588,7 @@
 
   return {
     INTRO_VS_MS, COIN_RESULT_AT, ROUND_MS, introRemaining, playIntro, clearIntro, introSkipped, holdIntro, roundStart, clearRound,
-    RESULT_FRESH_MS, resultViewer, resultReason, bestWordText, resultFresh, endingCelebration, renderResult, clearResult,
+    RESULT_FRESH_MS, resultViewer, resultReason, bestWord, bestWordText, resultFresh, endingCelebration, renderResult, clearResult,
     RIBBON_MS, ribbon, clearRibbon
   };
 });

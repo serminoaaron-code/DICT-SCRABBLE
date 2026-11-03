@@ -367,6 +367,7 @@ body.tile-dragging, body.tile-dragging * { cursor: grabbing !important; user-sel
 .sheet-notice { border-color: var(--yellow); }
 .sheet-reject { z-index: 9450; border-color: var(--red); }
 .sheet-msg { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.sheet-hint { margin-top: 4px; font-size: 13px; color: var(--muted); }
 .sheet-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .sheet-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
 .sheet-close { flex: none; padding: 4px 8px; font-size: 16px; text-decoration: none; }
