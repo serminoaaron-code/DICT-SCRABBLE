@@ -8,13 +8,14 @@
   --green: #00a651;
   --cream: #f6e7c1;
 
-  /* premium squares: always the brand colour, regardless of theme */
-  --sq-tw: var(--red);
-  --sq-dw: var(--yellow);
-  --sq-tl: var(--green);
-  /* a touch lighter than --sky: navy-on-sky at the brand hex is 4.05:1 with the small bold
-     square label, under the 4.5:1 AA floor. This keeps the same sky family at AA (~5:1). */
-  --sq-dl: #4d90f7;
+  /* premium squares (QA 2026-11-03, the user's pick "C1"): a soft tint with the label in the bonus colour,
+     easy on the eyes; deep muted squares in dark mode (html[data-theme="dark"] below). 2W is purple, not
+     yellow (too close to the cream tiles), 2L cyan, not blue (it blended into the dark board).
+     Every label is AA (>= 4.5:1) on its square in both themes (tests/style-tokens.test.js). */
+  --sq-tw: #fde1df; --sq-tw-ink: #b3170f;
+  --sq-dw: #efe2fb; --sq-dw-ink: #6a2ea6;
+  --sq-tl: #d9f2e4; --sq-tl-ink: #05703a;
+  --sq-dl: #d5f3f8; --sq-dl-ink: #0a6273;
 
   /* status chips (badges, warn/ok lines) keep their own fixed light tint in both themes */
   --green-bg: #ecfdf5;
@@ -76,6 +77,10 @@ html[data-theme="dark"] {
   --gridbg: #0f1d42;
   --bar: #1b3a85;
   --rack: #060d22;
+  --sq-tw: #5a2436; --sq-tw-ink: #ffb3ad;
+  --sq-dw: #46285f; --sq-dw-ink: #dcb8ff;
+  --sq-tl: #1c4a2c; --sq-tl-ink: #8fe3b6;
+  --sq-dl: #0d4f5e; --sq-dl-ink: #86e6f5;
 }
 
 * { box-sizing: border-box; font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
@@ -324,12 +329,14 @@ table.standings tr:first-child td { font-weight: 700; }
 .scrabble-grid { display: grid; grid-template-columns: repeat(15, 1fr); grid-template-rows: repeat(15, 1fr); gap: 1px; width: 100%; height: 100%; background: var(--gridbg); padding: 1px; }
 .sq { display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; color: var(--text); cursor: pointer; position: relative; }
 .sq.normal { background: var(--sq); }
-.sq.dl { background: var(--sq-dl); color: var(--navy); font-weight: 800; }
-.sq.tl { background: var(--sq-tl); color: var(--navy); font-weight: 800; }
-.sq.dw, .sq.center { background: var(--sq-dw); color: var(--navy); font-weight: 800; }
-.sq.tw { background: var(--sq-tw); color: #fff; }
+.sq.dl { background: var(--sq-dl); color: var(--sq-dl-ink); font-weight: 800; }
+.sq.tl { background: var(--sq-tl); color: var(--sq-tl-ink); font-weight: 800; }
+.sq.dw, .sq.center { background: var(--sq-dw); color: var(--sq-dw-ink); font-weight: 800; }
+.sq.tw { background: var(--sq-tw); color: var(--sq-tw-ink); font-weight: 800; }
 .tile { width: 92%; height: 92%; background: var(--cream); border: 1px solid var(--gold); border-radius: 3px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px; color: var(--navy); position: relative; box-shadow: 0 2px 3px rgba(0,0,0,.2); }
-.tile .sub { position: absolute; bottom: 0; right: 2px; font-size: 7px; font-weight: 600; }
+.tile .sub { position: absolute; bottom: 0; right: 2px; font-size: 7px; font-weight: 600; line-height: 1; letter-spacing: -.3px; }
+/* board tiles: the letter sits a little up-left so a "10" (Q, Z) in the corner clears it, at every width */
+#board-container .tile { padding: 0 3px 2px 0; }
 .tile.temp { background: #fde68a; border-color: #b45309; }
 .tile.pending { background: #fff; border: 2px dashed var(--red); }
 
@@ -358,8 +365,10 @@ table.standings tr:first-child td { font-weight: 700; }
 .drag-ghost { position: fixed; left: 0; top: 0; z-index: 9800; pointer-events: none; margin: 0; box-shadow: 0 12px 24px rgba(0,0,0,.4); will-change: transform; }
 body.tile-dragging, body.tile-dragging * { cursor: grabbing !important; user-select: none; -webkit-user-select: none; }
 /* Two-tone rings drawn inside the square (edge squares aren't clipped by the board's rounded frame):
-   one band always contrasts with the square, and "not allowed" is dashed, so it isn't colour alone. */
-.sq.drop-ok { outline: 3px solid #fff; outline-offset: -3px; box-shadow: inset 0 0 0 6px var(--green); z-index: 2; }
+   one band always contrasts with the square (the outer one is the text colour: navy on the pale light-mode
+   squares, near-white on the deep dark-mode ones; tests/style-tokens.test.js), and "not allowed" is dashed,
+   so it isn't colour alone. */
+.sq.drop-ok { outline: 3px solid var(--text); outline-offset: -3px; box-shadow: inset 0 0 0 6px var(--green); z-index: 2; }
 .sq.drop-bad { outline: 3px dashed var(--red); outline-offset: -3px; box-shadow: inset 0 0 0 6px #fff; z-index: 2; }
 .tile.drop-in { animation: tile-drop-in .22s cubic-bezier(.2,1.6,.4,1); }
 @keyframes tile-drop-in { from { transform: scale(1.25); } to { transform: none; } }
@@ -506,8 +515,9 @@ html[data-theme="dark"] .bp-shape { opacity: .35; }
 .bp-board .tile { width: 100%; height: 100%; border: 0; border-radius: calc(var(--u) * .2); font-size: calc(var(--u) * 1.35);
   box-shadow: 0 calc(var(--u) * .15) 0 #c9b78a; }
 .bp-board .tile .sub { font-size: calc(var(--u) * .55); right: calc(var(--u) * .15); }
-/* the newest tiles glow twice, then keep a yellow ring so the last move stays easy to spot */
-.bp-board .tile.bp-new { z-index: 1; box-shadow: 0 0 0 calc(var(--u) * .22) var(--yellow), 0 calc(var(--u) * .15) 0 #c9b78a; animation: bp-glow 1.4s ease 2; }
+/* the newest tiles glow twice, then keep a yellow ring so the last move stays easy to spot; a thin navy edge
+   around it keeps it visible on the pale light-mode squares (yellow carries it on the dark ones) */
+.bp-board .tile.bp-new { z-index: 1; box-shadow: 0 0 0 calc(var(--u) * .22) var(--yellow), 0 0 0 calc(var(--u) * .32) var(--navy), 0 calc(var(--u) * .15) 0 #c9b78a; animation: bp-glow 1.4s ease 2; }
 @keyframes bp-glow { 50% { box-shadow: 0 0 0 calc(var(--u) * .3) var(--yellow), 0 0 calc(var(--u) * 1.2) var(--yellow); } }
 .bp-lobby { width: 100%; height: 100%; border-radius: calc(var(--u) * .8); background: var(--surface); border: 2px solid var(--line);
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: calc(var(--u) * 1); padding: calc(var(--u) * 2); text-align: center; }
@@ -707,7 +717,7 @@ html[data-theme="dark"] .bp-shape { opacity: .35; }
   .live-panel .actions-row button { padding: 13px 8px; font-size: 14px; }
   /* the live board only (the result screen's "View board" uses the same id and keeps its own sizes) */
   .arena > #board-container .sq { font-size: calc(var(--cell, 30px) * .3); }
-  .arena > #board-container .tile { font-size: calc(var(--cell, 30px) * .55); }
+  .arena > #board-container .tile { font-size: calc(var(--cell, 30px) * .55); padding: 0 calc(var(--cell, 30px) * .12) calc(var(--cell, 30px) * .07) 0; }
   .arena > #board-container .tile .sub { font-size: calc(var(--cell, 30px) * .22); }
 }
 @media (max-width: 480px) {
@@ -715,7 +725,7 @@ html[data-theme="dark"] .bp-shape { opacity: .35; }
   .panel, .card { padding: 12px; }
   .sq { font-size: 6px; }
   .tile { font-size: 11px; }
-  .tile .sub { display: none; }
+  .tile .sub { font-size: 6.5px; right: 1px; } /* the points stay on phones (QA 2026-11-03) */
   .rack { gap: 4px; padding: 6px; }
   .rack .tile { width: 36px; height: 36px; font-size: 16px; }
   .rack-shuffle { width: 36px; height: 36px; font-size: 16px; }
