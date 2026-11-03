@@ -29,3 +29,12 @@ test('the player guide says which ways words read (the engine hint, not retyped)
   const E = require('../js/engine.js');
   assert.ok(Help.guides(Help.facts()).player.steps.join('').includes(E.READ_HINT));
 });
+
+test('the guides mention 2-4 players and the roulette (3-4 player rooms)', () => {
+  const g = Help.guides(Help.facts());
+  const player = g.player.steps.join('');
+  const host = g.host.steps.join('');
+  assert.ok(/roulette/i.test(player), 'player guide: the roulette for 3-4 players');
+  assert.ok(host.includes('2, 3 or 4'), 'host guide: pick 2, 3 or 4 players');
+  assert.ok(/all players are ready/i.test(host), 'host guide: start when all players are ready');
+});
