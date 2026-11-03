@@ -1124,16 +1124,18 @@
       if (phase === 'appeal') {
         const p = g.pending;
         decision = `<div class="warn-line stack">
-          <div>⚖️ <b class="nm">${esc(playerOf(room, p.seat))}</b> played ${p.words.map(w => `${esc(w.word)} (${w.score})`).join(', ')}: <b>${p.total} pts</b>.
+          <div>⚖️ <b class="nm">${esc(playerOf(room, p.seat))}</b> played ${p.words.map(w => `${esc(w.word)} (${Number(w.score) || 0})`).join(', ')}: <b>${Number(p.total) || 0} pts</b>.
           Not found: ${p.rejectedWords.map(esc).join(', ')}</div>
           <div class="row"><button class="small" data-host="approve">✅ Approve</button><button class="small danger" data-host="deny">✖ Deny</button></div>
         </div>`;
       } else if (phase === 'hostDecision') {
         // The tied sudden-death players (3-4 player rooms store them; 2 players = both).
         const sd = g.suddenDeath;
-        const tied = sd && Array.isArray(sd.seats) && sd.seats.length ? sd.seats : SEATS;
+        // Only real seats (room data is client-written; normalizeRoom filters too).
+        const stored = sd && Array.isArray(sd.seats) ? sd.seats.filter(s => SEATS.includes(s)) : [];
+        const tied = stored.length ? stored : SEATS;
         decision = `<div class="warn-line stack"><div>Still tied after 3 sudden-death rounds. Award the win:</div>
-          <div class="row">${tied.map(s => `<button class="small nm-btn" data-host="award" data-seat="${s}" title="${esc(teamOf(room, s))}">🏆 ${esc(teamOf(room, s))}</button>`).join('')}</div></div>`;
+          <div class="row">${tied.map(s => `<button class="small nm-btn" data-host="award" data-seat="${esc(s)}" title="${esc(teamOf(room, s))}">🏆 ${esc(teamOf(room, s))}</button>`).join('')}</div></div>`;
       }
       const canPause = PLAYING.includes(room.status) && !room.clock.paused;
       const pinned = ctx.state.pinned === ctx.code;

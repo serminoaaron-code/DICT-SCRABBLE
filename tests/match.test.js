@@ -1126,3 +1126,16 @@ test('resign during a celebration keeps the next turn\'s delay', () => {
   assert.strictEqual(n.game.turn, 'C');
   assert.strictEqual(n.clock.turnStartedAt, 20000);
 });
+
+test('normalizeRoom keeps only real seats and numeric scores (crafted room data)', () => {
+  const raw = { code: 'K7Q42M', teamA: 'tA', teamB: 'tB', teamC: 'tC', players: 3, status: 'hostDecision', matchLengthSec: 600,
+    clock: { startedAt: 1, endsAt: 2, turnStartedAt: 1 },
+    game: { turn: 'A', firstSeat: 'A', moveCount: 3, scores: { A: '<img src=x onerror=alert(1)>', B: 7, C: '12' },
+      suddenDeath: { startMove: 1, rounds: 3, seats: ['A', '"><img src=x>', 'C', 'Z'], played: ['C', '<b>'] },
+      out: { B: 'sd', '"><x>': 'left' } } };
+  const r = M.normalizeRoom(raw);
+  assert.deepStrictEqual(r.game.scores, { A: 0, B: 7, C: 12 });
+  assert.deepStrictEqual(r.game.suddenDeath.seats, ['A', 'C']);
+  assert.deepStrictEqual(r.game.suddenDeath.played, ['C']);
+  assert.deepStrictEqual(r.game.out, { B: 'sd' });
+});

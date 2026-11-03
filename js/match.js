@@ -126,13 +126,23 @@
       g.scores = g.scores || {};
       for (const s of SEATS) {
         g.racks[s] = g.racks[s] || [];
-        g.scores[s] = g.scores[s] || 0;
+        g.scores[s] = Number(g.scores[s]) || 0; // always a number (views put it into HTML)
       }
       g.moveCount = g.moveCount || 0;
-      g.out = g.out || {}; // 3-4 player rooms: { seat: 'left' | 'sd' } (resigned / out of sudden death)
+      // 3-4 player rooms: { seat: 'left' | 'sd' } (resigned / out of sudden death). Only real seats are
+      // kept, here and in suddenDeath.seats / played: room data is client-written and ends up in markup.
+      const out = g.out || {};
+      g.out = {};
+      for (const s of SEATS) if (out[s] === 'left' || out[s] === 'sd') g.out[s] = out[s];
       g.pending = g.pending || null;
       if (g.pending) g.pending.rejectedWords = g.pending.rejectedWords || [];
       g.suddenDeath = g.suddenDeath || null;
+      if (g.suddenDeath) {
+        const sd = g.suddenDeath;
+        if (Array.isArray(sd.seats)) sd.seats = sd.seats.filter(s => SEATS.includes(s));
+        if (Array.isArray(sd.played)) sd.played = sd.played.filter(s => SEATS.includes(s));
+        if (isMulti(r)) sd.played = sd.played || [];
+      }
       g.lastMove = g.lastMove || null;
       if (g.lastMove) {
         g.lastMove.words = g.lastMove.words || [];
