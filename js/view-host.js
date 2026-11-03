@@ -180,14 +180,14 @@
       };
 
       // A 3-4 player room's Walkover… / Correct result… picker stays open across the list's rebuilds.
-      let openPick = null; // '<code>:walkover' | '<code>:correct'
+      const openPick = new Set(); // '<code>:walkover' | '<code>:correct', one per open picker
       function picker(room, kind, label, seats) {
         const key = room.code + ':' + kind;
         const btns = seats.map(s => {
           const n = teamName(state, room, s);
           return `<button class="btn-secondary small nm-btn" data-${kind === 'walkover' ? 'walkover' : 'correct-to'}="${s}" data-code="${esc(room.code)}" title="+1 ${esc(n)}">+1 ${esc(n)}</button>`;
         }).join('');
-        return `<details class="pick" data-pick="${esc(key)}"${openPick === key ? ' open' : ''}><summary class="btn-secondary small">${esc(label)}</summary><div class="pick-list">${btns}</div></details>`;
+        return `<details class="pick" data-pick="${esc(key)}"${openPick.has(key) ? ' open' : ''}><summary class="btn-secondary small">${esc(label)}</summary><div class="pick-list">${btns}</div></details>`;
       }
 
       function cardHtml(room) {
@@ -308,7 +308,7 @@
         const sum = ev.target.closest('.pick > summary');
         if (sum) { // remember which picker is open (the card list is rebuilt on every room update)
           const key = sum.parentElement.dataset.pick;
-          openPick = sum.parentElement.open ? null : key;
+          if (sum.parentElement.open) openPick.delete(key); else openPick.add(key);
           return;
         }
         const btn = ev.target.closest('button');
@@ -321,7 +321,7 @@
           const name = teamName(state, room, to);
           const note = prompt('Reason for the correction (kept in the record):', '');
           if (note === null || !confirm(`Give the win to ${name} instead?`)) return;
-          openPick = null;
+          openPick.delete(code + ':correct');
           const res = await Store.mutateRoom(code, r => Match.correctResult(r, Store.serverNow(), note, to));
           UI.toast(res.committed ? `Result corrected: +1 ${name}.` : 'Could not correct the result.', res.committed ? 'ok' : 'error');
         } else if (btn.dataset.pin) {
@@ -343,7 +343,7 @@
           const seat = btn.dataset.walkover;
           const name = teamName(state, room, seat);
           if (!confirm(`Give ${name} a walkover win (+1)?`)) return;
-          openPick = null;
+          openPick.delete(code + ':walkover');
           const res = await Store.mutateRoom(code, r => Match.walkover(r, seat, Store.serverNow()));
           UI.toast(res.committed ? `Walkover recorded: +1 ${name}.` : 'Could not record walkover (room changed).', res.committed ? 'ok' : 'error');
         } else if (btn.dataset.void) {

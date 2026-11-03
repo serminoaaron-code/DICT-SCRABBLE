@@ -507,12 +507,17 @@
     const act = activeSeats(room);
     if (!act.includes(seat)) return null;
     const rest = act.filter(s => s !== seat);
-    if (rest.length === 1) return finalize(room, rest[0], 'resign', now);
+    if (rest.length === 1 && !isMulti(room)) return finalize(room, rest[0], 'resign', now);
     const r = clone(room);
     const g = r.game;
     g.out = g.out || {};
     g.out[seat] = 'left';
     g.racks[seat] = [];
+    if (rest.length === 1) { // 3-4 players: the last other player left; the leaver keeps its LEFT tag
+      const f = finalize(r, rest[0], 'resign', now);
+      f.result.leftSeat = seat;
+      return f;
+    }
     if (g.pending && g.pending.seat === seat) {
       g.pending = null;
       if (r.clock.paused && r.clock.paused.by === 'appeal') resumeInPlace(r, now);
@@ -520,7 +525,8 @@
     if (g.turn === seat) {
       g.turn = nextSeat(r, seat);
       if (r.clock.paused) r.clock.paused.turnRemainingMs = TURN_MS;
-      else r.clock.turnStartedAt = Math.max(now, r.clock.startedAt);
+      // never earlier than a celebration's or the intro's hold on the turn clock
+      else r.clock.turnStartedAt = Math.max(now, r.clock.turnStartedAt, r.clock.startedAt);
     }
     const sd = g.suddenDeath;
     if (sd && Array.isArray(sd.seats)) {

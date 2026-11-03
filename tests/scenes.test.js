@@ -146,3 +146,11 @@ test('resultViewer: 4-player room', () => {
 test('resultReason: 4-player resign', () => {
   assert.strictEqual(Scenes.resultReason(room4final('B', { result: { winner: 'B', reason: 'resign' } })), 'Everyone else left the game');
 });
+
+test('resultReason: 3-4 player resign names the leaver unless everyone else left', () => {
+  const base = { winner: 'A', reason: 'resign', scoreA: 1, scoreB: 2, scoreC: 3, scoreD: 4, decidedAt: 1 };
+  const sdRoom = room4final('A', { result: Object.assign({}, base, { leftSeat: 'B' }), game: { bestMove: null, out: { B: 'left', C: 'sd', D: 'sd' } } });
+  assert.strictEqual(Scenes.resultReason(sdRoom), 'Juan left the game');
+  const allLeft = room4final('A', { result: Object.assign({}, base, { leftSeat: 'B' }), game: { bestMove: null, out: { B: 'left', C: 'left', D: 'left' } } });
+  assert.strictEqual(Scenes.resultReason(allLeft), 'Everyone else left the game');
+});

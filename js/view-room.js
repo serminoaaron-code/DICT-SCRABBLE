@@ -525,6 +525,11 @@
     $('#resignBtn').onclick = async () => {
       const seat = ctx.state.mySeat;
       const room = ctx.state.room;
+      // 3-4 player rooms: not during the 3/4-WAY intro, so the roulette's "<TEAM> GOES FIRST!" stays true
+      if (multi(room) && room.clock && Store.serverNow() < room.clock.startedAt) {
+        UI.toast('You can leave once the game has started.', 'error');
+        return;
+      }
       const msg = multi(room) && Match.activeSeats(room).length > 2
         ? `Leave the game? Your team (${teamOf(room, seat)}) loses; the others play on.`
         : `Leave the game? Your team (${teamOf(room, seat)}) loses this match.`;

@@ -1092,3 +1092,37 @@ test('ranking: winner first, ties share, leavers last', () => {
   const t = M.awardWin(live4({ A: 20, B: 90, C: 20, D: 5 }), 'B', 8000);
   assert.deepStrictEqual(M.ranking(t).map(x => [x.seat, x.score, x.place]), [['B', 90, 1], ['A', 20, 2], ['C', 20, 2], ['D', 5, 4]]);
 });
+
+// ---------- final review fixes (2026-11-03) ----------
+
+test('last resign in a 4-player room marks the leaver (podium + reason)', () => {
+  // sudden death A vs B; C and D out of sudden death; B resigns -> A wins, B is LEFT
+  let r = live4({ A: 50, B: 50, C: 10, D: 5 });
+  r = M.resolveTimeUp(r, 601000);
+  assert.deepStrictEqual(r.game.suddenDeath.seats, ['A', 'B']);
+  r = M.resign(r, 'B', 602000);
+  assert.strictEqual(r.status, 'final');
+  assert.strictEqual(r.result.winner, 'A');
+  assert.strictEqual(r.game.out.B, 'left');
+  assert.strictEqual(r.result.leftSeat, 'B');
+  assert.deepStrictEqual(M.ranking(r).map(x => [x.seat, x.place, x.left]), [['A', 1, false], ['C', 2, false], ['D', 3, false], ['B', 4, true]]);
+  // live game: D, C, then B leave -> A wins; B (90) is tagged and last
+  let q = live4({ A: 5, B: 90, C: 3, D: 9 });
+  q = M.resign(M.resign(M.resign(q, 'D', 7000), 'C', 7100), 'B', 7200);
+  assert.deepStrictEqual(M.ranking(q).map(x => [x.seat, x.left]), [['A', false], ['B', true], ['D', true], ['C', true]]);
+});
+
+test('2-player resign still writes no out / leftSeat', () => {
+  const n = M.resign(liveRoom(), 'A', 5000);
+  assert.strictEqual('out' in n.game, false);
+  assert.strictEqual('leftSeat' in n.result, false);
+});
+
+test('resign during a celebration keeps the next turn\'s delay', () => {
+  const r = live4();
+  r.game.turn = 'B';
+  r.clock.turnStartedAt = 20000; // a celebration still holds the turn clock back
+  const n = M.resign(r, 'B', 16000);
+  assert.strictEqual(n.game.turn, 'C');
+  assert.strictEqual(n.clock.turnStartedAt, 20000);
+});

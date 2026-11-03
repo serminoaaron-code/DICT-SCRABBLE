@@ -80,8 +80,13 @@
     if (!hasResult(room)) return '';
     const res = room.result;
     let line = REASON_LINE[res.reason] || '';
-    if (res.reason === 'resign' && M().seatsOf(room).length > 2) line = 'Everyone else left the game';
-    else if (res.reason === 'resign') {
+    if (res.reason === 'resign' && M().seatsOf(room).length > 2) {
+      // "Everyone else left" only when they all did; otherwise (sudden death) name the last leaver
+      const out = (room.game && room.game.out) || {};
+      const all = M().seatsOf(room).filter(s => s !== res.winner).every(s => out[s] === 'left');
+      const who = res.leftSeat ? (playerOf(room, res.leftSeat) || teamOf(room, res.leftSeat)) : '';
+      line = all || !who ? 'Everyone else left the game' : `${who} left the game`;
+    } else if (res.reason === 'resign') {
       const loser = res.winner === 'A' ? 'B' : 'A';
       line = `${playerOf(room, loser) || teamOf(room, loser)} left the game`;
     }
@@ -595,7 +600,8 @@
         // "<player> left the game": the name gets the one-line "…" treatment, the rest stays readable.
         const line = el('div', 'res-reason');
         const loser = win === 'A' ? 'B' : 'A';
-        const who = res.reason === 'resign' && !isMultiRoom(room) ? (playerOf(room, loser) || teamOf(room, loser)) : '';
+        const gone = isMultiRoom(room) ? res.leftSeat : loser;
+        const who = res.reason === 'resign' && gone ? (playerOf(room, gone) || teamOf(room, gone)) : '';
         if (who && reason.startsWith(who)) line.append(el('span', 'nm', who), reason.slice(who.length));
         else line.textContent = reason;
         inner.appendChild(line);
