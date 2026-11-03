@@ -87,13 +87,14 @@
         const ch = noise.getChannelData(0); for (let i = 0; i < len; i++) ch[i] = Math.random() * 2 - 1;
       } catch (e) { ctx = null; return null; }
     }
-    try { if (ctx.state === 'suspended') ctx.resume(); } catch (e) { /* ignore */ }
+    try { if (ctx.state === 'suspended' || ctx.state === 'interrupted') ctx.resume(); } catch (e) { /* ignore */ } // 'interrupted': iPhone (a call, Siri)
     return ctx;
   }
   // A gesture starts music only if a match screen still wants it and 🎵 is on (stop() forgets the wish).
-  // pointerup too: on a phone, a touch only counts as a gesture when the finger lifts (as in sound.js).
+  // pointerup too: on a phone, a touch only counts as a gesture when the finger lifts; touchend and click
+  // for older iPhone Safari (the same list as sound.js, which also makes the iPhone play it as media).
   function onGesture() { gestured = true; if (wanted && wanted.track && enabled()) set(wanted.track, wanted.level); }
-  try { if (root.document) ['pointerdown', 'pointerup', 'keydown'].forEach(t => root.document.addEventListener(t, onGesture, true)); } catch (e) { /* no document */ }
+  try { if (root.document) ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown'].forEach(t => root.document.addEventListener(t, onGesture, true)); } catch (e) { /* no document */ }
 
   function tone(type, freq, t, dur, gain) {
     const o = ctx.createOscillator(), g = ctx.createGain();

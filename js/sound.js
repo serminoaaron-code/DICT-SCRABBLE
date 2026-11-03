@@ -39,17 +39,32 @@
   // gesture resumes a suspended context until it is running.
   let ctx = null;
   let gestured = false;
+  // iPhone (Safari and every iPhone browser on its engine, Brave too): Web Audio follows the silent
+  // switch unless the page says its sound is media (iOS 17+). Set just before the page's first sound,
+  // never on load, so opening a page never stops a player's own music. Older iPhones lack it: no-op.
+  function playAsMedia() {
+    try {
+      const s = root.navigator && root.navigator.audioSession;
+      if (s && s.type !== 'playback') s.type = 'playback';
+    } catch (e) { /* ignore */ }
+  }
+  // A context that a tap can start again: 'suspended', or iPhone's own 'interrupted' (a call, Siri,
+  // another app taking the audio — more common once the game plays as media).
+  function isHeld(c) { return !!c && (c.state === 'suspended' || c.state === 'interrupted'); }
   function ensureCtx() {
     if (!ctx) {
       try {
+        playAsMedia();
         const AC = root.AudioContext || root.webkitAudioContext;
         if (AC) ctx = new AC();
+        // stopped later (an iPhone call, Siri, the lock screen): listen for the next tap again to resume it
+        if (ctx) ctx.onstatechange = () => { if (ctx.state !== 'running') bindGestures(); };
       } catch (e) {
         ctx = null;
       }
     }
     try {
-      if (ctx && ctx.state === 'suspended' && ctx.resume) {
+      if (isHeld(ctx) && ctx.resume) {
         const p = ctx.resume();
         if (p && p.then) p.then(unbindWhenRunning, () => {});
       }
@@ -80,9 +95,11 @@
   // '1' from an earlier session) gets no running AudioContext until some
   // gesture happens on the new page — toggle() isn't called again. Every
   // pointerdown/pointerup/keydown resumes it (pointerup: a touch only counts
-  // as a gesture when the finger lifts), and the listeners stay until the
-  // context is running, then remove themselves.
-  const GESTURES = ['pointerdown', 'pointerup', 'keydown'];
+  // as a gesture when the finger lifts; touchend and click too, the only taps
+  // older iPhone Safari unlocks audio on), and the listeners stay until the
+  // context is running, then remove themselves; they come back if it stops
+  // again (onstatechange above).
+  const GESTURES = ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown'];
   function onGesture() {
     gestured = true;
     if (enabled()) ensureCtx();
@@ -92,11 +109,14 @@
     if (!ctx || ctx.state !== 'running') return;
     try { GESTURES.forEach(t => root.document.removeEventListener(t, onGesture, true)); } catch (e) { /* ignore */ }
   }
-  try {
-    if (root.document && root.document.addEventListener) {
-      GESTURES.forEach(t => root.document.addEventListener(t, onGesture, true));
-    }
-  } catch (e) { /* no document (Node, etc.) */ }
+  function bindGestures() { // adding the same listener twice is a no-op
+    try {
+      if (root.document && root.document.addEventListener) {
+        GESTURES.forEach(t => root.document.addEventListener(t, onGesture, true));
+      }
+    } catch (e) { /* no document (Node, etc.) */ }
+  }
+  bindGestures();
 
   // Short, quiet note sequences. Each note is well under 1s and gain stays
   // <= 0.2; total length per preset also stays under 1s.
