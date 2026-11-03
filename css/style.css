@@ -264,6 +264,22 @@ table.standings tr:first-child td { font-weight: 700; }
 .scorebar .side.turn .player::before { content: '▶ '; color: var(--yellow); }
 .scorebar .clock { font-family: ui-monospace, Consolas, monospace; font-size: 16px; font-weight: 800; text-align: center; padding: 3px 8px; border-radius: 8px; background: rgba(255,255,255,.18); color: #fff; }
 .scorebar .clock.low { background: var(--red); color: #fff; }
+/* 3-4 player rooms (mockup B): the match clock on top, then one column per seat in seat order;
+   the column on turn is highlighted, an out seat keeps its score with an OUT / LEFT tag. */
+.scorebar.multi { display: block; padding: 6px 8px; }
+.scorebar.multi .sb-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
+.scorebar.multi .sb-lbl { font-size: 11px; font-weight: 700; }
+.scorebar.multi .sb-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+.scorebar.multi.n3 .sb-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.scorebar.multi .side { align-items: center; text-align: center; gap: 2px; padding: 4px 3px; border-radius: 8px; background: rgba(255,255,255,.08); }
+.scorebar.multi .side .chip { font-size: 10px; padding: 1px 6px; }
+.scorebar.multi .who { flex-direction: column; align-items: center; gap: 2px; }
+.scorebar.multi .player { width: 100%; text-align: center; font-size: 11.5px; }
+.scorebar.multi .score { font-size: 20px; }
+.scorebar.multi .side.turn { background: rgba(255,194,14,.22); box-shadow: inset 0 0 0 1.5px var(--yellow); }
+.scorebar.multi .side.out { background: transparent; box-shadow: inset 0 0 0 1px rgba(255,255,255,.4); }
+.scorebar.multi .sb-out { font-size: 9.5px; font-weight: 900; letter-spacing: 1px; line-height: 14px; padding: 0 6px; border-radius: 99px; background: #fff; color: var(--navy); }
+.actions-row.out #playBtn, .actions-row.out #recallBtn, .actions-row.out #passBtn { display: none; }
 
 /* turn pill = #statusLine, with #turnClock inside */
 .pill-row { display: flex; justify-content: center; min-width: 0; }
@@ -273,7 +289,8 @@ table.standings tr:first-child td { font-weight: 700; }
 #statusLine .pill-clock:empty { display: none; }
 .pill-you { background: var(--green); color: var(--navy); border-color: var(--green); box-shadow: 0 0 0 4px rgba(0,166,81,.22), 0 0 14px rgba(0,166,81,.45); }
 .pill-you::before { content: ''; flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--navy); }
-.pill-them { background: var(--surface); color: var(--text); border-color: var(--line); }
+.pill-them, .pill-out { background: var(--surface); color: var(--text); border-color: var(--line); }
+.pill-out { border-style: dashed; }
 .pill-low { background: var(--red); color: #fff; border-color: var(--red); }
 .pill-ready, .pill-paused, .pill-appeal, .pill-hostDecision { background: var(--yellow); color: var(--navy); border-color: var(--yellow); }
 .pill-suddenDeath { background: var(--bg); color: var(--text); border-color: var(--red); }

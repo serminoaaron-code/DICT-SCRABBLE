@@ -213,3 +213,11 @@ test('seat C is seated (player names, YOUR TURN on its own turn)', () => {
 test('pill names an empty seat D by its team', () => {
   assert.strictEqual(Pill.state(room4('D'), 'A', 2000).text, "BARMM's turn");
 });
+
+test('an out player sees that they are out (3-4 player rooms)', () => {
+  const r = room4('B', { game: { turn: 'B', moveCount: 3, pending: null, suddenDeath: null, out: { C: 'sd' } } });
+  const p = Pill.state(r, 'C', 2000);
+  assert.strictEqual(p.kind, 'out');
+  assert.strictEqual(p.text, "You're out · Juan's turn");
+  assert.strictEqual(Pill.state(r, 'A', 2000).text, "Juan's turn");
+});

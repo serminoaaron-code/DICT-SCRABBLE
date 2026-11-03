@@ -1,6 +1,6 @@
 // Pure turn-pill state for the game screen (and later the projector).
 // state(room, mySeat, now) -> null when no game is in play, else { kind, text, ms }:
-//   kind: 'ready' | 'you' | 'them' | 'low' | 'paused' | 'appeal' | 'hostDecision' | 'suddenDeath'
+//   kind: 'ready' | 'you' | 'them' | 'low' | 'paused' | 'appeal' | 'hostDecision' | 'suddenDeath' | 'out'
 //   text: plain text (render with textContent, never innerHTML)
 //   ms:   turn time to show, clamped to 0..TURN_MS (null for hostDecision)
 // Loads as a browser global (Pill) or a Node module.
@@ -42,6 +42,8 @@
 
     const mine = mySeat === g.turn;
     const who = mine ? 'Your turn' : `${nameOf(room, g.turn)}'s turn`;
+    // 3-4 player rooms: a seat that left or dropped out of sudden death watches the rest.
+    if (g.out && g.out[mySeat]) return { kind: 'out', text: `You're out · ${who}`, ms };
     if (room.status === 'suddenDeath') {
       const round = ((g.suddenDeath && g.suddenDeath.rounds) || 0) + 1;
       return { kind: 'suddenDeath', text: `⚡ Sudden death · round ${round}/${Match.SUDDEN_DEATH_MAX_ROUNDS} · ${who}`, ms };
