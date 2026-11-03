@@ -290,7 +290,7 @@ Every bug we've fixed is listed here with steps to **try to make it happen again
   3. Once the game screen is up, tap a tile.
   4. Play a word.
   5. Do it again with the phone on **ring**.
-- **Expected now:** the music starts with your first tap on the game screen, and you hear the tile clicks, the "your turn" beep and the word sounds, whether the phone is on silent or on ring. If you had music playing in another app, it pauses when the game's sound starts, as it does for a video. On an iPhone older than iOS 17, silent mode still mutes the game (Apple doesn't allow anything else there); on ring it plays after your first tap.
+- **Expected now:** the music starts with your first tap on the game screen, and you hear the tile clicks, the "your turn" beep and the word sounds, whether the phone is on silent or on ring. If you had music playing in another app, it pauses on your first tap once the game has sound to play (🔊 on, or the match music), as it does for a video, and stays paused while the game is open. A phone call in the middle of a match doesn't leave the game silent: the next tap brings the sound back. On an iPhone older than iOS 17, silent mode still mutes the game (Apple doesn't allow anything else there); on ring it plays after your first tap.
 
 ## Scrabble rules
 

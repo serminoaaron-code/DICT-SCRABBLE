@@ -87,7 +87,7 @@
         const ch = noise.getChannelData(0); for (let i = 0; i < len; i++) ch[i] = Math.random() * 2 - 1;
       } catch (e) { ctx = null; return null; }
     }
-    try { if (ctx.state === 'suspended') ctx.resume(); } catch (e) { /* ignore */ }
+    try { if (ctx.state === 'suspended' || ctx.state === 'interrupted') ctx.resume(); } catch (e) { /* ignore */ } // 'interrupted': iPhone (a call, Siri)
     return ctx;
   }
   // A gesture starts music only if a match screen still wants it and 🎵 is on (stop() forgets the wish).

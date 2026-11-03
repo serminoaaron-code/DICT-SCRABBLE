@@ -50,10 +50,17 @@ test('a tap ending (touchend) starts the music, and the sound plays as media, so
   assert.strictEqual(Music.status().playing, true);
 });
 
-test('a click resumes a context the iPhone suspended (a call, the lock screen)', () => {
-  made[0].state = 'suspended';
-  gesture('click');
-  assert.strictEqual(made[0].state, 'running');
+test('a click resumes a context the iPhone suspended (lock screen) or interrupted (a call, Siri)', () => {
+  for (const state of ['suspended', 'interrupted']) {
+    made[0].state = state;
+    gesture('click');
+    assert.strictEqual(made[0].state, 'running', state);
+  }
   assert.strictEqual(made.length, 1, 'still the one shared context');
+});
+
+test('after the match stops the music, a click never restarts it', () => {
   Music.stop();
+  gesture('click'); gesture('touchend');
+  assert.strictEqual(Music.status().playing, false);
 });
