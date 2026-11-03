@@ -82,12 +82,18 @@
     const tags = [];
     const playing = PLAYING.includes(phase);
     if (playing && row.out) tags.push({ kind: 'bad', text: row.out === 'left' ? 'LEFT' : 'OUT' });
-    if (playing && row.turn) tags.push({ kind: 'turn', text: '▶ Turn' });
+    if (playing && row.turn && phase !== 'hostDecision') tags.push({ kind: 'turn', text: '▶ Turn' }); // nobody moves while the host decides
     if (phase === 'waiting') tags.push(row.ready ? { kind: 'ok', text: '✓ Ready' } : { kind: 'off', text: 'Not ready' });
     if (!row.online && row.out !== 'left') tags.push({ kind: 'off', text: '📴 Offline' });
     if (row.leaves > 0) tags.push({ kind: 'warn', text: `⚠️ Left the screen · ${row.leaves}×` });
     return tags;
   }
 
-  return { PER_PAGE, tabOf, view, pageList, seatRows, seatTags };
+  // A finished or void room's card has no player list: its screen-leave counts in one line, for the host's
+  // Correct result / Void call. -> [{ name, leaves }] for each seated player who left the screen.
+  function fairPlayLine(room) {
+    return seatRows(room).filter(r => r.taken && r.leaves > 0).map(r => ({ name: r.name, leaves: r.leaves }));
+  }
+
+  return { PER_PAGE, tabOf, view, pageList, seatRows, seatTags, fairPlayLine };
 });

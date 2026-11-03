@@ -222,6 +222,14 @@
         </div>`;
       }
 
+      // a finished or void card has no player list: its screen-leave counts stay visible for the host's call
+      function fairLine(room) {
+        if (room.status !== 'final' && room.status !== 'void') return '';
+        const who = RoomList.fairPlayLine(room);
+        if (!who.length) return '';
+        return `<div class="rc-fair">⚠️ Left the screen: ${who.map(p => `<span class="nm" title="${esc(p.name)}">${esc(Names.short(p.name))}</span> ${p.leaves}×`).join(' · ')}</div>`;
+      }
+
       function cardHtml(room) {
         const phase = Match.roomPhase(room);
         const seats = Match.seatsOf(room);
@@ -277,6 +285,7 @@
           ${room.status === 'waiting' || live ? playersHtml(room, phase) : ''}
           ${alert ? `<div class="rc-alert">${alert}</div>` : ''}
           ${status}${room.status === 'void' && room.voidNote ? `<div class="rc-voidnote">Void: ${esc(room.voidNote)}</div>` : ''}
+          ${fairLine(room)}
           <div class="actions rc-actions">${actions}</div>
         </div>`;
       }

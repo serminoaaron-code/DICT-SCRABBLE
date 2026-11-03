@@ -135,3 +135,18 @@ test('seatRows: scores are numbers only while a game exists, null before it', ()
   const r = base(2, { status: 'live', game: { turn: 'A', scores: { A: '7', B: 'x' }, board: {}, bag: [], racks: {} } });
   assert.deepStrictEqual(RoomList.seatRows(r).map(x => x.score), [7, 0]);
 });
+
+test('seatTags: no ▶ Turn while the host decides a tie (nobody can move then)', () => {
+  const r = base(2, { status: 'hostDecision', seats: { A: { name: 'a', clientId: 'ca' }, B: { name: 'b', clientId: 'cb' } }, presence: { ca: 'A', cb: 'B' },
+    game: { turn: 'A', scores: { A: 9, B: 9 }, board: {}, bag: [], racks: {}, suddenDeath: { startMove: 4, rounds: 1 } } });
+  const [a] = RoomList.seatRows(r);
+  assert.deepStrictEqual(texts(a, 'hostDecision'), []);
+  assert.deepStrictEqual(texts(a, 'appeal'), ['turn:▶ Turn'], 'during an appeal the turn is still with that seat');
+});
+
+test('fairPlayLine: the screen-leave counts of a finished or void room in one short line', () => {
+  const r = base(3, { status: 'final', seats: { A: { name: 'josh', clientId: 'c1' }, B: { name: 'mark', clientId: 'c2' }, C: { name: 'ana', clientId: 'c3' } },
+    fairPlay: { A: { screenLeaves: 1 }, C: { screenLeaves: 4 } } });
+  assert.deepStrictEqual(RoomList.fairPlayLine(r), [{ name: 'josh', leaves: 1 }, { name: 'ana', leaves: 4 }]);
+  assert.deepStrictEqual(RoomList.fairPlayLine(base(2)), []);
+});
