@@ -166,6 +166,16 @@ html[data-theme="dark"] .panel, html[data-theme="dark"] .card { box-shadow: 0 10
 .chip { display: inline-block; vertical-align: middle; max-width: 100%; overflow: hidden; text-overflow: ellipsis; padding: 4px 11px; border-radius: 999px; font-weight: 800; font-size: 12px; letter-spacing: .2px; white-space: nowrap; line-height: 1.5; }
 .chip-a { background: var(--blue); color: #fff; }
 .chip-b { background: var(--red); color: #fff; }
+/* 3-4 player rooms: seat C green and seat D yellow, both with dark text (AA in both themes) */
+.chip-c { background: var(--green); color: var(--navy); }
+.chip-d { background: var(--yellow); color: var(--navy); }
+/* host pickers for 3-4 player rooms (Walkover… / Correct result…) */
+.pick { display: inline-block; }
+.pick > summary { list-style: none; cursor: pointer; display: inline-block; padding: 6px 12px; font-size: 12px; font-weight: 800; border-radius: 9px; }
+.pick > summary::-webkit-details-marker { display: none; }
+.pick[open] > summary { background: var(--navy); color: #fff; border-color: var(--navy); }
+.pick-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.nr-players { margin-top: 4px; }
 
 /* generic status pill (base for the game-screen turn pill built in a later task) */
 .pill { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 16px; border-radius: 999px; font-weight: 800; font-size: 13px; background: var(--surface); color: var(--text); border: 2px solid var(--line); }
