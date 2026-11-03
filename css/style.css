@@ -8,13 +8,14 @@
   --green: #00a651;
   --cream: #f6e7c1;
 
-  /* premium squares: always the brand colour, regardless of theme */
-  --sq-tw: var(--red);
-  --sq-dw: var(--yellow);
-  --sq-tl: var(--green);
-  /* a touch lighter than --sky: navy-on-sky at the brand hex is 4.05:1 with the small bold
-     square label, under the 4.5:1 AA floor. This keeps the same sky family at AA (~5:1). */
-  --sq-dl: #4d90f7;
+  /* premium squares (QA 2026-11-03, the user's pick "C1"): a soft tint with the label in the bonus colour,
+     easy on the eyes; deep muted squares in dark mode (html[data-theme="dark"] below). 2W is purple, not
+     yellow (too close to the cream tiles), 2L cyan, not blue (it blended into the dark board).
+     Every label is AA (>= 4.5:1) on its square in both themes (tests/style-tokens.test.js). */
+  --sq-tw: #fde1df; --sq-tw-ink: #b3170f;
+  --sq-dw: #efe2fb; --sq-dw-ink: #6a2ea6;
+  --sq-tl: #d9f2e4; --sq-tl-ink: #05703a;
+  --sq-dl: #d5f3f8; --sq-dl-ink: #0a6273;
 
   /* status chips (badges, warn/ok lines) keep their own fixed light tint in both themes */
   --green-bg: #ecfdf5;
@@ -76,6 +77,10 @@ html[data-theme="dark"] {
   --gridbg: #0f1d42;
   --bar: #1b3a85;
   --rack: #060d22;
+  --sq-tw: #5a2436; --sq-tw-ink: #ffb3ad;
+  --sq-dw: #46285f; --sq-dw-ink: #dcb8ff;
+  --sq-tl: #1c4a2c; --sq-tl-ink: #8fe3b6;
+  --sq-dl: #0d4f5e; --sq-dl-ink: #86e6f5;
 }
 
 * { box-sizing: border-box; font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
@@ -324,10 +329,10 @@ table.standings tr:first-child td { font-weight: 700; }
 .scrabble-grid { display: grid; grid-template-columns: repeat(15, 1fr); grid-template-rows: repeat(15, 1fr); gap: 1px; width: 100%; height: 100%; background: var(--gridbg); padding: 1px; }
 .sq { display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; color: var(--text); cursor: pointer; position: relative; }
 .sq.normal { background: var(--sq); }
-.sq.dl { background: var(--sq-dl); color: var(--navy); font-weight: 800; }
-.sq.tl { background: var(--sq-tl); color: var(--navy); font-weight: 800; }
-.sq.dw, .sq.center { background: var(--sq-dw); color: var(--navy); font-weight: 800; }
-.sq.tw { background: var(--sq-tw); color: #fff; }
+.sq.dl { background: var(--sq-dl); color: var(--sq-dl-ink); font-weight: 800; }
+.sq.tl { background: var(--sq-tl); color: var(--sq-tl-ink); font-weight: 800; }
+.sq.dw, .sq.center { background: var(--sq-dw); color: var(--sq-dw-ink); font-weight: 800; }
+.sq.tw { background: var(--sq-tw); color: var(--sq-tw-ink); font-weight: 800; }
 .tile { width: 92%; height: 92%; background: var(--cream); border: 1px solid var(--gold); border-radius: 3px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px; color: var(--navy); position: relative; box-shadow: 0 2px 3px rgba(0,0,0,.2); }
 .tile .sub { position: absolute; bottom: 0; right: 2px; font-size: 7px; font-weight: 600; }
 .tile.temp { background: #fde68a; border-color: #b45309; }
@@ -715,7 +720,9 @@ html[data-theme="dark"] .bp-shape { opacity: .35; }
   .panel, .card { padding: 12px; }
   .sq { font-size: 6px; }
   .tile { font-size: 11px; }
-  .tile .sub { display: none; }
+  /* the points stay on phones (QA 2026-11-03); the letter sits a little up-left so a "10" (Q, Z) clears it */
+  .tile .sub { font-size: 6.5px; right: 1px; line-height: 1; letter-spacing: -.3px; }
+  #board-container .tile { padding: 0 3px 2px 0; }
   .rack { gap: 4px; padding: 6px; }
   .rack .tile { width: 36px; height: 36px; font-size: 16px; }
   .rack-shuffle { width: 36px; height: 36px; font-size: 16px; }

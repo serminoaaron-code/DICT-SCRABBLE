@@ -292,6 +292,15 @@ Every bug we've fixed is listed here with steps to **try to make it happen again
   5. Do it again with the phone on **ring**.
 - **Expected now:** the music starts with your first tap on the game screen, and you hear the tile clicks, the "your turn" beep and the word sounds, whether the phone is on silent or on ring. If you had music playing in another app, it pauses on your first tap once the game has sound to play (🔊 on, or the match music), as it does for a video, and stays paused while the game is open. A phone call in the middle of a match doesn't leave the game silent: the next tap brings the sound back. On an iPhone older than iOS 17, silent mode still mutes the game (Apple doesn't allow anything else there); on ring it plays after your first tap.
 
+### BF-32: No letter points on phone tiles
+- **Area:** live game · **Fixed in:** PR #19 · **Found by:** QA, phones
+- **Used to happen:** on a phone, the tiles on the board and in your rack showed only the letter, without its points (no small "1", "8", "10"). On a computer they were there.
+- **Try to trigger it:**
+  1. Open a room on a phone and start a match.
+  2. Look at your rack, then play a word and look at the board. Try to get a **Q** or **Z** (10 points) on the board.
+  3. Switch ☀️/🌙 and look again.
+- **Expected now:** every tile, in the rack and on the board, shows its points in the bottom-right corner, in both themes. The "10" on Q and Z doesn't cover the letter. The bonus squares are also softer now (pale squares with coloured labels; 2W is purple, 2L is cyan), on phones, computers and the big screen.
+
 ## Scrabble rules
 
 ### BF-15: Middle-row triple-word square in the wrong place

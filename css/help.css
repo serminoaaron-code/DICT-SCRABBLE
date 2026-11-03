@@ -46,8 +46,9 @@
 .gh-tl sub { position: absolute; right: 4px; bottom: 2px; font: 700 10px/1 Inter, sans-serif; }
 .gh-tl.sel { transform: translateY(-5px); box-shadow: 0 0 0 3px var(--yellow), 0 3px 0 var(--tile-edge); }
 .gh-sq { width: 30px; height: 30px; border-radius: 4px; font: 800 11px/30px Inter, sans-serif; text-align: center; color: var(--navy); }
-.gh-sq.dl { background: var(--sq-dl); } .gh-sq.tl { background: var(--sq-tl); } .gh-sq.dw, .gh-sq.st { background: var(--sq-dw); }
-.gh-sq.tw { background: var(--sq-tw); color: #fff; }
+.gh-sq.dl { background: var(--sq-dl); color: var(--sq-dl-ink); } .gh-sq.tl { background: var(--sq-tl); color: var(--sq-tl-ink); }
+.gh-sq.dw, .gh-sq.st { background: var(--sq-dw); color: var(--sq-dw-ink); }
+.gh-sq.tw { background: var(--sq-tw); color: var(--sq-tw-ink); }
 .gh-bt { border-radius: 10px; padding: 6px 10px; font-weight: 800; font-size: 13px; white-space: nowrap; color: #fff; background: var(--blue); }
 .gh-bt.red { background: var(--red); } .gh-bt.green { background: var(--green); color: var(--navy); } .gh-bt.gray { background: var(--btn-muted); } .gh-bt.ylw { background: var(--yellow); color: var(--navy); }
 .gh-in { flex: 1 1 130px; min-width: 0; border: 2px solid var(--line); border-radius: 10px; padding: 6px 10px; background: var(--bg); color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
