@@ -20,10 +20,26 @@
   const DROP_MS = 700;
   const CELEBRATE_MS = [1000, 2600, 2600, 3000, 4500];
   const SUDDEN_DEATH_MAX_ROUNDS = 3;
-  const SEATS = ['A', 'B'];
+  // 3-4 player rooms (2026-11-03): the "3/4-WAY" team intro + roulette wheel take 2 s longer
+  // (teams 2.6 s, wheel 3.4 s, then "<TEAM> GOES FIRST!" holds 2.5 s; Scenes.WHEEL_RESULT_AT).
+  const INTRO_MULTI_MS = 8500;
+  const ALL_SEATS = ['A', 'B', 'C', 'D'];
 
   const clone = obj => JSON.parse(JSON.stringify(obj));
   const other = seat => (seat === 'A' ? 'B' : 'A');
+
+  // ---------- seats (2-4 players) ----------
+  // A room without `players` is a 2-player room; 3-4 player rooms add seats C and D
+  // (teamC/teamCName, teamD/teamDName). The fields of a 2-player room never change.
+  function seatsOf(room) {
+    const n = room && [3, 4].includes(room.players) ? room.players : 2;
+    return ALL_SEATS.slice(0, n);
+  }
+  const isMulti = room => seatsOf(room).length > 2;
+  function isSeat(room, s) { return seatsOf(room).includes(s); }
+  function teamOf(room, seat) { return (room && room['team' + seat]) || ''; }
+  function teamNameOf(room, seat) { return (room && room['team' + seat + 'Name']) || 'Team ' + seat; }
+  function introMsFor(room) { return isMulti(room) ? INTRO_MULTI_MS : INTRO_MS; }
 
   // ---------- codes ----------
 
@@ -47,9 +63,14 @@
 
   // ---------- room shape ----------
 
-  function createRoom({ code, teamA, teamB, teamAName, teamBName, label, matchLengthSec, now }) {
-    if (teamA === teamB) throw new Error('SAME_TEAM');
-    return {
+  function createRoom(opts) {
+    const { code, teamA, teamB, teamAName, teamBName, label, matchLengthSec, now, players = 2 } = opts;
+    if (![2, 3, 4].includes(players)) throw new Error('BAD_PLAYERS');
+    const seats = ALL_SEATS.slice(0, players);
+    const ids = seats.map(s => opts['team' + s]);
+    if (players > 2 && ids.some(id => !id)) throw new Error('MISSING_TEAM');
+    if (new Set(ids).size !== ids.length) throw new Error('SAME_TEAM');
+    const r = {
       code, teamA, teamB,
       teamAName: teamAName || '', teamBName: teamBName || '',
       label: label || '',
@@ -63,6 +84,15 @@
       result: null,
       createdAt: now
     };
+    if (players === 2) return r; // exactly today's room
+    r.players = players;
+    for (const s of seats.slice(2)) {
+      r['team' + s] = opts['team' + s];
+      r['team' + s + 'Name'] = opts['team' + s + 'Name'] || '';
+      r.seats[s] = null;
+      r.fairPlay[s] = { screenLeaves: 0 };
+    }
+    return r;
   }
 
   // Firebase drops empty arrays/objects and nulls; restore every default.
@@ -71,6 +101,8 @@
     r.label = r.label || '';
     r.teamAName = r.teamAName || '';
     r.teamBName = r.teamBName || '';
+    const SEATS = seatsOf(r);
+    for (const s of SEATS.slice(2)) r['team' + s + 'Name'] = r['team' + s + 'Name'] || '';
     r.seats = r.seats || {};
     for (const s of SEATS) r.seats[s] = r.seats[s] || null;
     r.watchers = r.watchers || {};
@@ -94,12 +126,23 @@
       g.scores = g.scores || {};
       for (const s of SEATS) {
         g.racks[s] = g.racks[s] || [];
-        g.scores[s] = g.scores[s] || 0;
+        g.scores[s] = Number(g.scores[s]) || 0; // always a number (views put it into HTML)
       }
       g.moveCount = g.moveCount || 0;
+      // 3-4 player rooms: { seat: 'left' | 'sd' } (resigned / out of sudden death). Only real seats are
+      // kept, here and in suddenDeath.seats / played: room data is client-written and ends up in markup.
+      const out = g.out || {};
+      g.out = {};
+      for (const s of SEATS) if (out[s] === 'left' || out[s] === 'sd') g.out[s] = out[s];
       g.pending = g.pending || null;
       if (g.pending) g.pending.rejectedWords = g.pending.rejectedWords || [];
       g.suddenDeath = g.suddenDeath || null;
+      if (g.suddenDeath) {
+        const sd = g.suddenDeath;
+        if (Array.isArray(sd.seats)) sd.seats = sd.seats.filter(s => SEATS.includes(s));
+        if (Array.isArray(sd.played)) sd.played = sd.played.filter(s => SEATS.includes(s));
+        if (isMulti(r)) sd.played = sd.played || [];
+      }
       g.lastMove = g.lastMove || null;
       if (g.lastMove) {
         g.lastMove.words = g.lastMove.words || [];
@@ -115,6 +158,7 @@
 
   function claimSeat(room, seat, { name, clientId }) {
     if (room.status === 'final' || room.status === 'void') return null;
+    if (!isSeat(room, seat)) return null;
     const cur = room.seats && room.seats[seat];
     if (cur && cur.clientId !== clientId) return null;
     const r = clone(room);
@@ -160,8 +204,10 @@
   // Display copy with the teams' current names (renames), falling back to the snapshot.
   function withTeamNames(room, teams) {
     const r = clone(room);
-    if (teams && teams[r.teamA] && teams[r.teamA].name) r.teamAName = teams[r.teamA].name;
-    if (teams && teams[r.teamB] && teams[r.teamB].name) r.teamBName = teams[r.teamB].name;
+    for (const s of seatsOf(r)) {
+      const id = r['team' + s];
+      if (teams && teams[id] && teams[id].name) r['team' + s + 'Name'] = teams[id].name;
+    }
     return r;
   }
 
@@ -171,14 +217,20 @@
 
   function startMatch(room, now, rng = Math.random, introMs = 0) {
     if (room.status !== 'waiting') return null;
-    if (!SEATS.every(s => room.seats[s] && room.seats[s].ready)) return null;
+    const seats = seatsOf(room);
+    if (!seats.every(s => room.seats[s] && room.seats[s].ready)) return null;
     const r = clone(room);
     let bag = Engine.createBag(rng);
-    const a = Engine.drawTiles(bag, Engine.RACK_SIZE); bag = a.bag;
-    const b = Engine.drawTiles(bag, Engine.RACK_SIZE); bag = b.bag;
-    const firstSeat = rng() < 0.5 ? 'A' : 'B';
+    const racks = {}, scores = {};
+    for (const s of seats) {
+      const d = Engine.drawTiles(bag, Engine.RACK_SIZE);
+      bag = d.bag; racks[s] = d.drawn; scores[s] = 0;
+    }
+    // 2 players: the coin toss (as before); 3-4 players: the roulette's pick. Chosen once, here, so
+    // every screen plays the same coin / wheel landing from the stored firstSeat.
+    const firstSeat = seats.length === 2 ? (rng() < 0.5 ? 'A' : 'B') : seats[Math.min(seats.length - 1, Math.floor(rng() * seats.length))];
     r.game = {
-      board: {}, bag, racks: { A: a.drawn, B: b.drawn }, scores: { A: 0, B: 0 },
+      board: {}, bag, racks, scores,
       firstSeat, turn: firstSeat, moveCount: 0, pending: null, suddenDeath: null, lastMove: null, bestMove: null
     };
     const startedAt = now + introMs;
@@ -218,45 +270,117 @@
     r.status = 'final';
     r.result = {
       winner: winnerSeat,
-      teamId: winnerSeat === 'A' ? r.teamA : r.teamB,
+      teamId: teamOf(r, winnerSeat),
       scoreA: scores.A || 0,
       scoreB: scores.B || 0,
       reason,
       decidedAt: now
     };
+    for (const s of seatsOf(r).slice(2)) r.result['score' + s] = scores[s] || 0;
     return r;
   }
 
-  function leader(room) {
-    const { A, B } = room.game.scores;
-    return A === B ? null : (A > B ? 'A' : 'B');
+  // ---------- turn order, out seats, sudden death (2-4 players) ----------
+  // game.out (3-4 player rooms only): { seat: 'left' (resigned) | 'sd' (out of sudden death) }.
+  // An out seat keeps its score but gets no turns. 2-player rooms never write it.
+
+  function activeSeats(room) {
+    const out = (room.game && room.game.out) || {};
+    return seatsOf(room).filter(s => !out[s]);
   }
 
-  function enterSuddenDeath(r, now, delayMs = 0) {
+  // The next active seat after `seat`, in seat order, wrapping (2 players: the other seat).
+  function nextSeat(room, seat) {
+    const order = seatsOf(room);
+    const act = activeSeats(room);
+    const i = order.indexOf(seat);
+    for (let k = 1; k <= order.length; k++) {
+      const s = order[(i + k) % order.length];
+      if (act.includes(s)) return s;
+    }
+    return seat;
+  }
+
+  // The seats among `seats` with the top score.
+  function leadersOf(room, seats) {
+    const sc = room.game.scores;
+    const top = Math.max(...seats.map(s => sc[s] || 0));
+    return seats.filter(s => (sc[s] || 0) === top);
+  }
+
+  // Sudden-death seats: 3-4 player rooms store them; 2 players = both.
+  function sdSeats(room) {
+    const sd = room.game.suddenDeath;
+    return sd && Array.isArray(sd.seats) && sd.seats.length ? sd.seats : activeSeats(room);
+  }
+
+  // Mutates r: a tie at the top goes to sudden death between the tied seats only; in 3-4 player
+  // rooms the others are out ('sd'). The first tied seat at or after firstSeat moves first.
+  function enterSuddenDeath(r, now, delayMs, leaders) {
+    const g = r.game;
     r.status = 'suddenDeath';
-    r.game.suddenDeath = { startMove: r.game.moveCount, rounds: 0 };
-    r.game.turn = r.game.firstSeat;
+    g.suddenDeath = { startMove: g.moveCount, rounds: 0 };
+    if (isMulti(r)) {
+      g.out = g.out || {};
+      for (const s of activeSeats(r)) if (!leaders.includes(s)) g.out[s] = 'sd';
+      g.suddenDeath.seats = leaders.slice();
+      g.suddenDeath.played = [];
+    }
+    const order = seatsOf(r);
+    const fi = Math.max(0, order.indexOf(g.firstSeat));
+    for (let k = 0; k < order.length; k++) {
+      const s = order[(fi + k) % order.length];
+      if (leaders.includes(s)) { g.turn = s; break; }
+    }
     r.clock.turnStartedAt = now + delayMs;
     return r;
   }
+
+  // Mutates r (a clone): the highest active score wins; a tie at the top -> sudden death.
+  function endByScore(r, reason, now, delayMs = 0) {
+    const leaders = leadersOf(r, activeSeats(r));
+    if (leaders.length === 1) return finalize(r, leaders[0], reason, now);
+    return enterSuddenDeath(r, now, delayMs, leaders);
+  }
+
+  // Mutates r: a sudden-death round is over. One leader wins; otherwise (3-4 players) the seats
+  // that fell behind are out too, and the round count keeps going; 3 rounds -> host decides.
+  function endRound(r, now) {
+    const g = r.game;
+    const sd = g.suddenDeath;
+    sd.rounds += 1;
+    const leaders = leadersOf(r, sdSeats(r));
+    if (leaders.length === 1) return finalize(r, leaders[0], 'suddenDeath', now);
+    if (isMulti(r)) {
+      for (const s of sdSeats(r)) if (!leaders.includes(s)) g.out[s] = 'sd';
+      sd.seats = leaders;
+      sd.played = [];
+      if (g.out[g.turn]) g.turn = nextSeat(r, g.turn);
+    }
+    if (sd.rounds >= SUDDEN_DEATH_MAX_ROUNDS) r.status = 'hostDecision';
+    return r;
+  }
+
+  // 3-4 player rooms: has every sudden-death seat played this round?
+  const roundDone = g => g.suddenDeath.seats.every(s => (g.suddenDeath.played || []).includes(s));
 
   // Mutates r (already a clone): advance the turn, then apply end-of-game rules.
   // delayMs holds the opponent's turn clock back for a celebration (0 for passes/timeouts).
   function endTurn(r, seat, now, wentOut, delayMs = 0) {
     const g = r.game;
     g.moveCount += 1;
-    g.turn = other(seat);
+    g.turn = nextSeat(r, seat);
     r.clock.turnStartedAt = now + delayMs;
 
-    if (wentOut && r.status === 'live') {
-      const lead = leader(r);
-      return lead ? finalize(r, lead, 'bagOut', now) : enterSuddenDeath(r, now, delayMs);
-    }
-    if (r.status === 'suddenDeath' && (g.moveCount - g.suddenDeath.startMove) % 2 === 0) {
-      g.suddenDeath.rounds += 1;
-      const lead = leader(r);
-      if (lead) return finalize(r, lead, 'suddenDeath', now);
-      if (g.suddenDeath.rounds >= SUDDEN_DEATH_MAX_ROUNDS) r.status = 'hostDecision';
+    if (wentOut && r.status === 'live') return endByScore(r, 'bagOut', now, delayMs);
+    if (r.status === 'suddenDeath') {
+      if (!isMulti(r)) {
+        if ((g.moveCount - g.suddenDeath.startMove) % 2 === 0) return endRound(r, now);
+      } else {
+        const played = g.suddenDeath.played || [];
+        g.suddenDeath.played = played.includes(seat) ? played : played.concat(seat);
+        if (roundDone(g)) return endRound(r, now);
+      }
     }
     return r;
   }
@@ -319,9 +443,7 @@
   function resolveTimeUp(room, now) {
     if (room.status !== 'live' || room.result || !room.clock || room.clock.paused) return null;
     if (now < room.clock.endsAt) return null;
-    const lead = leader(room);
-    if (lead) return finalize(room, lead, 'time', now);
-    return enterSuddenDeath(clone(room), now);
+    return endByScore(clone(room), 'time', now);
   }
 
   // ---------- pause & appeals ----------
@@ -387,18 +509,51 @@
 
   const DECIDABLE = ['live', 'suddenDeath', 'hostDecision'];
 
+  // A player leaves the game and loses. With one player left, that player wins (2 players: the
+  // other seat, as before). In 3-4 player rooms the others play on: the seat is out ('left'), its
+  // tiles leave the game (the bag is unchanged) and its turns are skipped.
   function resign(room, seat, now) {
-    if (!DECIDABLE.includes(room.status)) return null;
-    return finalize(room, other(seat), 'resign', now);
+    if (!DECIDABLE.includes(room.status) || !room.game) return null;
+    const act = activeSeats(room);
+    if (!act.includes(seat)) return null;
+    const rest = act.filter(s => s !== seat);
+    if (rest.length === 1 && !isMulti(room)) return finalize(room, rest[0], 'resign', now);
+    const r = clone(room);
+    const g = r.game;
+    g.out = g.out || {};
+    g.out[seat] = 'left';
+    g.racks[seat] = [];
+    if (rest.length === 1) { // 3-4 players: the last other player left; the leaver keeps its LEFT tag
+      const f = finalize(r, rest[0], 'resign', now);
+      f.result.leftSeat = seat;
+      return f;
+    }
+    if (g.pending && g.pending.seat === seat) {
+      g.pending = null;
+      if (r.clock.paused && r.clock.paused.by === 'appeal') resumeInPlace(r, now);
+    }
+    if (g.turn === seat) {
+      g.turn = nextSeat(r, seat);
+      if (r.clock.paused) r.clock.paused.turnRemainingMs = TURN_MS;
+      // never earlier than a celebration's or the intro's hold on the turn clock
+      else r.clock.turnStartedAt = Math.max(now, r.clock.turnStartedAt, r.clock.startedAt);
+    }
+    const sd = g.suddenDeath;
+    if (sd && Array.isArray(sd.seats)) {
+      sd.seats = sd.seats.filter(s => s !== seat);
+      sd.played = (sd.played || []).filter(s => s !== seat);
+      if (r.status === 'suddenDeath' && roundDone(g)) return endRound(r, now);
+    }
+    return r;
   }
 
   function awardWin(room, seat, now) {
-    if (!DECIDABLE.includes(room.status)) return null;
+    if (!DECIDABLE.includes(room.status) || !isSeat(room, seat)) return null;
     return finalize(room, seat, 'awarded', now);
   }
 
   function walkover(room, seat, now) {
-    if (room.status !== 'waiting') return null;
+    if (room.status !== 'waiting' || !isSeat(room, seat)) return null;
     return finalize(room, seat, 'walkover', now);
   }
 
@@ -411,13 +566,18 @@
     return r;
   }
 
-  function correctResult(room, now, note = '') {
+  // 2 players: the win goes to the other seat (toSeat optional). 3-4 players: the host picks the
+  // new winner (toSeat, a seat of the room other than the current winner).
+  function correctResult(room, now, note = '', toSeat = null) {
     if (room.status !== 'final' || !room.result) return null;
+    const cur = room.result.winner;
+    const valid = isSeat(room, toSeat) && toSeat !== cur;
+    if (isMulti(room) && !valid) return null;
     const r = clone(room);
-    const winner = other(r.result.winner);
+    const winner = valid ? toSeat : other(cur);
     r.result.originalReason = r.result.originalReason || r.result.reason;
     r.result.winner = winner;
-    r.result.teamId = winner === 'A' ? r.teamA : r.teamB;
+    r.result.teamId = teamOf(r, winner);
     r.result.reason = 'corrected';
     r.result.note = cleanNote(note);
     r.result.decidedAt = now;
@@ -450,7 +610,7 @@
   }
 
   function tauntAllowed(room, seat, now) {
-    if (!SEATS.includes(seat) || !tauntWindow(room, now)) return false;
+    if (!isSeat(room, seat) || !tauntWindow(room, now)) return false;
     const last = room.taunts && room.taunts[seat];
     return !(last && now - last.at < TAUNT_COOLDOWN_MS);
   }
@@ -493,14 +653,12 @@
     for (const id of Object.keys(teams || {})) ensure(id);
     for (const room of Object.values(rooms || {})) {
       if (!room || room.status !== 'final' || !room.result) continue;
+      // +1 and a win for the winner; a loss for every other seat (3-4 players: 1 win, 2-3 losses).
       const winSeat = room.result.winner;
-      const loseSeat = other(winSeat);
-      const idOf = s => (s === 'A' ? room.teamA : room.teamB);
-      const nameOf = s => (s === 'A' ? room.teamAName : room.teamBName);
-      const w = ensure(idOf(winSeat), nameOf(winSeat));
-      const l = ensure(idOf(loseSeat), nameOf(loseSeat));
+      const nameOf = s => room['team' + s + 'Name'];
+      const w = ensure(teamOf(room, winSeat), nameOf(winSeat));
       w.wins += 1; w.points += 1;
-      l.losses += 1;
+      for (const s of seatsOf(room)) if (s !== winSeat) ensure(teamOf(room, s), nameOf(s)).losses += 1;
     }
     const list = Object.values(table).sort((a, b) => b.points - a.points || a.name.localeCompare(b.name));
     list.forEach((t, i) => {
@@ -509,8 +667,33 @@
     return list;
   }
 
+  // The result screen's podium: the recorded winner first (place 1, even after an award or a
+  // correction), then the players who stayed by score, then those who left; equal scores share a
+  // place within a group. Scores from the result when final, else the live game.
+  function ranking(room) {
+    const res = room.result || null;
+    const g = room.game || {};
+    const out = g.out || {};
+    const order = seatsOf(room);
+    const scoreOf = s => (res && typeof res['score' + s] === 'number' ? res['score' + s] : ((g.scores || {})[s] || 0));
+    const all = order.map(s => ({ seat: s, score: scoreOf(s), place: 0, left: out[s] === 'left' }));
+    const byScore = (a, b) => b.score - a.score || order.indexOf(a.seat) - order.indexOf(b.seat);
+    const win = res ? all.filter(x => x.seat === res.winner) : [];
+    const rest = all.filter(x => !win.includes(x));
+    const groups = [win, rest.filter(x => !x.left).sort(byScore), rest.filter(x => x.left).sort(byScore)];
+    const list = [];
+    for (const grp of groups) {
+      grp.forEach((x, i) => {
+        x.place = i > 0 && grp[i - 1].score === x.score && grp !== win ? grp[i - 1].place : list.length + 1;
+        list.push(x);
+      });
+    }
+    return list;
+  }
+
   return {
-    CODE_ALPHABET, TURN_MS, INTRO_MS, DROP_MS, CELEBRATE_MS, SUDDEN_DEATH_MAX_ROUNDS,
+    CODE_ALPHABET, TURN_MS, INTRO_MS, INTRO_MULTI_MS, DROP_MS, CELEBRATE_MS, SUDDEN_DEATH_MAX_ROUNDS,
+    ALL_SEATS, seatsOf, isSeat, teamOf, teamNameOf, introMsFor, activeSeats, nextSeat, ranking,
     generateRoomCode, formatCode, normalizeCode, isRoomRecord, createRoom, normalizeRoom,
     claimSeat, setReady, removePlayer, leaveSeat, rejoinSeat, withTeamNames, startMatch,
     prepareMove, applyPlay, applyPass, resolveTimeUp, finalize,

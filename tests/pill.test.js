@@ -191,3 +191,33 @@ test("ribbon: the name comes apart from \"'S TURN\", so a phone can cut the name
   assert.strictEqual(Pill.ribbon(started(), 'watch').name, 'NCR');
   assert.strictEqual(Pill.ribbon(started(), 'A').name, null);
 });
+
+// ---- 3-4 player rooms (2026-11-03) ----
+const room4 = (turn, over = {}) => Object.assign({
+  status: 'live', players: 4, teamAName: 'NCR', teamBName: 'CAR', teamCName: 'IV-A', teamDName: 'BARMM',
+  seats: { A: { name: 'Maria' }, B: { name: 'Juan' }, C: { name: 'Ana' }, D: null },
+  clock: { startedAt: 0, endsAt: 1e9, turnStartedAt: 1000, paused: null },
+  game: { turn, moveCount: 3, pending: null, suddenDeath: null }
+}, over);
+
+test('ribbon names seat D\'s team for a spectator', () => {
+  assert.strictEqual(Pill.ribbon(room4('D'), 'watch').name, 'BARMM');
+});
+
+test('seat C is seated (player names, YOUR TURN on its own turn)', () => {
+  assert.strictEqual(Pill.ribbon(room4('B'), 'C').name, 'JUAN');
+  assert.strictEqual(Pill.ribbon(room4('C'), 'C').mine, true);
+  assert.strictEqual(Pill.ribbon(room4('B', { players: undefined }), 'C').name, 'CAR', '2-player room: C is not a seat');
+});
+
+test('pill names an empty seat D by its team', () => {
+  assert.strictEqual(Pill.state(room4('D'), 'A', 2000).text, "BARMM's turn");
+});
+
+test('an out player sees that they are out (3-4 player rooms)', () => {
+  const r = room4('B', { game: { turn: 'B', moveCount: 3, pending: null, suddenDeath: null, out: { C: 'sd' } } });
+  const p = Pill.state(r, 'C', 2000);
+  assert.strictEqual(p.kind, 'out');
+  assert.strictEqual(p.text, "You're out · Juan's turn");
+  assert.strictEqual(Pill.state(r, 'A', 2000).text, "Juan's turn");
+});

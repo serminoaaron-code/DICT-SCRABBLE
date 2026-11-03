@@ -4,13 +4,18 @@
 
   const esc = s => UI.escapeHtml(s);
   const seatKey = code => 'scrabble.seat.' + code;
-  const SEATS = ['A', 'B'];
+  // The room's seats: A, B (2 players) or A–D (3-4 player rooms, Match.seatsOf).
+  const seatsOf = room => Match.seatsOf(room);
+  const isSeatCode = s => Match.ALL_SEATS.includes(s); // a stored seat (before the room is known)
+  const multi = room => seatsOf(room).length > 2;
 
-  // Team colour chip: Team A is always blue, Team B is always red, everywhere.
+  // Team colour chip: Team A is always blue, Team B red, C green, D yellow, everywhere.
   // Names as shown: at most Names.MAX characters + "…" (QA pass); full names stay in titles.
   const short = s => Names.short(s);
   const chip = (seat, name) => `<span class="chip chip-${seat.toLowerCase()}" title="${esc(name)}">${esc(short(name))}</span>`;
-  const versusHtml = room => `<div class="versus">${chip('A', room.teamAName)}<span class="vs-sep">vs</span>${chip('B', room.teamBName)}</div>`;
+  const versusHtml = room => `<div class="versus">${seatsOf(room).map(s => chip(s, Match.teamNameOf(room, s))).join('<span class="vs-sep">vs</span>')}</div>`;
+  // "A", "A and B", "A, B and C"
+  const andList = xs => (xs.length < 3 ? xs.join(' and ') : xs.slice(0, -1).join(', ') + ' and ' + xs[xs.length - 1]);
 
   // ---------- join page ----------
 
@@ -51,7 +56,7 @@
       room: undefined,
       rawRoom: undefined,
       teams: {},
-      mySeat: Store.local.get(seatKey(code)), // 'A' | 'B' | 'watch' | null
+      mySeat: Store.local.get(seatKey(code)), // 'A' | 'B' | 'C' | 'D' | 'watch' | null
       loaded: false,
       pinned: null, // room code pinned to the big screen, or null
       ui: { lastSeenMove: null } // live-view working state (Task 10); lastSeenMove: null until the first live render
@@ -75,7 +80,7 @@
 
     const nameOf = (room, seat) => {
       // Rooms keep a name snapshot; live team names are not needed here.
-      return seat === 'A' ? room.teamAName : room.teamBName;
+      return Match.teamNameOf(room, seat);
     };
 
     async function claim(seat, name) {
@@ -92,7 +97,7 @@
     async function firstLoad(room) {
       if (!room) return;
       const s = state.mySeat;
-      if (s === 'A' || s === 'B') {
+      if (isSeatCode(s)) {
         if (room.status === 'final' || room.status === 'void') return; // read-only result
         const res = await Store.mutateRoom(code, r => Match.rejoinSeat(r, s, me));
         if (res.committed) setRole(s);
@@ -116,7 +121,7 @@
 
       // Seat taken away by the host?
       const s = state.mySeat;
-      if (!first && room && (s === 'A' || s === 'B') && room.status !== 'final' && room.status !== 'void') {
+      if (!first && room && isSeatCode(s) && room.status !== 'final' && room.status !== 'void') {
         const seat = room.seats[s];
         if (!seat || seat.clientId !== me) forgetSeat('You were removed from your seat by the host.');
       }
@@ -130,7 +135,7 @@
       App.inLiveSeat = false; // set again by the live view's update() while I'm seated in a live game
       // music only on the live match screen (the lobby, choices, results and "not found" are quiet)
       const watchingLive = !!room && ['live', 'suddenDeath', 'hostDecision'].includes(room.status) &&
-        (state.mySeat === 'A' || state.mySeat === 'B' || state.mySeat === 'watch' || App.isHost());
+        (isSeatCode(state.mySeat) || state.mySeat === 'watch' || App.isHost());
       if (!watchingLive) Music.stop();
       document.body.classList.remove('in-game'); // RoomLive.renderLive / renderFinal put it back
 
@@ -142,7 +147,7 @@
       }
       if (!room) { el.innerHTML = '<div class="card narrow"><p class="muted">Loading room…</p></div>'; return; }
 
-      const seated = state.mySeat === 'A' || state.mySeat === 'B';
+      const seated = Match.isSeat(room, state.mySeat);
       const host = App.isHost();
       if (!seated && state.mySeat !== 'watch' && !host && room.status !== 'final' && room.status !== 'void') {
         return renderChoices(room);
@@ -168,13 +173,14 @@
         // An empty seat in a running game: the player is continuing on a new device (host freed the seat).
         return `<button class="nm-btn" data-claim="${seat}" title="${esc(team)}">${inPlay ? `Take ${esc(short(team))}'s seat` : `Play for ${esc(short(team))}`}</button>`;
       };
+      const SEATS = seatsOf(room);
       const anyFree = SEATS.some(s => !room.seats[s]);
       el.innerHTML = `
         <div class="card narrow stack">
           ${versusHtml(room)}
           <div class="center muted small-text">Room <span class="code">${esc(Match.formatCode(code))}</span>${room.label ? ' · ' + esc(room.label) : ''}</div>
           <div><label for="choiceName">Your name</label><input id="choiceName" maxlength="40" placeholder="Your name"></div>
-          ${!inPlay ? btn('A') + btn('B')
+          ${!inPlay ? SEATS.map(btn).join('')
             : (anyFree ? '<p class="muted small-text center">This match is in progress. If you are a player switching devices, take your seat:</p>' +
                 SEATS.filter(s => !room.seats[s]).map(btn).join('')
               : '<p class="muted small-text center">This match has already started. You can watch it. (Switching devices? Ask the host to free your seat.)</p>')}
@@ -219,17 +225,19 @@
             ${host ? `<button class="btn-secondary small" data-remove="${seat}">Remove</button>` : ''}
           </span></div>`;
       };
-      const mine = (state.mySeat === 'A' || state.mySeat === 'B') ? room.seats[state.mySeat] : null;
+      const SEATS = seatsOf(room);
+      const mine = Match.isSeat(room, state.mySeat) ? room.seats[state.mySeat] : null;
       const bothReady = SEATS.every(s => room.seats[s] && room.seats[s].ready);
+      const who = multi(room) ? 'all players' : 'both players';
       el.innerHTML = `
         <div class="card narrow stack">
           ${versusHtml(room)}
           <div class="center muted small-text">Room <span class="code">${esc(Match.formatCode(code))}</span> · ${Math.round(room.matchLengthSec / 60)} min${room.label ? ' · ' + esc(room.label) : ''}</div>
-          ${seatRow('A')}${seatRow('B')}
+          ${SEATS.map(seatRow).join('')}
           <div class="seat"><span><span class="dot ${hostOnline ? 'on' : ''}"></span>⚙ Host</span><span class="small-text muted" id="watchCount">👁️ ${Match.watcherCount(room)} watching</span></div>
           ${mine ? `<button id="readyBtn" class="${mine.ready ? 'btn-secondary' : 'btn-primary'}">${mine.ready ? 'Not ready' : "I'm ready"}</button>` : ''}
           ${host ? `<button id="startBtn" class="btn-primary" ${bothReady ? '' : 'disabled'}>▶ Start match</button>
-                    <div class="small-text muted center">${bothReady ? 'Both players are ready.' : 'Start unlocks when both players are ready.'}</div>` : ''}
+                    <div class="small-text muted center">${bothReady ? (multi(room) ? 'All players are ready.' : 'Both players are ready.') : `Start unlocks when ${who} are ready.`}</div>` : ''}
           ${!mine && !host ? '<p class="muted small-text center">Waiting for the host to start the match…</p>' : ''}
           <div class="row" style="justify-content:space-between;">
             <a href="#" class="small-text">← Back to start</a>
@@ -243,8 +251,8 @@
         Store.mutateRoom(code, r => Match.setReady(r, state.mySeat, me, !mine.ready));
       if ($('#startBtn')) $('#startBtn').onclick = async () => {
         $('#startBtn').disabled = true;
-        const res = await Store.mutateRoom(code, r => Match.startMatch(r, Store.serverNow(), Math.random, Match.INTRO_MS));
-        if (!res.committed) UI.toast('Could not start: both players must be ready.', 'error');
+        const res = await Store.mutateRoom(code, r => Match.startMatch(r, Store.serverNow(), Math.random, Match.introMsFor(r)));
+        if (!res.committed) UI.toast(`Could not start: ${multi(room) ? 'all' : 'both'} players must be ready.`, 'error');
       };
       if ($('#stopWatching')) $('#stopWatching').onclick = stopWatching;
       if ($('#leaveSeat')) $('#leaveSeat').onclick = async () => {
@@ -269,7 +277,7 @@
     const onVisibility = () => {
       const room = state.room;
       const seat = state.mySeat;
-      if (!document.hidden || !room || (seat !== 'A' && seat !== 'B')) return;
+      if (!document.hidden || !room || !Match.isSeat(room, seat)) return;
       if (room.status !== 'live' && room.status !== 'suddenDeath') return;
       Store.mutateRoom(code, r => Match.recordScreenLeave(r, seat));
     };
@@ -311,9 +319,11 @@
   const PLAYING = ['live', 'suddenDeath'];
 
   // As shown in the live view (score bar, last move, host bar): at most Names.MAX characters + "…".
-  const teamOf = (room, seat) => short(seat === 'A' ? room.teamAName : room.teamBName);
-  const playerOf = (room, seat) => short(room.seats[seat] ? room.seats[seat].name : (seat === 'A' ? room.teamAName : room.teamBName));
-  const isSeat = s => s === 'A' || s === 'B';
+  const teamOf = (room, seat) => short(Match.teamNameOf(room, seat));
+  const playerOf = (room, seat) => short(room.seats[seat] ? room.seats[seat].name : Match.teamNameOf(room, seat));
+  const isSeat = s => isSeatCode(s);
+  // 3-4 player rooms: a seat that resigned ('left') or dropped out of sudden death ('sd').
+  const outOf = (room, seat) => (room.game && room.game.out && room.game.out[seat]) || null;
 
   function myTurn(room, ctx) {
     const s = ctx.state.mySeat;
@@ -354,14 +364,24 @@
     // the phone column; in the desktop landscape layout (Layout.QUERY) the grid puts the board on
     // the left and the panel on the right.
     // Temporary boxes (#noticeBox, #rejectBox) are fixed bottom sheets so they never push the board.
-    el.innerHTML = `
-      <div class="card live-card"><div class="arena" id="liveRoot">
-        <div class="live-panel" id="livePanel">
-        <div class="scorebar">
+    // 2 players: A | clock | B (as before). 3-4 players (mockup B): the clock on top, then one column
+    // per seat in seat order; the turn highlight moves along the row.
+    const liveRoom = ctx.state.room;
+    const seats = liveRoom ? seatsOf(liveRoom) : ['A', 'B'];
+    const scorebar = seats.length > 2
+      ? `<div class="scorebar multi n${seats.length}">
+          <div class="sb-top"><span class="sb-lbl">Match</span><div class="clock" id="matchClock">0:00</div></div>
+          <div class="sb-row">${seats.map(s => `<div class="side" id="side${s}"></div>`).join('')}</div>
+        </div>`
+      : `<div class="scorebar">
           <div class="side" id="sideA"></div>
           <div class="clock" id="matchClock">0:00</div>
           <div class="side right" id="sideB"></div>
-        </div>
+        </div>`;
+    el.innerHTML = `
+      <div class="card live-card"><div class="arena" id="liveRoot" data-seats="${seats.length}">
+        <div class="live-panel" id="livePanel">
+        ${scorebar}
         <div class="pill-row"><div class="pill pill-them" id="statusLine" role="status" aria-live="polite"><span class="pill-text"></span><span class="pill-clock" id="turnClock"></span></div></div>
         <div class="caption-row"><span class="caption-text"><span id="tossLine"></span><span id="lastMove"></span></span><button type="button" id="bonusBtn" class="caption-btn" aria-expanded="false" aria-controls="bonusCard">? Bonuses</button></div>
         <div class="rack-row"><span class="rack-bag" aria-hidden="true">👜</span><div class="rack hidden" id="rack"></div><button type="button" id="shuffleBtn" class="rack-shuffle hidden" aria-label="Shuffle tiles" title="Shuffle tiles">🔀</button></div>
@@ -504,7 +524,16 @@
 
     $('#resignBtn').onclick = async () => {
       const seat = ctx.state.mySeat;
-      if (!isSeat(seat) || !confirm(`Leave the game? Your team (${teamOf(ctx.state.room, seat)}) loses this match.`)) return;
+      const room = ctx.state.room;
+      // 3-4 player rooms: not during the 3/4-WAY intro, so the roulette's "<TEAM> GOES FIRST!" stays true
+      if (multi(room) && room.clock && Store.serverNow() < room.clock.startedAt) {
+        UI.toast('You can leave once the game has started.', 'error');
+        return;
+      }
+      const msg = multi(room) && Match.activeSeats(room).length > 2
+        ? `Leave the game? Your team (${teamOf(room, seat)}) loses; the others play on.`
+        : `Leave the game? Your team (${teamOf(room, seat)}) loses this match.`;
+      if (!isSeat(seat) || !confirm(msg)) return;
       await Store.mutateRoom(ctx.code, r => Match.resign(r, seat, Store.serverNow()));
     };
 
@@ -677,11 +706,15 @@
       ui.seenMove = g.moveCount;
     }
 
-    for (const s of SEATS) {
+    for (const s of seatsOf(room)) {
       const side = $('#side' + s);
+      if (!side) continue;
+      const o = outOf(room, s);
       side.classList.toggle('turn', g.turn === s && PLAYING.includes(room.status));
+      side.classList.toggle('out', !!o);
+      const tag = o ? `<span class="sb-out">${o === 'left' ? 'LEFT' : 'OUT'}</span>` : '';
       const html = `<span class="chip chip-${s.toLowerCase()} team">${esc(teamOf(room, s))}</span>
-        <div class="who"><span class="player">${esc(playerOf(room, s))}${seat === s ? ' (you)' : ''}</span><span class="score disp">${g.scores[s]}</span></div>`;
+        <div class="who"><span class="player" title="${esc(room.seats[s] ? room.seats[s].name : Match.teamNameOf(room, s))}">${esc(playerOf(room, s))}${seat === s ? ' (you)' : ''}</span><span class="score disp">${g.scores[s]}</span></div>${tag}`;
       // Rewrite only on change: a celebration holds the old score in this element until its points land.
       if (ui.sideHtml[s] !== html) { side.innerHTML = html; ui.sideHtml[s] = html; }
     }
@@ -697,10 +730,12 @@
 
     const rackEl = $('#rack');
     const shuffleBtn = $('#shuffleBtn');
-    rackEl.classList.toggle('hidden', !isSeat(seat));
-    shuffleBtn.classList.toggle('hidden', !isSeat(seat));
-    $('.rack-row').classList.toggle('hidden', !isSeat(seat)); // no empty row (and gap) for spectators / the host
-    if (isSeat(seat)) {
+    const iAmOut = isSeat(seat) && !!outOf(room, seat); // 3-4 player rooms: out, watching the rest
+    const hasRack = isSeat(seat) && !iAmOut;
+    rackEl.classList.toggle('hidden', !hasRack);
+    shuffleBtn.classList.toggle('hidden', !hasRack);
+    $('.rack-row').classList.toggle('hidden', !hasRack); // no empty row (and gap) for spectators / the host
+    if (hasRack) {
       // This device's tile order (Shuffle). After my own play (turn moments #3) the tiles I kept stay
       // where they were and the drawn ones go into the used slots; any other change resets the order.
       const rackNow = g.racks[seat];
@@ -732,11 +767,12 @@
     }
 
     $('#actions').classList.toggle('hidden', !isSeat(seat));
+    $('#actions').classList.toggle('out', iAmOut); // an out player keeps only 😀 and ⋯
     for (const id of ['#playBtn', '#recallBtn', '#passBtn']) $(id).disabled = !mine || ui.busy || !!ui.rejected;
     syncTaunt(el, room, ctx);
     // During my own live game the header's "How to play" opens in a new tab (app.js), so the game stays open.
     App.inLiveSeat = isSeat(seat) && ['live', 'suddenDeath', 'hostDecision'].includes(room.status);
-    $('#resignBtn').disabled = !isSeat(seat) || !['live', 'suddenDeath', 'hostDecision'].includes(room.status);
+    $('#resignBtn').disabled = !isSeat(seat) || iAmOut || !['live', 'suddenDeath', 'hostDecision'].includes(room.status);
 
     // Bottom sheet (empty = hidden): the recall / ask-host choice, or my appeal waiting for the host.
     let sheet = ui.rejected ? `<div class="sheet-msg">❌ <b>${ui.rejected.rejectedWords.map(esc).join(', ')}</b> not found in the dictionary.</div>
@@ -883,7 +919,7 @@
     ui.tauntSeen = a.seen;
     for (const t of a.show) {
       const s = room.seats && room.seats[t.seat];
-      const name = Names.short((s && s.name) || (t.seat === 'A' ? room.teamAName : room.teamBName) || '');
+      const name = Names.short((s && s.name) || room['team' + t.seat + 'Name'] || '');
       Taunt.show(el.querySelector('#side' + t.seat), el.querySelector('.scorebar'), { seat: t.seat, e: t.e, name });
       // Screen readers: a lasting polite live region whose text changes (an inserted, already-filled
       // region is often not announced). The floating face is aria-hidden.
@@ -1030,7 +1066,7 @@
       const viewer = Scenes.resultViewer(room, ctx.state.mySeat);
       const res = room.result;
       const key = [room.status, viewer, App.isHost() ? 'host' : '',
-        res ? [res.winner, res.scoreA, res.scoreB, res.reason, res.decidedAt, res.note || ''].join('/') : '',
+        res ? [res.winner, ...seatsOf(room).map(s => res['score' + s]), res.reason, res.decidedAt, res.note || ''].join('/') : '',
         room.voidedAt || '', room.voidNote || ''].join('|');
       if (ui.finalKey === key && el.querySelector('.res-final')) {
         RoomLive.updateFinalHost(el, room, ctx);
@@ -1061,13 +1097,16 @@
       const inPlay = ['live', 'suddenDeath', 'hostDecision'].includes(room.status);
 
       // Disconnect notice: a bottom sheet that can be hidden (✕) until the set of offline players changes.
-      const offline = SEATS.filter(s => room.seats[s] && !Match.isSeatOnline(room, s));
+      const SEATS = seatsOf(room);
+      const isMulti = SEATS.length > 2;
+      // Out seats (3-4 player rooms) no longer play: no disconnect notice for them.
+      const offline = SEATS.filter(s => room.seats[s] && !outOf(room, s) && !Match.isSeatOnline(room, s));
       const ui = ctx.state.ui;
       const noticeKey = offline.map(s => s + ':' + room.seats[s].clientId).join('|');
       if (!offline.length) ui.noticeHidden = null; // a new disconnect shows again
       const notice = el.querySelector('#noticeBox');
       notice.innerHTML = inPlay && offline.length && ui.noticeHidden !== noticeKey
-        ? `<div class="sheet-row"><div class="sheet-msg">📴 ${offline.map(s => `<span class="nm">${esc(short(room.seats[s].name))}</span>`).join(' and ')} disconnected${App.isHost() ? ' · Pause to wait, or Award win' : ''}</div>
+        ? `<div class="sheet-row"><div class="sheet-msg">📴 ${andList(offline.map(s => `<span class="nm">${esc(short(room.seats[s].name))}</span>`))} disconnected${App.isHost() ? ' · Pause to wait, or Award win' : ''}</div>
             <button class="btn-ghost sheet-close" data-act="hideNotice" aria-label="Hide this notice">✕</button></div>`
         : '';
       notice.onclick = ev => {
@@ -1085,22 +1124,32 @@
       if (phase === 'appeal') {
         const p = g.pending;
         decision = `<div class="warn-line stack">
-          <div>⚖️ <b class="nm">${esc(playerOf(room, p.seat))}</b> played ${p.words.map(w => `${esc(w.word)} (${w.score})`).join(', ')}: <b>${p.total} pts</b>.
+          <div>⚖️ <b class="nm">${esc(playerOf(room, p.seat))}</b> played ${p.words.map(w => `${esc(w.word)} (${Number(w.score) || 0})`).join(', ')}: <b>${Number(p.total) || 0} pts</b>.
           Not found: ${p.rejectedWords.map(esc).join(', ')}</div>
           <div class="row"><button class="small" data-host="approve">✅ Approve</button><button class="small danger" data-host="deny">✖ Deny</button></div>
         </div>`;
       } else if (phase === 'hostDecision') {
+        // The tied sudden-death players (3-4 player rooms store them; 2 players = both).
+        const sd = g.suddenDeath;
+        // Only real seats (room data is client-written; normalizeRoom filters too).
+        const stored = sd && Array.isArray(sd.seats) ? sd.seats.filter(s => SEATS.includes(s)) : [];
+        const tied = stored.length ? stored : SEATS;
         decision = `<div class="warn-line stack"><div>Still tied after 3 sudden-death rounds. Award the win:</div>
-          <div class="row">${SEATS.map(s => `<button class="small nm-btn" data-host="award" data-seat="${s}" title="${esc(teamOf(room, s))}">🏆 ${esc(teamOf(room, s))}</button>`).join('')}</div></div>`;
+          <div class="row">${tied.map(s => `<button class="small nm-btn" data-host="award" data-seat="${esc(s)}" title="${esc(teamOf(room, s))}">🏆 ${esc(teamOf(room, s))}</button>`).join('')}</div></div>`;
       }
       const canPause = PLAYING.includes(room.status) && !room.clock.paused;
       const pinned = ctx.state.pinned === ctx.code;
+      const awardBtn = s => `<button class="small secondary nm-btn" data-host="award" data-seat="${s}" title="Award win → ${esc(teamOf(room, s))}">${isMulti ? '🏆' : 'Award win →'} ${esc(teamOf(room, s))}</button>`;
+      // 3-4 player rooms: one "Award win…" picker instead of four buttons (kept open across redraws)
+      const award = isMulti
+        ? `<details class="pick" id="awardPick"${ui.awardOpen ? ' open' : ''}><summary class="btn-secondary">Award win…</summary><div class="pick-list">${SEATS.map(awardBtn).join('')}</div></details>`
+        : SEATS.map(awardBtn).join('');
       bar.innerHTML = `<div class="hostbar">
         <h4>⚙ Host controls</h4>
         ${warnings}${decision}
         <div class="row">
           ${phase === 'paused' ? '<button class="small" data-host="resume">▶ Resume</button>' : `<button class="small secondary" data-host="pause" ${canPause ? '' : 'disabled'}>⏸ Pause</button>`}
-          ${SEATS.map(s => `<button class="small secondary nm-btn" data-host="award" data-seat="${s}" title="Award win → ${esc(teamOf(room, s))}">Award win → ${esc(teamOf(room, s))}</button>`).join('')}
+          ${award}
           <button class="small secondary" data-host="pin">${pinned ? 'Unpin' : '📌 Pin to big screen'}</button>
           <button class="small danger" data-host="void">Void</button>
         </div>
@@ -1110,6 +1159,7 @@
         </div>
       </div>`;
       bar.onclick = async ev => {
+        if (ev.target.closest('#awardPick > summary')) { ui.awardOpen = !el.querySelector('#awardPick').open; return; }
         const b = ev.target.closest('button[data-host]');
         if (!b || b.disabled) return;
         const act = b.dataset.host;
@@ -1133,6 +1183,7 @@
         else if (act === 'award') {
           const seat = b.dataset.seat;
           if (!confirm(`Award the win to ${teamOf(ctx.state.room, seat)}?`)) return;
+          ui.awardOpen = false;
           fn = r => Match.awardWin(r, seat, now());
         } else if (act === 'void') {
           const note = prompt('Reason for voiding (kept in the record):', '');
@@ -1155,14 +1206,17 @@
     updateFinalHost(el, room, ctx) {
       const box = el.querySelector('#finalHost');
       if (!box || !App.isHost() || room.status !== 'final' || !room.result) return;
-      const otherSeat = room.result.winner === 'A' ? 'B' : 'A';
+      // 2 players: give the win to the other seat. 3-4 players: one button per other seat.
+      const others = seatsOf(room).filter(s => s !== room.result.winner);
+      const correctBtn = s => `<button class="small secondary nm-btn" data-correct-to="${s}" title="Give the win to ${esc(teamOf(room, s))}">Give the win to ${esc(teamOf(room, s))}</button>`;
       box.innerHTML = `<div class="hostbar"><h4>⚙ Host</h4><div class="row">
-        <button class="small secondary nm-btn" id="correctBtn" title="Give the win to ${esc(teamOf(room, otherSeat))}">Give the win to ${esc(teamOf(room, otherSeat))}</button>
+        ${others.map((s, i) => correctBtn(s).replace('<button ', i === 0 ? '<button id="correctBtn" ' : '<button ')).join('')}
         <button class="small danger" id="voidFinalBtn">Void</button></div></div>`;
-      box.querySelector('#correctBtn').onclick = async () => {
+      for (const b of box.querySelectorAll('[data-correct-to]')) b.onclick = async () => {
+        const to = b.dataset.correctTo;
         const note = prompt('Reason for the correction (kept in the record):', '');
-        if (note === null || !confirm(`Give the win to ${teamOf(room, otherSeat)} instead?`)) return;
-        await Store.mutateRoom(ctx.code, r => Match.correctResult(r, Store.serverNow(), note));
+        if (note === null || !confirm(`Give the win to ${teamOf(room, to)} instead?`)) return;
+        await Store.mutateRoom(ctx.code, r => Match.correctResult(r, Store.serverNow(), note, to));
       };
       box.querySelector('#voidFinalBtn').onclick = async () => {
         const note = prompt('Reason for voiding (kept in the record):', '');

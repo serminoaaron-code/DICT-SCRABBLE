@@ -15,18 +15,27 @@
   const reducedMotion = () => !!(root.matchMedia && root.matchMedia('(prefers-reduced-motion: reduce)').matches);
   const pretty = code => (code && code.length === 6 ? Match.formatCode(code) : String(code || ''));
 
-  const TEMPLATE = `
-    <div class="bp" id="bigRoot">
-      <div class="bp-shape bp-shape-y" aria-hidden="true"></div>
-      <div class="bp-shape bp-shape-r" aria-hidden="true"></div>
-      <div class="bp-idlehead" aria-hidden="true"><span class="disp">🏆 TEAM STANDINGS</span><small>DICT Digital Scrabble · Sportsfest 2026</small></div>
-      <div class="bp-top" id="bigTop">
+  // The top score bar: A | score VS score | B for 2 players (as before); for 3-4 player rooms the clock
+  // and pill on top, then one column per seat (team chip, player, score; OUT / LEFT), like the players' bar.
+  const TOP2 = `
         <div class="bp-side bp-a" data-side="A"><div class="bp-team"></div><div class="bp-player"></div></div>
         <div class="bp-mid">
           <div class="bp-scoreline"><span class="bp-score disp" data-seat="A"></span><span class="bp-vs disp">VS</span><span class="bp-score disp" data-seat="B"></span></div>
           <div class="bp-meta"><span class="bp-clock"></span><span class="bp-pill"></span></div>
         </div>
-        <div class="bp-side bp-b" data-side="B"><div class="bp-team"></div><div class="bp-player"></div></div>
+        <div class="bp-side bp-b" data-side="B"><div class="bp-team"></div><div class="bp-player"></div></div>`;
+  const topMulti = seats => `
+        <div class="bp-meta"><span class="bp-clock"></span><span class="bp-pill"></span></div>
+        <div class="bp-mrow">${seats.map(s => `<div class="bp-side" data-side="${s}"><div class="bp-who">
+          <span class="chip chip-${s.toLowerCase()} bp-team"></span><div class="bp-player"></div></div>
+          <span class="bp-out"></span><span class="bp-score disp" data-seat="${s}"></span></div>`).join('')}</div>`;
+
+  const TEMPLATE = `
+    <div class="bp" id="bigRoot">
+      <div class="bp-shape bp-shape-y" aria-hidden="true"></div>
+      <div class="bp-shape bp-shape-r" aria-hidden="true"></div>
+      <div class="bp-idlehead" aria-hidden="true"><span class="disp">🏆 TEAM STANDINGS</span><small>DICT Digital Scrabble · Sportsfest 2026</small></div>
+      <div class="bp-top" id="bigTop">${TOP2}
       </div>
       <div class="bp-feature">
         <div class="bp-board" id="bigBoard"></div>
@@ -72,10 +81,12 @@
     // ---------- data helpers ----------
     const named = room => Match.withTeamNames(room, st.teams);
     const teamName = (room, seat) => {
-      const id = seat === 'A' ? room.teamA : room.teamB;
+      const id = Match.teamOf(room, seat);
       // As shown on the projector (ticker included): at most Names.MAX characters + "…" (QA pass).
-    return Names.short((st.teams[id] && st.teams[id].name) || (seat === 'A' ? room.teamAName : room.teamBName) || (seat === 'A' ? 'Team A' : 'Team B'));
+      return Names.short((st.teams[id] && st.teams[id].name) || Match.teamNameOf(room, seat));
     };
+    const seatsOf = room => Match.seatsOf(room);
+    const teamsVs = room => seatsOf(room).map(s => esc(teamName(room, s))).join(' vs ');
     const playerName = (room, seat) => Names.short((room.seats && room.seats[seat] && room.seats[seat].name) || '');
     const isLive = room => !!room && LIVE.includes(room.status) && !!room.game;
 
@@ -131,15 +142,14 @@
       const recent = Object.values(st.rooms).filter(r => r.status === 'final' && r.result)
         .sort((a, b) => (b.result.decidedAt || 0) - (a.result.decidedAt || 0)).slice(0, 5);
       setHtml($('#bigRecent'), 'recent', recent.length
-        ? recent.map(r => `<div class="bp-res"><b>+1 ${esc(teamName(r, r.result.winner))}</b> (${Number(r.result.scoreA) || 0}–${Number(r.result.scoreB) || 0})</div>`).join('')
+        ? recent.map(r => `<div class="bp-res"><b>+1 ${esc(teamName(r, r.result.winner))}</b> (${seatsOf(r).map(s => Number(r.result['score' + s]) || 0).join('–')})</div>`).join('')
         : '<div class="bp-empty">No results yet</div>');
     }
 
     function renderNext() {
       const waiting = Object.values(st.rooms).filter(r => r.status === 'waiting')
         .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-      const rows = waiting.slice(0, 6).map(r => `<div class="bp-nx"><div class="bp-nx-teams"><span>${esc(teamName(r, 'A'))}</span>
-          <span class="bp-nx-vs disp">VS</span><span>${esc(teamName(r, 'B'))}</span></div>
+      const rows = waiting.slice(0, 6).map(r => `<div class="bp-nx"><div class="bp-nx-teams${seatsOf(r).length > 2 ? ' multi' : ''}">${seatsOf(r).map(s => `<span>${esc(teamName(r, s))}</span>`).join('<span class="bp-nx-vs disp">VS</span>')}</div>
           <div class="bp-nx-code">ROOM ${esc(pretty(r.code))}${r.label ? ' · ' + esc(r.label) : ''}</div></div>`).join('');
       const more = waiting.length > 6 ? `<div class="bp-empty">+${waiting.length - 6} more</div>` : '';
       setHtml($('#bigNext'), 'next', `<h4 class="disp">⏭ Next up</h4>` +
@@ -148,11 +158,15 @@
 
     function renderTicker() {
       const live = Object.values(st.rooms).filter(isLive).sort((a, b) => (a.code < b.code ? -1 : 1));
-      const item = r => `<span class="bp-tk${r.code === st.shown ? ' feat' : ''}">${esc(teamName(r, 'A'))} <b>${r.game.scores.A}</b> – <b>${r.game.scores.B}</b> ${esc(teamName(r, 'B'))} · <span data-bigclock="${esc(r.code)}">${esc(clockOf(r))}</span></span>`;
+      // 2 players: "A 12 – 9 B"; 3-4 players: "A 12 · B 9 · C 4 · D 0"
+      const scoresText = r => (seatsOf(r).length > 2
+        ? seatsOf(r).map(s => `${esc(teamName(r, s))} <b>${r.game.scores[s] || 0}</b>`).join(' · ')
+        : `${esc(teamName(r, 'A'))} <b>${r.game.scores.A}</b> – <b>${r.game.scores.B}</b> ${esc(teamName(r, 'B'))}`);
+      const item = r => `<span class="bp-tk${r.code === st.shown ? ' feat' : ''}">${scoresText(r)} · <span data-bigclock="${esc(r.code)}">${esc(clockOf(r))}</span></span>`;
       const one = live.map(item).join('');
       const box = $('#bigLive');
       // The clocks tick in place; rebuild only when rooms, names, scores or the featured room change.
-      const key = live.map(r => [r.code, teamName(r, 'A'), r.game.scores.A, r.game.scores.B, teamName(r, 'B'), r.code === st.shown].join('|')).join('/');
+      const key = live.map(r => [r.code, ...seatsOf(r).map(s => teamName(r, s) + ':' + r.game.scores[s]), r.code === st.shown].join('|')).join('/');
       if (st.keys.ticker === key) return;
       st.keys.ticker = key;
       if (!live.length) {
@@ -175,14 +189,32 @@
     }
 
     // ---------- featured room ----------
+    // Builds the top bar for the room's seat count (2 or 3-4), only when that changes.
+    function topLayout(room) {
+      const seats = room ? seatsOf(room) : ['A', 'B'];
+      const top = $('#bigTop');
+      const key = seats.join('');
+      if (st.keys.topLayout !== key) {
+        st.keys.topLayout = key;
+        st.scores = {};
+        top.className = 'bp-top' + (seats.length > 2 ? ' multi n' + seats.length : '');
+        top.innerHTML = seats.length > 2 ? topMulti(seats) : TOP2;
+      }
+      return seats;
+    }
+
     function renderTop(room) {
       const top = $('#bigTop');
-      for (const s of ['A', 'B']) {
+      for (const s of topLayout(room)) {
         const side = top.querySelector(`[data-side="${s}"]`);
         setText(side.querySelector('.bp-team'), room ? teamName(room, s) : '');
         setText(side.querySelector('.bp-player'), room ? playerName(room, s) : '');
         const turn = !!room && isLive(room) && room.game.turn === s && room.status !== 'hostDecision';
         side.classList.toggle('turn', turn);
+        const out = (room && room.game && room.game.out && room.game.out[s]) || null; // 3-4 player rooms
+        side.classList.toggle('out', !!out);
+        const tag = side.querySelector('.bp-out');
+        if (tag) setText(tag, out === 'left' ? 'LEFT' : out ? 'OUT' : '');
         const score = room && room.game ? String(room.game.scores[s]) : '0';
         const sc = top.querySelector(`.bp-score[data-seat="${s}"]`);
         // Only on a real change: a word celebration may be holding the old score until its points land.
@@ -235,7 +267,9 @@
           return `<div class="bp-lb-side bp-lb-${s.toLowerCase()}"><div class="bp-lb-team disp">${esc(teamName(room, s))}</div>
             <div class="bp-lb-player">${p ? esc(Names.short(p.name)) + (p.ready ? ' · ✓ Ready' : '') : 'Waiting for player…'}</div></div>`;
         };
-        setHtml(lobby, 'lobby', `<div class="bp-lb-title disp">STARTING SOON</div>${seat('A')}<div class="bp-lb-vs disp">VS</div>${seat('B')}
+        const multi = seatsOf(room).length > 2;
+        lobby.classList.toggle('multi', multi);
+        setHtml(lobby, 'lobby', `<div class="bp-lb-title disp">STARTING SOON${multi ? ` · ${seatsOf(room).length}-WAY` : ''}</div>${multi ? seatsOf(room).map(seat).join('') : `${seat('A')}<div class="bp-lb-vs disp">VS</div>${seat('B')}`}
           <div class="bp-lb-code">ROOM ${esc(pretty(room.code))}</div>`);
         st.keys.board = '';
         return;
@@ -348,7 +382,7 @@
       let html = '';
       if (room) {
         const tag = room.status === 'waiting' ? 'STARTING SOON' : room.status === 'final' ? 'FINAL' : room.status === 'void' ? 'VOID' : 'LIVE';
-        html = `<span class="bp-dot">● ${tag}</span> · ROOM ${esc(pretty(room.code))} · ${esc(teamName(room, 'A'))} vs ${esc(teamName(room, 'B'))}`;
+        html = `<span class="bp-dot">● ${tag}</span> · ROOM ${esc(pretty(room.code))} · ${teamsVs(room)}`;
       }
       setHtml($('#bigLower'), 'lower', html);
       $('#bigLower').classList.toggle('hidden', !room);

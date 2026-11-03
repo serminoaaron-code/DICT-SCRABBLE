@@ -86,3 +86,10 @@ test('box: on the score bar, centred on the sender\'s side, 1.5x the bar height'
 test('polish: one set of taunt ids, shared with Match', () => {
   assert.strictEqual(Taunt.IDS, M.TAUNTS);
 });
+
+test('arrivals sees a taunt from seat C (3-player room)', () => {
+  const room = live({ C: { e: 'cry', at: T } }, { players: 3, teamC: 'tC', teamCName: 'IV-A' });
+  const first = Taunt.arrivals(null, room, T);
+  const again = Taunt.arrivals(first.seen, live({ C: { e: 'lol', at: T + 100 } }, { players: 3, teamC: 'tC', teamCName: 'IV-A' }), T + 200);
+  assert.deepStrictEqual(again.show, [{ seat: 'C', e: 'lol', at: T + 100 }]);
+});

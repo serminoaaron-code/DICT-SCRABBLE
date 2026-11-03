@@ -44,10 +44,12 @@
   };
 
   function teamName(state, room, seat) {
-    const id = seat === 'A' ? room.teamA : room.teamB;
+    const id = Match.teamOf(room, seat);
     // As shown: at most Names.MAX characters + "…" (QA pass).
-    return Names.short((state.teams[id] && state.teams[id].name) || (seat === 'A' ? room.teamAName : room.teamBName) || '?');
+    return Names.short((state.teams[id] && state.teams[id].name) || room['team' + seat + 'Name'] || '?');
   }
+
+  const SEAT_CHIP = s => 'chip-' + s.toLowerCase();
 
   function clockText(room) {
     const phase = Match.roomPhase(room);
@@ -65,9 +67,12 @@
         <details id="newRoomBox" open>
           <summary style="cursor:pointer;font-weight:700;">+ New room</summary>
           <form id="newRoom" class="stack" style="margin-top:6px;">
-            <div class="row">
-              <div style="flex:1;min-width:120px;"><label for="nrA">Team A</label><select id="nrA"></select></div>
-              <div style="flex:1;min-width:120px;"><label for="nrB">Team B</label><select id="nrB"></select></div>
+            <div><label id="nrPlayersLbl">Players</label>
+              <div class="tabs nr-players" id="nrPlayers" role="radiogroup" aria-labelledby="nrPlayersLbl">
+                ${[2, 3, 4].map(n => `<button type="button" class="tab${n === 2 ? ' on' : ''}" role="radio" aria-checked="${n === 2}" data-players="${n}">${n}</button>`).join('')}
+              </div></div>
+            <div class="row nr-teams">
+              ${Match.ALL_SEATS.map(s => `<div class="nr-seat${s > 'B' ? ' hidden' : ''}" data-seat-box="${s}" style="flex:1;min-width:120px;"><label for="nr${s}">Team ${s}</label><select id="nr${s}" data-seat="${s}"></select></div>`).join('')}
             </div>
             <div class="row">
               <div style="flex:1;min-width:120px;"><label for="nrLen">Match length</label>
@@ -89,35 +94,71 @@
       const sel = { tab: 'active', page: { finished: 1, void: 1 } };
       $('#nrLen').onchange = () => $('#nrCustomBox').classList.toggle('hidden', $('#nrLen').value !== 'custom');
 
+      // Players 2 · 3 · 4 (3-4 player rooms, 2026-11-03): one team select per seat; a team chosen in one
+      // seat is disabled in the others, and Match.createRoom refuses duplicates too.
+      let players = 2;
+      const visibleSeats = () => Match.ALL_SEATS.slice(0, players);
+      const seatSel = s => $('#nr' + s);
+
+      function syncTeamOptions() {
+        const chosen = visibleSeats().map(s => seatSel(s).value).filter(Boolean);
+        for (const s of Match.ALL_SEATS) {
+          const sel = seatSel(s);
+          for (const o of sel.options) o.disabled = !!o.value && o.value !== sel.value && chosen.includes(o.value);
+        }
+      }
+
       function fillSelects() {
         const ids = Object.keys(state.teams).sort((a, b) => state.teams[a].name.localeCompare(state.teams[b].name));
-        for (const sel of [$('#nrA'), $('#nrB')]) {
+        for (const s of Match.ALL_SEATS) {
+          const sel = seatSel(s);
           const keep = sel.value;
           sel.innerHTML = '<option value="">— choose —</option>' + ids.map(id => `<option value="${esc(id)}" title="${esc(state.teams[id].name)}">${esc(Names.short(state.teams[id].name))}</option>`).join('');
           if (ids.includes(keep)) sel.value = keep;
         }
+        syncTeamOptions();
       }
+
+      $('#nrPlayers').onclick = ev => {
+        const b = ev.target.closest('[data-players]');
+        if (!b) return;
+        players = Number(b.dataset.players);
+        for (const x of panel.querySelectorAll('#nrPlayers [data-players]')) {
+          const on = Number(x.dataset.players) === players;
+          x.classList.toggle('on', on);
+          x.setAttribute('aria-checked', String(on));
+        }
+        for (const s of Match.ALL_SEATS) {
+          const show = visibleSeats().includes(s);
+          panel.querySelector(`[data-seat-box="${s}"]`).classList.toggle('hidden', !show);
+          if (!show) seatSel(s).value = '';
+        }
+        syncTeamOptions();
+      };
+      panel.querySelector('.nr-teams').onchange = syncTeamOptions;
 
       $('#newRoom').onsubmit = async ev => {
         ev.preventDefault();
         const err = $('#nrError');
-        const a = $('#nrA').value, b = $('#nrB').value;
+        const seats = visibleSeats();
+        const ids = seats.map(s => seatSel(s).value);
         const minutes = $('#nrLen').value === 'custom' ? Math.round(Number($('#nrCustom').value)) : Number($('#nrLen').value);
         let msg = '';
-        if (!a || !b) msg = 'Choose both teams.';
-        else if (a === b) msg = 'Team A and Team B must be different.';
+        if (ids.some(id => !id || !state.teams[id])) msg = players === 2 ? 'Choose both teams.' : 'Choose a team for every seat.';
+        else if (new Set(ids).size !== ids.length) msg = players === 2 ? 'Team A and Team B must be different.' : 'Each seat needs a different team.';
         else if (!(minutes >= 1 && minutes <= 60)) msg = 'Match length must be 1–60 minutes.';
         err.textContent = msg;
         err.classList.toggle('hidden', !msg);
         if (msg) return;
+        const opts = { label: cleanName($('#nrLabel').value), matchLengthSec: minutes * 60 };
+        if (players > 2) opts.players = players;
+        seats.forEach((s, i) => { opts['team' + s] = ids[i]; opts['team' + s + 'Name'] = state.teams[ids[i]].name; });
         try {
-          const code = await Store.createRoom({
-            teamA: a, teamB: b, teamAName: state.teams[a].name, teamBName: state.teams[b].name,
-            label: cleanName($('#nrLabel').value), matchLengthSec: minutes * 60
-          });
+          const code = await Store.createRoom(opts);
           const pretty = Match.formatCode(code);
           const box = $('#nrCreated');
-          box.innerHTML = `<div class="small-text muted">Room created for <b class="nm">${esc(Names.short(state.teams[a].name))}</b> vs <b class="nm">${esc(Names.short(state.teams[b].name))}</b>. Share this code:</div>
+          const names = ids.map(id => `<b class="nm">${esc(Names.short(state.teams[id].name))}</b>`).join(' vs ');
+          box.innerHTML = `<div class="small-text muted">Room created for ${names}. Share this code:</div>
             <div class="code-big" id="nrCode">${esc(pretty)}</div>
             <div class="row"><button type="button" class="btn-secondary small" id="nrCopy">Copy code</button><a href="#room=${esc(code)}">Open room →</a></div>`;
           box.classList.remove('hidden');
@@ -138,19 +179,33 @@
         }
       };
 
+      // A 3-4 player room's Walkover… / Correct result… picker stays open across the list's rebuilds.
+      const openPick = new Set(); // '<code>:walkover' | '<code>:correct', one per open picker
+      function picker(room, kind, label, seats) {
+        const key = room.code + ':' + kind;
+        const btns = seats.map(s => {
+          const n = teamName(state, room, s);
+          return `<button class="btn-secondary small nm-btn" data-${kind === 'walkover' ? 'walkover' : 'correct-to'}="${s}" data-code="${esc(room.code)}" title="+1 ${esc(n)}">+1 ${esc(n)}</button>`;
+        }).join('');
+        return `<details class="pick" data-pick="${esc(key)}"${openPick.has(key) ? ' open' : ''}><summary class="btn-secondary small">${esc(label)}</summary><div class="pick-list">${btns}</div></details>`;
+      }
+
       function cardHtml(room) {
         const phase = Match.roomPhase(room);
+        const seats = Match.seatsOf(room);
+        const multi = seats.length > 2;
         const nameA = teamName(state, room, 'A'), nameB = teamName(state, room, 'B');
-        const seatsTaken = ['A', 'B'].filter(s => room.seats[s]).length;
-        const warnings = ['A', 'B']
+        const seatsTaken = seats.filter(s => room.seats[s]).length;
+        const warnings = seats
           .filter(s => room.fairPlay[s].screenLeaves > 0 && room.seats[s])
           .map(s => `<div class="warn-line">⚠️ ${esc(room.seats[s].name)} left the screen ${room.fairPlay[s].screenLeaves}×</div>`).join('');
         let status = '';
         if (room.status === 'final' && room.result) {
-          const winName = room.result.winner === 'A' ? nameA : nameB;
+          const winName = teamName(state, room, room.result.winner);
           const note = room.result.note ? ': ' + esc(room.result.note) : '';
           const why = room.result.reason !== 'time' ? ` <span class="muted">(${esc(REASON_TEXT[room.result.reason] || room.result.reason)}${note})</span>` : '';
-          status = `<div class="ok-line">+1 <span class="nm" title="${esc(winName)}">${esc(winName)}</span> · ${room.result.scoreA}–${room.result.scoreB}${why}</div>`;
+          const scores = seats.map(s => Number(room.result['score' + s]) || 0).join('–');
+          status = `<div class="ok-line">+1 <span class="nm" title="${esc(winName)}">${esc(winName)}</span> · ${scores}${why}</div>`;
         }
         const live = ['live', 'paused', 'appeal', 'suddenDeath', 'hostDecision'].includes(phase);
         const actions = [`<a class="small-text" href="#room=${esc(room.code)}">Open room →</a>`];
@@ -159,19 +214,27 @@
           actions.push(`<button class="btn-secondary small" data-pin="${esc(room.code)}">${pinned ? 'Unpin' : '📌 Pin to big screen'}</button>`);
         }
         if (room.status === 'waiting') {
-          actions.push(`<button class="btn-secondary small nm-btn" data-walkover="A" data-code="${esc(room.code)}" title="Walkover → ${esc(nameA)}">Walkover → ${esc(nameA)}</button>`);
-          actions.push(`<button class="btn-secondary small nm-btn" data-walkover="B" data-code="${esc(room.code)}" title="Walkover → ${esc(nameB)}">Walkover → ${esc(nameB)}</button>`);
+          if (multi) actions.push(picker(room, 'walkover', 'Walkover…', seats));
+          else {
+            actions.push(`<button class="btn-secondary small nm-btn" data-walkover="A" data-code="${esc(room.code)}" title="Walkover → ${esc(nameA)}">Walkover → ${esc(nameA)}</button>`);
+            actions.push(`<button class="btn-secondary small nm-btn" data-walkover="B" data-code="${esc(room.code)}" title="Walkover → ${esc(nameB)}">Walkover → ${esc(nameB)}</button>`);
+          }
           actions.push(`<button class="danger small" data-void="${esc(room.code)}">Void</button>`);
         } else if (room.status === 'final') {
-          actions.push(`<button class="btn-secondary small" data-correct="${esc(room.code)}">Correct result</button>`);
+          if (multi && room.result) actions.push(picker(room, 'correct', 'Correct result…', seats.filter(s => s !== room.result.winner)));
+          else actions.push(`<button class="btn-secondary small" data-correct="${esc(room.code)}">Correct result</button>`);
           actions.push(`<button class="danger small" data-void="${esc(room.code)}">Void</button>`);
         }
+        const chips = seats.map(s => {
+          const n = teamName(state, room, s);
+          return `<span class="chip ${SEAT_CHIP(s)}" title="${esc(n)}">${esc(n)}</span>`;
+        }).join(' <span class="vs-sep muted small-text">vs</span> ');
         return `<div class="room-card" data-room="${esc(room.code)}">
           <div class="spread">
-            <span class="teams"><span class="chip chip-a">${esc(nameA)}</span> <span class="vs-sep muted small-text">vs</span> <span class="chip chip-b">${esc(nameB)}</span></span>
+            <span class="teams">${chips}</span>
             <span class="badge ${esc(phase)}">${live ? '● ' : ''}${esc(PHASE_LABEL[phase] || phase)}${live ? ` <span data-clock="${esc(room.code)}">${esc(clockText(room))}</span>` : ''}</span>
           </div>
-          <div class="meta"><span class="code">${esc(Match.formatCode(room.code))}</span> · ${Math.round(room.matchLengthSec / 60)} min · seats ${seatsTaken}/2${room.label ? ' · ' + esc(room.label) : ''}</div>
+          <div class="meta"><span class="code">${esc(Match.formatCode(room.code))}</span> · ${Math.round(room.matchLengthSec / 60)} min · seats ${seatsTaken}/${seats.length}${room.label ? ' · ' + esc(room.label) : ''}</div>
           ${phase === 'appeal' ? '<div class="warn-line">⚖️ Appeal pending: open the room to decide</div>' : ''}
           ${phase === 'hostDecision' ? '<div class="warn-line">Still tied: open the room to award the win</div>' : ''}
           ${warnings}${status}${room.status === 'void' && room.voidNote ? `<div class="meta">Void: ${esc(room.voidNote)}</div>` : ''}
@@ -242,12 +305,26 @@
       };
 
       $('#roomList').onclick = async ev => {
+        const sum = ev.target.closest('.pick > summary');
+        if (sum) { // remember which picker is open (the card list is rebuilt on every room update)
+          const key = sum.parentElement.dataset.pick;
+          if (sum.parentElement.open) openPick.delete(key); else openPick.add(key);
+          return;
+        }
         const btn = ev.target.closest('button');
         if (!btn) return;
         const code = btn.dataset.code || btn.dataset.void || btn.dataset.correct || btn.dataset.pin;
         const room = state.rooms[code];
         if (!room) return;
-        if (btn.dataset.pin) {
+        if (btn.dataset.correctTo) {
+          const to = btn.dataset.correctTo;
+          const name = teamName(state, room, to);
+          const note = prompt('Reason for the correction (kept in the record):', '');
+          if (note === null || !confirm(`Give the win to ${name} instead?`)) return;
+          openPick.delete(code + ':correct');
+          const res = await Store.mutateRoom(code, r => Match.correctResult(r, Store.serverNow(), note, to));
+          UI.toast(res.committed ? `Result corrected: +1 ${name}.` : 'Could not correct the result.', res.committed ? 'ok' : 'error');
+        } else if (btn.dataset.pin) {
           btn.disabled = true;
           try {
             await Store.setPinned(state.pinned === code ? null : code);
@@ -266,6 +343,7 @@
           const seat = btn.dataset.walkover;
           const name = teamName(state, room, seat);
           if (!confirm(`Give ${name} a walkover win (+1)?`)) return;
+          openPick.delete(code + ':walkover');
           const res = await Store.mutateRoom(code, r => Match.walkover(r, seat, Store.serverNow()));
           UI.toast(res.committed ? `Walkover recorded: +1 ${name}.` : 'Could not record walkover (room changed).', res.committed ? 'ok' : 'error');
         } else if (btn.dataset.void) {
@@ -337,7 +415,7 @@
       const ids = Object.keys(state.teams).sort((a, b) => state.teams[a].name.localeCompare(state.teams[b].name));
       if (!ids.length) { list.innerHTML = '<p class="muted small-text">Add the teams taking part.</p>'; return; }
       const used = new Set();
-      for (const r of Object.values(state.rooms)) { used.add(r.teamA); used.add(r.teamB); }
+      for (const r of Object.values(state.rooms)) for (const s of Match.seatsOf(r)) used.add(Match.teamOf(r, s));
       list.innerHTML = ids.map(id => `
         <div class="list-item">
           <span class="name" title="${esc(state.teams[id].name)}">${esc(Names.short(state.teams[id].name))}</span>

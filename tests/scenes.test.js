@@ -106,3 +106,51 @@ test('bestWord / bestWordText show the dictionary spelling, both readings as STO
   const up = finalRoom('A', g({ seat: 'A', words: [{ word: 'VERIFY', score: 30 }], total: 30, bingo: false }));
   assert.strictEqual(Scenes.bestWord(up).word, 'VERIFY');
 });
+
+// ---- 3-4 player rooms (2026-11-03) ----
+const M4 = require('../js/match.js');
+const room4final = (winner, extra = {}) => Object.assign({
+  status: 'final', players: 4, teamAName: 'NCR', teamBName: 'CAR', teamCName: 'IV-A', teamDName: 'BARMM',
+  seats: { A: { name: 'Maria' }, B: { name: 'Juan' }, C: { name: 'Ana' }, D: { name: 'Ali' } },
+  result: { winner, scoreA: 1, scoreB: 2, scoreC: 3, scoreD: 4, reason: 'time', decidedAt: 1000 },
+  game: { bestMove: null }
+}, extra);
+
+test('wheelTurns lands every seat under the pointer', () => {
+  for (const seats of [['A', 'B', 'C'], ['A', 'B', 'C', 'D']]) {
+    const n = seats.length;
+    seats.forEach((s, i) => {
+      const t = Scenes.wheelTurns(seats, s);
+      assert.ok(t >= 5 * 360, `${n}/${s}: at least 5 spins (${t})`);
+      const top = ((t + (i + 0.5) * 360 / n) % 360 + 360) % 360;
+      assert.ok(Math.abs(top) < 1e-9 || Math.abs(top - 360) < 1e-9, `${n}/${s}: slice centre under the pointer (${top})`);
+    });
+  }
+});
+
+test('the wheel result stays at least 2 s before the clocks start', () => {
+  assert.strictEqual(Scenes.WHEEL_RESULT_AT, 6000);
+  assert.strictEqual(Scenes.MULTI_TEAMS_MS + Scenes.WHEEL_SPIN_MS, Scenes.WHEEL_RESULT_AT);
+  assert.ok(M4.INTRO_MULTI_MS - Scenes.WHEEL_RESULT_AT >= 2000);
+});
+
+test('resultViewer: 4-player room', () => {
+  const r = room4final('C');
+  assert.strictEqual(Scenes.resultViewer(r, 'C'), 'winner');
+  assert.strictEqual(Scenes.resultViewer(r, 'A'), 'other');
+  assert.strictEqual(Scenes.resultViewer(r, 'D'), 'other');
+  assert.strictEqual(Scenes.resultViewer(r, 'watch'), 'neutral');
+  assert.strictEqual(Scenes.resultViewer(finalRoom('A'), 'C'), 'neutral', '2-player room: no seat C');
+});
+
+test('resultReason: 4-player resign', () => {
+  assert.strictEqual(Scenes.resultReason(room4final('B', { result: { winner: 'B', reason: 'resign' } })), 'Everyone else left the game');
+});
+
+test('resultReason: 3-4 player resign names the leaver unless everyone else left', () => {
+  const base = { winner: 'A', reason: 'resign', scoreA: 1, scoreB: 2, scoreC: 3, scoreD: 4, decidedAt: 1 };
+  const sdRoom = room4final('A', { result: Object.assign({}, base, { leftSeat: 'B' }), game: { bestMove: null, out: { B: 'left', C: 'sd', D: 'sd' } } });
+  assert.strictEqual(Scenes.resultReason(sdRoom), 'Juan left the game');
+  const allLeft = room4final('A', { result: Object.assign({}, base, { leftSeat: 'B' }), game: { bestMove: null, out: { B: 'left', C: 'left', D: 'left' } } });
+  assert.strictEqual(Scenes.resultReason(allLeft), 'Everyone else left the game');
+});

@@ -39,7 +39,7 @@
     // Names as shown: at most Names.MAX characters + "…" (QA pass).
     const Names = root.Names || (typeof require === 'function' ? require('./names.js') : null);
     const short = s => (Names ? Names.short(s) : s);
-    const teamName = short((seat === 'A' ? room.teamAName : room.teamBName) || '');
+    const teamName = short(room['team' + seat + 'Name'] || '');
     const seatInfo = room.seats && room.seats[seat];
     return {
       tier: tierFor({ total, bingo }),

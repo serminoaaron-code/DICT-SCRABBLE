@@ -77,6 +77,17 @@ Tick each box. If something fails, note what you did, what you saw, and on which
 - [ ] Toggle **☀️/🌙** on the projector page. Every readout (score bar, lower-third, ticker, corner card) stays easy to read in both themes.
 - [ ] Delete a room (host **Reset playground**) while the projector is mid-highlight on it. The highlight clears and the projector falls back to idle standings within a couple of seconds, instead of freezing on a room that no longer exists.
 
+## 8b. 3–4 player rooms (needs 2 extra devices, or extra Incognito / other-browser windows)
+- [ ] Add teams `TEST-C` and `TEST-D`. In **+ New room**, choose **Players: 4**. Four team boxes appear, and a team chosen in one box is greyed out in the others. Create **TEST-A, B, C, D, custom 4 minutes**. The card shows all four teams and "seats 0/4".
+- [ ] Each of the four players joins with the code and takes a different seat. The host's **Start** unlocks only when **all players are ready**.
+- [ ] After Start, every screen (and the projector) shows **4-WAY** with the four teams, then a **roulette wheel** that stops on the same team everywhere: "<TEAM> GOES FIRST!". The caption reads "🎡 Roulette: <team> goes first".
+- [ ] The score bar shows **one column per player** in seat order, highlighting the player whose turn it is. Turns go around the table from the wheel's pick. On the phone, nothing spills off the screen.
+- [ ] One player taps **⋯ → Leave**. The game **goes on**: their column shows **LEFT**, they see "You're out", and their turns are skipped.
+- [ ] Let the clock run out with two players tied at the top. **Sudden death** is between those two only; the others show **OUT** and keep watching. After 3 tied rounds the host gets **Award win** buttons for just the tied players.
+- [ ] The result screen shows a **podium** (1st in the middle, 2nd and 3rd beside, 4th below, LEFT tag for the leaver). The projector shows the same. Standings: the winner +1 (1-0), the other three 0-1.
+- [ ] **Correct result** on that room offers a choice of the other three teams.
+- [ ] A 2-player room still shows **VS** + the **coin toss** and the two-sided score bar, exactly as before.
+
 ## 9. Clean up
 - [ ] Press **Reset playground** in the yellow banner. This deletes only test data.
 - [ ] Open the real site (GitHub Pages, no banner) and check that its Standings are empty or show only real teams.

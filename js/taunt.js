@@ -18,7 +18,6 @@
   const LABELS = { angry: 'Angry', lol: 'LOL', cry: 'Crying' };
   const SHOW_MS = 2500; // on screen
   const LATE_MS = 3000; // a taunt arriving later than this (slow connection) is skipped
-  const SEATS = ['A', 'B'];
 
   // ---------- pure ----------
 
@@ -33,10 +32,11 @@
     return Match.tauntAllowed(room, seat, now);
   }
 
-  // What this view should show now. seen = { A, B } (last `at` per seat) or null on the first render,
-  // which only sets the baseline. Returns the new seen and the taunts to show, A first.
+  // What this view should show now. seen = { A, B, … } (last `at` per seat of the room) or null on the
+  // first render, which only sets the baseline. Returns the new seen and the taunts to show, A first.
   function arrivals(seen, room, now) {
     const t = (room && room.taunts) || {};
+    const SEATS = Match.seatsOf(room);
     const next = {};
     const show = [];
     for (const s of SEATS) {
