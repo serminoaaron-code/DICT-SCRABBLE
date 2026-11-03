@@ -33,15 +33,6 @@
     }
   }
 
-  async function checkWords(words, { fetchFn = (...a) => root.fetch(...a), timeoutMs = 5000 } = {}) {
-    const unique = [...new Set(words.map(w => String(w).toUpperCase()))];
-    const results = await Promise.all(unique.map(w => checkOne(w, fetchFn, timeoutMs)));
-    return {
-      rejected: unique.filter((w, i) => results[i] === 'rejected'),
-      unverified: results.includes('unverified')
-    };
-  }
-
   // Checks a play's words (Engine.scoreMove words: { word, back? }). A vertical word (back set) may
   // read top to bottom or bottom to top; both readings are checked at the same time, each string once.
   // spellings (aligned with words) is what Match.applyPlay stores: { word } — the reading that is a
@@ -69,5 +60,5 @@
     return out;
   }
 
-  return { checkWords, checkPlay };
+  return { checkPlay };
 });

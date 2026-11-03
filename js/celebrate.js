@@ -200,8 +200,7 @@
     return (c.words[0] && c.words[0].word) || '';
   }
   function mainShown(c) {
-    const w = c.words[0];
-    return w ? (w.alt ? `${w.word}/${w.alt}` : w.word) : '';
+    return c.words[0] ? Engine.shownWord(c.words[0]) : '';
   }
 
   function overlay(run, opts, c, reduced) {
