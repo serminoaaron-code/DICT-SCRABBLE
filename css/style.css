@@ -152,8 +152,9 @@ html[data-theme="dark"] .panel, html[data-theme="dark"] .card { box-shadow: 0 10
 .badge.live { border-color: var(--green); color: var(--navy); background: var(--green); }
 .badge.waiting { }
 .badge.final { border-color: var(--gold); color: #92400e; background: var(--cream); }
-.badge.void { text-decoration: line-through; }
-.badge.warn, .badge.paused, .badge.appeal, .badge.hostDecision, .badge.suddenDeath { border-color: var(--red); color: #fff; background: var(--red); }
+.badge.void { border-color: var(--line); color: var(--text); background: var(--line); }
+.badge.warn, .badge.appeal, .badge.hostDecision, .badge.suddenDeath { border-color: var(--red); color: #fff; background: var(--red); }
+.badge.paused { border-color: var(--yellow); color: var(--navy); background: var(--yellow); }
 .warn-line { background: var(--red-bg); color: var(--red-ink); border: 2px solid #fecaca; border-radius: 10px; padding: 8px 10px; font-size: 12px; font-weight: 600; }
 .ok-line { background: var(--green-bg); color: var(--green-ink); border: 2px solid #a7f3d0; border-radius: 10px; padding: 8px 10px; font-size: 12px; font-weight: 600; }
 /* these two sit on a fixed light tint in both themes (above): a nested .muted note must not
@@ -193,12 +194,80 @@ html[data-theme="dark"] .panel, html[data-theme="dark"] .card { box-shadow: 0 10
 /* minmax(0, …): a column never grows to fit its widest content (a dropdown as long as a long team name). */
 .dash { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr) minmax(0, 1fr); gap: 16px; align-items: start; }
 .dash .panel + .panel, .dash .card + .card { margin-top: 0; }
+/* large displays (host room cards redesign): the dashboard grows past the 1100px page and the rooms get the room */
+@media (min-width: 1280px) {
+  main:has(.dash) { max-width: 1560px; }
+  .dash { grid-template-columns: minmax(0, 1fr) minmax(0, 2.2fr) minmax(0, 1fr); }
+}
 .list-item { display: flex; justify-content: space-between; align-items: center; gap: 8px; border: 2px solid var(--line); border-radius: 12px; padding: 8px 11px; margin: 6px 0; background: var(--bg); }
 .list-item .name { font-weight: 700; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.room-card { border: 2px solid var(--line); border-radius: 14px; padding: 11px 12px; margin: 10px 0; background: var(--bg); }
-.room-card .teams { font-weight: 800; overflow-wrap: anywhere; min-width: 0; max-width: 100%; } /* long team chips end in "…" */
-.room-card .meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
-.room-card .actions { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
+/* Host room cards (redesign 2026-11-03, design "A"): head (teams + status), facts, Player List + Seat Overview
+   (side by side when the card is wide, stacked when narrow: a container query), compact alerts, one action row. */
+.room-card { container-type: inline-size; border: 2px solid var(--line); border-radius: 16px; padding: 12px 14px; margin: 12px 0; background: var(--bg); }
+.room-card.rc-suddenDeath, .room-card.rc-appeal, .room-card.rc-hostDecision { border-color: var(--red); }
+.room-card .teams { font-weight: 800; overflow-wrap: anywhere; min-width: 0; max-width: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; } /* long team chips end in "…" */
+.room-card .teams .chip { font-size: 13px; padding: 4px 12px; }
+.room-card .vs-sep { color: var(--muted); font-size: 12px; font-weight: 800; }
+.rc-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px 10px; flex-wrap: wrap; }
+.room-card .badge { font-size: 12px; padding: 5px 12px; font-weight: 900; }
+.room-card .meta { font-size: 13px; color: var(--muted); margin-top: 8px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; }
+.room-card .meta .code { color: var(--text); letter-spacing: 1px; }
+.rc-label { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rc-pill { display: inline-block; padding: 1px 9px; border-radius: 999px; font-weight: 900; font-size: 12px; }
+.rc-pill.full { background: var(--green); color: var(--navy); }
+.rc-pill.part { background: var(--yellow); color: var(--navy); }
+.rc-pill.none { background: var(--line); color: var(--text); }
+.rc-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; margin-top: 10px; padding: 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+@container (min-width: 560px) { .rc-body { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); } }
+.rc-body h4 { margin: 0 0 8px; font-size: 13px; color: var(--text); }
+.rc-row { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto auto; align-items: center; gap: 8px; padding: 6px 8px; margin-bottom: 6px; border-radius: 10px; background: var(--bg); }
+.rc-row:last-child { margin-bottom: 0; }
+.rc-row.gone { opacity: .8; }
+.rc-num { width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: 900; font-size: 13px; }
+.rc-num.s-a { background: var(--blue); color: #fff; } .rc-num.s-b { background: var(--red); color: #fff; }
+.rc-num.s-c { background: var(--green); color: var(--navy); } .rc-num.s-d { background: var(--yellow); color: var(--navy); }
+.rc-who { min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+.rc-name { font-weight: 800; font-size: 14px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rc-name.empty, .rc-seat-who.empty { font-style: italic; font-weight: 600; color: var(--muted); }
+.rc-team { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rc-tags { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
+.rc-tag { padding: 2px 8px; border-radius: 999px; font-weight: 800; font-size: 11.5px; white-space: nowrap; }
+.rc-tag.ok { background: var(--green-bg); color: var(--green-ink); }
+.rc-tag.warn { background: #fff3c4; color: #6b4a00; }
+.rc-tag.off { background: var(--line); color: var(--text); }
+.rc-tag.bad { background: var(--red-bg); color: var(--red-ink); }
+.rc-tag.turn { background: var(--yellow); color: var(--navy); }
+.rc-score { min-width: 32px; text-align: right; font: 900 15px 'Archivo Black', Impact, sans-serif; color: var(--text); }
+/* a narrow card (phone, the stacked dashboard): the tags go under the name so the name keeps its width */
+@container (max-width: 460px) {
+  .rc-row { grid-template-columns: 26px minmax(0, 1fr) auto; row-gap: 4px; }
+  .rc-row .rc-num { grid-row: 1; grid-column: 1; }
+  .rc-row .rc-who { grid-row: 1; grid-column: 2; }
+  .rc-row .rc-score { grid-row: 1; grid-column: 3; }
+  .rc-row .rc-tags { grid-row: 2; grid-column: 2 / -1; justify-content: flex-start; }
+  .rc-row .rc-tags:empty { display: none; }
+}
+.rc-seats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.rc-seats.n3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.rc-seats.n4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.rc-seat { min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 8px 4px; border: 2px solid var(--line); border-radius: 12px; background: var(--bg); text-align: center; font-size: 12px; }
+.rc-seat.taken { border-color: var(--green); }
+.rc-seat.gone { border-style: dashed; }
+.rc-seat-n { font-weight: 900; font-size: 13px; color: var(--text); }
+.rc-seat-who { max-width: 100%; font-weight: 800; font-size: 13px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rc-seat-sub { max-width: 100%; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rc-alert { margin-top: 10px; padding: 7px 10px; border-radius: 10px; background: #fff3c4; color: #6b4a00; font-size: 13px; font-weight: 700; }
+.rc-result { margin-top: 10px; padding: 7px 10px; border-radius: 10px; background: var(--green-bg); color: var(--green-ink); font-size: 13px; font-weight: 800; }
+.rc-result .rc-why { font-weight: 600; }
+.rc-voidnote { margin-top: 8px; font-size: 13px; color: var(--muted); }
+.room-card .actions { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.rc-btn { display: inline-flex; align-items: center; padding: 6px 12px; font-size: 12px; font-weight: 800; border-radius: 9px; background: var(--surface); color: var(--text); border: 2px solid var(--line); text-decoration: none; }
+.rc-btn:hover { filter: brightness(1.06); }
+.rc-sep { width: 2px; align-self: stretch; min-height: 24px; background: var(--line); margin: 0 2px; }
+.rc-void { margin-left: auto; }
+/* the "share this code" box after Create room: the code big, its two buttons beside it */
+#nrCreated:not(.hidden) { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 12px; border: 2px solid var(--line); border-radius: 14px; background: var(--bg); }
+#nrCreated .code-big { padding: 6px 14px; }
 /* Host room list: Active / Finished / Void tabs and the page buttons (feature #8). */
 .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
 .tabs .tab { padding: 6px 12px; font-size: 12.5px; border-radius: 999px; background: var(--surface); color: var(--text); border: 2px solid var(--line); box-shadow: none; }
