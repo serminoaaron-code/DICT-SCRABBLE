@@ -14,11 +14,11 @@
   const short = s => Names.short(s);
   // The lobby and the seat picker (lobby redesign "A", 2026-11-03): the room facts + a status badge, then the one
   // team line (js/teamline.js), the same as on the host room cards.
-  const lobbyHead = (room, badge) => {
+  const lobbyHead = (room, badge, roomCode) => { // roomCode: the route code (a room record may lack its own)
     const SEATS = seatsOf(room);
     const taken = SEATS.filter(s => room.seats[s]).length;
     const pill = taken === SEATS.length ? 'full' : taken ? 'part' : 'none';
-    return `<div class="lb-head"><div class="meta lb-meta"><span>📍 <span class="code">${esc(Match.formatCode(room.code))}</span></span><span>⏱ ${Math.round(room.matchLengthSec / 60)} min</span>
+    return `<div class="lb-head"><div class="meta lb-meta"><span>📍 <span class="code">${esc(Match.formatCode(roomCode))}</span></span><span>⏱ ${Math.round(room.matchLengthSec / 60)} min</span>
         <span>👥 Seats <span class="rc-pill ${pill}">${taken}/${SEATS.length}</span></span>${room.label ? `<span class="rc-label" title="${esc(room.label)}">🏷 ${esc(room.label)}</span>` : ''}</div>${badge}</div>
       ${TeamLine.html(SEATS.map(s => ({ seat: s, name: Match.teamNameOf(room, s) })))}`;
   };
@@ -180,17 +180,19 @@
         const s = room.seats[seat];
         const team = nameOf(room, seat);
         if (s) return `<button type="button" class="lb-seat taken" disabled title="${esc(team)}: taken by ${esc(s.name)}">${seatTop(room, seat)}
-          <span class="lb-name" title="${esc(s.name)}">${esc(short(s.name))}</span><span class="lb-sub">Seat taken by ${esc(short(s.name))}</span></button>`;
+          <span class="lb-name"><span class="lb-txt" title="${esc(s.name)}">${esc(short(s.name))}</span></span><span class="lb-sub">Seat taken by ${esc(short(s.name))}</span></button>`;
         // An empty seat in a running game: the player is continuing on a new device (host freed the seat).
-        return `<button type="button" class="lb-seat free" data-claim="${seat}" title="${esc(team)}">${seatTop(room, seat)}
-          <span class="lb-name">${inPlay ? `Take ${esc(short(team))}'s seat` : `Play for ${esc(short(team))}`}</span><span class="rc-tag ok lb-join">Tap to join</span></button>`;
+        // The team is on the tile's top line, so the label stays short on a phone; the full action is the button's name.
+        const action = inPlay ? `Take ${short(team)}'s seat` : `Play for ${short(team)}`;
+        return `<button type="button" class="lb-seat free" data-claim="${seat}" title="${esc(action)}" aria-label="${esc(action)}">${seatTop(room, seat)}
+          <span class="lb-name"><span class="lb-txt">Free seat</span></span><span class="rc-tag ok lb-join">${inPlay ? 'Tap to take it' : 'Tap to join'}</span></button>`;
       };
       const SEATS = seatsOf(room);
       const anyFree = SEATS.some(s => !room.seats[s]);
       const badge = inPlay ? '<span class="badge live">● Live</span>' : '<span class="badge waiting">🕒 Waiting</span>';
       el.innerHTML = `
         <div class="card narrow stack lobby-card">
-          ${lobbyHead(room, badge)}
+          ${lobbyHead(room, badge, code)}
           <div><label for="choiceName">Your name</label><input id="choiceName" maxlength="40" placeholder="Your name"></div>
           ${!inPlay ? `<div class="lb-seats">${SEATS.map(btn).join('')}</div>`
             : (anyFree ? '<p class="muted small-text center">This match is in progress. If you are a player switching devices, take your seat:</p>' +
@@ -229,7 +231,7 @@
       const seatTile = seat => {
         const s = room.seats[seat];
         const you = state.mySeat === seat ? '<span class="lb-you">YOU</span>' : '';
-        if (!s) return `<div class="lb-seat empty" data-seat-row="${seat}">${seatTop(room, seat)}<span class="lb-name empty">Waiting for player…</span></div>`;
+        if (!s) return `<div class="lb-seat empty" data-seat-row="${seat}">${seatTop(room, seat)}<span class="lb-name empty"><span class="lb-txt">Waiting for player…</span></span></div>`;
         const online = Match.isSeatOnline(room, seat);
         return `<div class="lb-seat taken${s.ready ? ' ready' : ''}${you ? ' me' : ''}" data-seat-row="${seat}">${you}${seatTop(room, seat)}
           <span class="lb-name"><span class="dot ${online ? 'on' : ''}" title="${online ? 'Connected' : 'Offline'}"></span><b class="seat-name" title="${esc(s.name)}">${esc(short(s.name))}</b></span>
@@ -249,7 +251,7 @@
         : '👁️ Waiting for the host to start the match…';
       el.innerHTML = `
         <div class="card narrow stack lobby-card">
-          ${lobbyHead(room, badge)}
+          ${lobbyHead(room, badge, code)}
           <div class="lb-seats">${SEATS.map(seatTile).join('')}</div>
           <div class="lb-prog"><div class="lb-prog-row"><b>${nReady} of ${SEATS.length} ready</b><span>${open ? `${open} seat${open > 1 ? 's' : ''} open` : 'all seats taken'}</span></div>
             <div class="lb-bar" role="progressbar" aria-label="Players ready" aria-valuemin="0" aria-valuemax="${SEATS.length}" aria-valuenow="${nReady}"><i style="width:${Math.round(nReady / SEATS.length * 100)}%"></i></div></div>

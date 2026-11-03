@@ -51,7 +51,6 @@
     return Names.short((state.teams[id] && state.teams[id].name) || room['team' + seat + 'Name'] || '?');
   }
 
-  const SEAT_CHIP = s => 'chip-' + s.toLowerCase();
 
   function clockText(room) {
     const phase = Match.roomPhase(room);
