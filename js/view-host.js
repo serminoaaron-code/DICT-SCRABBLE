@@ -266,10 +266,11 @@
         const canVoid = room.status === 'waiting' || room.status === 'final';
         const actions = lead.join('') + (decide.length ? '<span class="rc-sep" aria-hidden="true"></span>' + decide.join('') : '')
           + (canVoid ? `<button class="danger small rc-void" data-void="${code}">🗑 Void</button>` : '');
-        const chips = seats.map(s => {
-          const n = teamName(state, room, s);
-          return `<span class="chip ${SEAT_CHIP(s)}" title="${esc(n)}">${esc(n)}</span>`;
-        }).join(' <span class="vs-sep">vs</span> ');
+        // the one team line (js/teamline.js): full names in, TeamLine shortens and escapes them
+        const lineup = TeamLine.html(seats.map(s => {
+          const id = Match.teamOf(room, s);
+          return { seat: s, name: (state.teams[id] && state.teams[id].name) || room['team' + s + 'Name'] || '?' };
+        }));
         const n = seats.length;
         const seatPill = seatsTaken === n ? 'full' : seatsTaken ? 'part' : 'none';
         const clock = ['live', 'paused', 'appeal'].includes(phase) ? ` <span data-clock="${code}">${esc(clockText(room))}</span>` : '';
@@ -277,11 +278,11 @@
           : phase === 'hostDecision' ? '⚖️ Still tied: open the room to award the win' : '';
         return `<div class="room-card rc-${esc(phase)}" data-room="${code}">
           <div class="rc-head">
-            <span class="teams">${chips}</span>
+            <div class="meta rc-meta"><span>📍 <span class="code">${esc(Match.formatCode(room.code))}</span></span><span>⏱ ${Math.round(room.matchLengthSec / 60)} min</span>
+              <span>👥 Seats <span class="rc-pill ${seatPill}">${seatsTaken}/${n}</span></span>${room.label ? `<span class="rc-label" title="${esc(room.label)}">🏷 ${esc(room.label)}</span>` : ''}</div>
             <span class="badge ${esc(phase)}">${esc(BADGE[phase] || phase)}${clock}</span>
           </div>
-          <div class="meta rc-meta"><span>📍 <span class="code">${esc(Match.formatCode(room.code))}</span></span><span>⏱ ${Math.round(room.matchLengthSec / 60)} min</span>
-            <span>👥 Seats <span class="rc-pill ${seatPill}">${seatsTaken}/${n}</span></span>${room.label ? `<span class="rc-label" title="${esc(room.label)}">🏷 ${esc(room.label)}</span>` : ''}</div>
+          ${lineup}
           ${room.status === 'waiting' || live ? playersHtml(room, phase) : ''}
           ${alert ? `<div class="rc-alert">${alert}</div>` : ''}
           ${status}${room.status === 'void' && room.voidNote ? `<div class="rc-voidnote">Void: ${esc(room.voidNote)}</div>` : ''}

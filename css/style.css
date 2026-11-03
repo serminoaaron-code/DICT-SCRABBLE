@@ -212,7 +212,8 @@ html[data-theme="dark"] .panel, html[data-theme="dark"] .card { box-shadow: 0 10
 .room-card .teams { font-weight: 800; overflow-wrap: anywhere; min-width: 0; max-width: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; } /* long team chips end in "…" */
 .room-card .teams .chip { font-size: 13px; padding: 4px 12px; }
 .room-card .vs-sep { color: var(--muted); font-size: 12px; font-weight: 800; }
-.rc-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px 10px; flex-wrap: wrap; }
+.rc-head { display: flex; justify-content: space-between; align-items: center; gap: 8px 10px; flex-wrap: wrap; }
+.rc-head .meta { margin-top: 0; min-width: 0; }
 .room-card .badge { font-size: 12px; padding: 5px 12px; font-weight: 900; }
 .room-card .meta { font-size: 13px; color: var(--muted); margin-top: 8px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; }
 .room-card .meta .code { color: var(--text); letter-spacing: 1px; }
@@ -306,18 +307,59 @@ table.standings td.pts { font-weight: 800; color: var(--text); }
 table.standings tr:first-child td { font-weight: 700; }
 
 /* ---------- room: lobby ---------- */
-.versus { font-size: 20px; font-weight: 800; color: var(--text); text-align: center; overflow-wrap: anywhere; display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; }
-.versus .vs-sep { color: var(--muted); font-size: 13px; font-weight: 700; text-transform: uppercase; }
-.seat { display: flex; justify-content: space-between; align-items: center; gap: 8px; border: 2px solid var(--line); border-radius: 12px; padding: 10px 12px; background: var(--bg); }
-.seat.ready { border-color: var(--green); background: var(--green-bg); color: var(--navy); }
-.seat.empty { border-style: dashed; color: var(--muted); }
-/* Lobby seat row stays on one line: long team/player names end in "…" (full name in the title). */
-.seat-who { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.seat-who .dot { flex: none; margin-right: 0; }
-.seat-who .chip { display: block; flex: 0 1 auto; min-width: 0; max-width: 45%; overflow: hidden; text-overflow: ellipsis; }
-.seat-who .seat-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.seat-who .seat-sep, .seat-who .seat-you { flex: none; }
-.seat > .seat-side { flex: none; flex-wrap: nowrap; }
+/* The one team line (js/teamline.js) on the host room cards, the lobby and the seat picker: equal chips, never a
+   dangling "vs". 2 teams: TEAM VS TEAM. 3-4: a "3-/4-WAY MATCH" label over chips numbered like the seats; a narrow
+   line puts 4 teams 2 x 2 and 3 teams 2 + 1 (container queries on the line's own width). */
+.teamline { container: teamline / inline-size; display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.tl-lab { font-size: 10.5px; font-weight: 900; letter-spacing: 1.5px; color: var(--muted); }
+.tl-grid { display: grid; gap: 6px; align-items: center; }
+.teamline.n2 .tl-grid { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); }
+.teamline.n3 .tl-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.teamline.n4 .tl-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@container teamline (max-width: 440px) { .teamline.n4 .tl-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container teamline (max-width: 380px) {
+  .teamline.n3 .tl-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .teamline.n3 .tl-chip:last-child { grid-column: 1 / -1; }
+}
+.tl-chip { display: block; min-width: 0; max-width: none; text-align: center; font-size: 13px; padding: 5px 10px; }
+.tl-num { display: inline-block; width: 17px; height: 17px; margin-right: 6px; border-radius: 50%; font-size: 10.5px; line-height: 17px; background: rgba(255, 255, 255, .3); }
+.chip-c .tl-num, .chip-d .tl-num { background: rgba(11, 31, 77, .16); }
+.tl-vs { color: var(--muted); font-weight: 900; font-size: 12px; letter-spacing: 1px; }
+.rc-head + .teamline { margin-top: 10px; }
+/* The players' waiting screen and seat picker (lobby redesign "A"): head + team line, a tile per seat
+   (2 columns), a "1 of 4 ready" bar, the big button, a note, a small footer. */
+.lb-head { display: flex; justify-content: space-between; align-items: center; gap: 6px 10px; flex-wrap: wrap; }
+.lb-head .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-size: 13px; color: var(--muted); min-width: 0; }
+.lb-head .meta .code { color: var(--text); letter-spacing: 1px; }
+.lb-seats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.lb-seat { position: relative; min-width: 0; display: flex; flex-direction: column; align-items: stretch; gap: 4px; padding: 10px; border: 2px solid var(--line); border-radius: 14px; background: var(--bg); color: var(--text); text-align: left; font-weight: 600; box-shadow: none; }
+button.lb-seat { cursor: pointer; }
+button.lb-seat:disabled { opacity: 1; cursor: default; }
+.lb-seat.taken { border-color: var(--green); }
+.lb-seat.empty { border-style: dashed; }
+button.lb-seat.free { border-color: var(--green); border-style: dashed; }
+button.lb-seat.free:hover { filter: none; border-style: solid; }
+.lb-seat.me { border-color: var(--yellow); box-shadow: inset 0 0 0 2px var(--yellow); }
+.lb-top { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.lb-team { min-width: 0; font-size: 12px; font-weight: 800; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lb-name { display: flex; align-items: center; gap: 2px; min-width: 0; font-size: 15px; font-weight: 900; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lb-name .seat-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.lb-name .dot { flex: none; margin-right: 4px; }
+.lb-name.empty { font-size: 13px; font-weight: 600; font-style: italic; color: var(--muted); }
+.lb-sub { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lb-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.lb-join { align-self: flex-start; }
+.lb-you { position: absolute; top: -10px; right: 8px; padding: 1px 8px; border-radius: 999px; background: var(--yellow); color: var(--navy); font-size: 10.5px; font-weight: 900; letter-spacing: .5px; }
+.lb-remove { align-self: flex-start; padding: 2px 0; background: none; color: var(--text); font-size: 12px; font-weight: 800; text-decoration: underline; box-shadow: none; border-radius: 0; }
+.lb-prog-row { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--muted); }
+.lb-prog-row b { color: var(--text); }
+.lb-bar { height: 8px; margin-top: 5px; border-radius: 999px; background: var(--line); overflow: hidden; }
+.lb-bar i { display: block; height: 100%; border-radius: 999px; background: var(--green); transition: width .3s ease; }
+@media (prefers-reduced-motion: reduce) { .lb-bar i { transition: none; } }
+button.btn-go { background: var(--green); color: var(--navy); }
+.lb-note { margin: 0; }
+.lb-foot { display: flex; justify-content: space-between; align-items: center; gap: 6px 10px; flex-wrap: wrap; padding-top: 8px; border-top: 1px solid var(--line); }
+.lb-links { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #9aa5b8; margin-right: 6px; vertical-align: middle; }
 .dot.on { background: var(--green); }
 
