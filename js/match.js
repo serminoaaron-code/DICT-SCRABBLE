@@ -20,10 +20,26 @@
   const DROP_MS = 700;
   const CELEBRATE_MS = [1000, 2600, 2600, 3000, 4500];
   const SUDDEN_DEATH_MAX_ROUNDS = 3;
-  const SEATS = ['A', 'B'];
+  // 3-4 player rooms (2026-11-03): the "3/4-WAY" team intro + roulette wheel take 2 s longer
+  // (teams 2.6 s, wheel 3.4 s, then "<TEAM> GOES FIRST!" holds 2.5 s; Scenes.WHEEL_RESULT_AT).
+  const INTRO_MULTI_MS = 8500;
+  const ALL_SEATS = ['A', 'B', 'C', 'D'];
 
   const clone = obj => JSON.parse(JSON.stringify(obj));
   const other = seat => (seat === 'A' ? 'B' : 'A');
+
+  // ---------- seats (2-4 players) ----------
+  // A room without `players` is a 2-player room; 3-4 player rooms add seats C and D
+  // (teamC/teamCName, teamD/teamDName). The fields of a 2-player room never change.
+  function seatsOf(room) {
+    const n = room && [3, 4].includes(room.players) ? room.players : 2;
+    return ALL_SEATS.slice(0, n);
+  }
+  const isMulti = room => seatsOf(room).length > 2;
+  function isSeat(room, s) { return seatsOf(room).includes(s); }
+  function teamOf(room, seat) { return (room && room['team' + seat]) || ''; }
+  function teamNameOf(room, seat) { return (room && room['team' + seat + 'Name']) || 'Team ' + seat; }
+  function introMsFor(room) { return isMulti(room) ? INTRO_MULTI_MS : INTRO_MS; }
 
   // ---------- codes ----------
 
@@ -47,9 +63,14 @@
 
   // ---------- room shape ----------
 
-  function createRoom({ code, teamA, teamB, teamAName, teamBName, label, matchLengthSec, now }) {
-    if (teamA === teamB) throw new Error('SAME_TEAM');
-    return {
+  function createRoom(opts) {
+    const { code, teamA, teamB, teamAName, teamBName, label, matchLengthSec, now, players = 2 } = opts;
+    if (![2, 3, 4].includes(players)) throw new Error('BAD_PLAYERS');
+    const seats = ALL_SEATS.slice(0, players);
+    const ids = seats.map(s => opts['team' + s]);
+    if (players > 2 && ids.some(id => !id)) throw new Error('MISSING_TEAM');
+    if (new Set(ids).size !== ids.length) throw new Error('SAME_TEAM');
+    const r = {
       code, teamA, teamB,
       teamAName: teamAName || '', teamBName: teamBName || '',
       label: label || '',
@@ -63,6 +84,15 @@
       result: null,
       createdAt: now
     };
+    if (players === 2) return r; // exactly today's room
+    r.players = players;
+    for (const s of seats.slice(2)) {
+      r['team' + s] = opts['team' + s];
+      r['team' + s + 'Name'] = opts['team' + s + 'Name'] || '';
+      r.seats[s] = null;
+      r.fairPlay[s] = { screenLeaves: 0 };
+    }
+    return r;
   }
 
   // Firebase drops empty arrays/objects and nulls; restore every default.
@@ -71,6 +101,8 @@
     r.label = r.label || '';
     r.teamAName = r.teamAName || '';
     r.teamBName = r.teamBName || '';
+    const SEATS = seatsOf(r);
+    for (const s of SEATS.slice(2)) r['team' + s + 'Name'] = r['team' + s + 'Name'] || '';
     r.seats = r.seats || {};
     for (const s of SEATS) r.seats[s] = r.seats[s] || null;
     r.watchers = r.watchers || {};
@@ -97,6 +129,7 @@
         g.scores[s] = g.scores[s] || 0;
       }
       g.moveCount = g.moveCount || 0;
+      g.out = g.out || {}; // 3-4 player rooms: { seat: 'left' | 'sd' } (resigned / out of sudden death)
       g.pending = g.pending || null;
       if (g.pending) g.pending.rejectedWords = g.pending.rejectedWords || [];
       g.suddenDeath = g.suddenDeath || null;
@@ -115,6 +148,7 @@
 
   function claimSeat(room, seat, { name, clientId }) {
     if (room.status === 'final' || room.status === 'void') return null;
+    if (!isSeat(room, seat)) return null;
     const cur = room.seats && room.seats[seat];
     if (cur && cur.clientId !== clientId) return null;
     const r = clone(room);
@@ -160,8 +194,10 @@
   // Display copy with the teams' current names (renames), falling back to the snapshot.
   function withTeamNames(room, teams) {
     const r = clone(room);
-    if (teams && teams[r.teamA] && teams[r.teamA].name) r.teamAName = teams[r.teamA].name;
-    if (teams && teams[r.teamB] && teams[r.teamB].name) r.teamBName = teams[r.teamB].name;
+    for (const s of seatsOf(r)) {
+      const id = r['team' + s];
+      if (teams && teams[id] && teams[id].name) r['team' + s + 'Name'] = teams[id].name;
+    }
     return r;
   }
 
@@ -171,14 +207,20 @@
 
   function startMatch(room, now, rng = Math.random, introMs = 0) {
     if (room.status !== 'waiting') return null;
-    if (!SEATS.every(s => room.seats[s] && room.seats[s].ready)) return null;
+    const seats = seatsOf(room);
+    if (!seats.every(s => room.seats[s] && room.seats[s].ready)) return null;
     const r = clone(room);
     let bag = Engine.createBag(rng);
-    const a = Engine.drawTiles(bag, Engine.RACK_SIZE); bag = a.bag;
-    const b = Engine.drawTiles(bag, Engine.RACK_SIZE); bag = b.bag;
-    const firstSeat = rng() < 0.5 ? 'A' : 'B';
+    const racks = {}, scores = {};
+    for (const s of seats) {
+      const d = Engine.drawTiles(bag, Engine.RACK_SIZE);
+      bag = d.bag; racks[s] = d.drawn; scores[s] = 0;
+    }
+    // 2 players: the coin toss (as before); 3-4 players: the roulette's pick. Chosen once, here, so
+    // every screen plays the same coin / wheel landing from the stored firstSeat.
+    const firstSeat = seats.length === 2 ? (rng() < 0.5 ? 'A' : 'B') : seats[Math.min(seats.length - 1, Math.floor(rng() * seats.length))];
     r.game = {
-      board: {}, bag, racks: { A: a.drawn, B: b.drawn }, scores: { A: 0, B: 0 },
+      board: {}, bag, racks, scores,
       firstSeat, turn: firstSeat, moveCount: 0, pending: null, suddenDeath: null, lastMove: null, bestMove: null
     };
     const startedAt = now + introMs;
@@ -450,7 +492,7 @@
   }
 
   function tauntAllowed(room, seat, now) {
-    if (!SEATS.includes(seat) || !tauntWindow(room, now)) return false;
+    if (!isSeat(room, seat) || !tauntWindow(room, now)) return false;
     const last = room.taunts && room.taunts[seat];
     return !(last && now - last.at < TAUNT_COOLDOWN_MS);
   }
@@ -510,7 +552,8 @@
   }
 
   return {
-    CODE_ALPHABET, TURN_MS, INTRO_MS, DROP_MS, CELEBRATE_MS, SUDDEN_DEATH_MAX_ROUNDS,
+    CODE_ALPHABET, TURN_MS, INTRO_MS, INTRO_MULTI_MS, DROP_MS, CELEBRATE_MS, SUDDEN_DEATH_MAX_ROUNDS,
+    ALL_SEATS, seatsOf, isSeat, teamOf, teamNameOf, introMsFor,
     generateRoomCode, formatCode, normalizeCode, isRoomRecord, createRoom, normalizeRoom,
     claimSeat, setReady, removePlayer, leaveSeat, rejoinSeat, withTeamNames, startMatch,
     prepareMove, applyPlay, applyPass, resolveTimeUp, finalize,

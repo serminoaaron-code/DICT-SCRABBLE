@@ -779,3 +779,120 @@ test('approved appeal shows the board reading', () => {
   const n = M.resolveAppeal(asked, true, { now: 160000 });
   assert.deepStrictEqual(n.game.lastMove.words, [{ word: 'YFIREV', score: 30 }]);
 });
+
+// ---------- 3–4 player rooms: seat model (2026-11-03) ----------
+
+const TEAMS4 = { teamA: 'tA', teamB: 'tB', teamC: 'tC', teamD: 'tD', teamAName: 'NCR', teamBName: 'CAR', teamCName: 'IV-A', teamDName: 'BARMM' };
+function room4(extra = {}) {
+  return M.createRoom(Object.assign({ code: 'K7Q42M', label: '', matchLengthSec: 600, now: 1000, players: 4 }, TEAMS4, extra));
+}
+function ready4(players = 4) {
+  let r = room4(players === 3 ? { players: 3, teamD: undefined, teamDName: undefined } : {});
+  M.seatsOf(r).forEach((s, i) => {
+    r = M.claimSeat(r, s, { name: 'P' + s, clientId: 'c' + i });
+    r = M.setReady(r, s, 'c' + i, true);
+  });
+  return r;
+}
+
+test('seatsOf / teamNameOf / introMsFor', () => {
+  assert.deepStrictEqual(M.ALL_SEATS, ['A', 'B', 'C', 'D']);
+  assert.deepStrictEqual(M.seatsOf({ teamA: 'x', teamB: 'y' }), ['A', 'B']);
+  assert.deepStrictEqual(M.seatsOf({ players: 3 }), ['A', 'B', 'C']);
+  assert.deepStrictEqual(M.seatsOf({ players: 4 }), ['A', 'B', 'C', 'D']);
+  assert.strictEqual(M.teamNameOf({ teamCName: 'IV-A' }, 'C'), 'IV-A');
+  assert.strictEqual(M.teamNameOf({}, 'D'), 'Team D');
+  assert.strictEqual(M.teamOf({ teamC: 'tC' }, 'C'), 'tC');
+  assert.strictEqual(M.isSeat({ players: 3 }, 'C'), true);
+  assert.strictEqual(M.isSeat({}, 'C'), false);
+  assert.strictEqual(M.isSeat({}, 'watch'), false);
+  assert.strictEqual(M.INTRO_MULTI_MS, 8500);
+  assert.strictEqual(M.introMsFor({}), M.INTRO_MS);
+  assert.strictEqual(M.introMsFor({ players: 3 }), 8500);
+});
+
+test('createRoom: 2 players is unchanged', () => {
+  assert.deepStrictEqual(baseRoom(), {
+    code: 'K7Q42M', teamA: 'tA', teamB: 'tB', teamAName: 'NCR', teamBName: 'Region IV-A', label: 'Tonight',
+    matchLengthSec: 600, status: 'waiting', seats: { A: null, B: null }, watchers: {}, clock: null, game: null,
+    fairPlay: { A: { screenLeaves: 0 }, B: { screenLeaves: 0 } }, result: null, createdAt: 1000
+  });
+});
+
+test('createRoom: 4 players', () => {
+  const r = room4();
+  assert.strictEqual(r.players, 4);
+  assert.deepStrictEqual(r.seats, { A: null, B: null, C: null, D: null });
+  assert.strictEqual(r.teamC, 'tC');
+  assert.strictEqual(r.teamDName, 'BARMM');
+  assert.deepStrictEqual(Object.keys(r.fairPlay), ['A', 'B', 'C', 'D']);
+  const r3 = room4({ players: 3, teamD: undefined, teamDName: undefined });
+  assert.deepStrictEqual(Object.keys(r3.seats), ['A', 'B', 'C']);
+  assert.strictEqual('teamD' in r3, false);
+  assert.strictEqual('teamDName' in r3, false);
+  assert.ok(!JSON.stringify(r3).includes('undefined'));
+});
+
+test('createRoom: duplicates and gaps are refused', () => {
+  assert.throws(() => room4({ teamC: 'tA' }), /SAME_TEAM/);
+  assert.throws(() => room4({ teamD: 'tB' }), /SAME_TEAM/);
+  assert.throws(() => room4({ players: 3, teamC: '' }), /MISSING_TEAM/);
+  assert.throws(() => room4({ teamD: undefined }), /MISSING_TEAM/);
+  assert.throws(() => room4({ players: 5 }), /BAD_PLAYERS/);
+  assert.throws(() => room4({ players: 1 }), /BAD_PLAYERS/);
+});
+
+test('normalizeRoom: old 2-player room unchanged', () => {
+  const r = M.normalizeRoom(JSON.parse(JSON.stringify(startedRoom())));
+  assert.strictEqual('players' in r, false);
+  assert.deepStrictEqual(Object.keys(r.seats), ['A', 'B']);
+  assert.deepStrictEqual(Object.keys(r.game.racks), ['A', 'B']);
+  assert.deepStrictEqual(Object.keys(r.game.scores), ['A', 'B']);
+  assert.deepStrictEqual(Object.keys(r.taunts), ['A', 'B']);
+  assert.deepStrictEqual(r.game.out, {});
+});
+
+test('normalizeRoom: 4-player room restores dropped empties', () => {
+  const raw = { code: 'K7Q42M', teamA: 'tA', teamB: 'tB', teamC: 'tC', teamD: 'tD', players: 4, status: 'live', matchLengthSec: 600,
+    seats: { A: { name: 'P', clientId: 'c0', ready: true } }, clock: { startedAt: 1, endsAt: 2, turnStartedAt: 1 },
+    game: { turn: 'C', firstSeat: 'C', moveCount: 0, scores: { C: 4 } } };
+  const r = M.normalizeRoom(raw);
+  assert.deepStrictEqual(r.game.scores, { C: 4, A: 0, B: 0, D: 0 });
+  assert.deepStrictEqual(r.game.racks.D, []);
+  assert.strictEqual(r.seats.D, null);
+  assert.strictEqual(r.fairPlay.C.screenLeaves, 0);
+  assert.strictEqual(r.taunts.D, null);
+  assert.strictEqual(r.teamCName, '');
+  assert.deepStrictEqual(r.game.out, {});
+});
+
+test('claimSeat: C only exists in 3-4 player rooms', () => {
+  assert.strictEqual(M.claimSeat(baseRoom(), 'C', { name: 'X', clientId: 'c9' }), null);
+  assert.strictEqual(M.claimSeat(room4({ players: 3, teamD: undefined }), 'D', { name: 'X', clientId: 'c9' }), null);
+  assert.strictEqual(M.claimSeat(room4({ players: 3, teamD: undefined }), 'C', { name: 'X', clientId: 'c9' }).seats.C.name, 'X');
+});
+
+test('startMatch: 4 players', () => {
+  const r = M.startMatch(ready4(), 1000, constRng(0.8));
+  assert.strictEqual(r.status, 'live');
+  for (const s of ['A', 'B', 'C', 'D']) assert.strictEqual(r.game.racks[s].length, 7, s);
+  assert.strictEqual(r.game.bag.length, 98 - 28);
+  assert.deepStrictEqual(r.game.scores, { A: 0, B: 0, C: 0, D: 0 });
+  assert.strictEqual(r.game.firstSeat, 'D');
+  assert.strictEqual(r.game.turn, 'D');
+  assert.strictEqual(M.startMatch(ready4(), 1000, constRng(0.3)).game.firstSeat, 'B');
+  assert.strictEqual(M.startMatch(ready4(3), 1000, constRng(0.99)).game.firstSeat, 'C');
+  assert.strictEqual(M.startMatch(ready4(3), 1000, constRng(0.99)).game.bag.length, 98 - 21);
+});
+
+test('startMatch: needs every seat ready', () => {
+  let r = ready4();
+  r = M.setReady(r, 'D', 'c3', false);
+  assert.strictEqual(M.startMatch(r, 1000, constRng(0.5)), null);
+});
+
+test('withTeamNames refreshes every seat', () => {
+  const r = M.withTeamNames(room4(), { tC: { name: 'Region IV-A' }, tD: { name: 'Bangsamoro' } });
+  assert.strictEqual(r.teamCName, 'Region IV-A');
+  assert.strictEqual(r.teamDName, 'Bangsamoro');
+});
