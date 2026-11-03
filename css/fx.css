@@ -314,6 +314,37 @@ body.fx-scene #hostBar, body.fx-active #hostBar { position: relative; z-index: 9
 .rs-team { padding: calc(var(--k) * 5) calc(var(--k) * 12); border-radius: 999px; border: 2px solid rgba(255,255,255,.85); min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rs-a { background: #1446a0; }
 .rs-b { background: #c41f16; }
+.rs-c { background: #00a651; color: #0b1f4d; }
+.rs-d { background: #ffc20e; color: #0b1f4d; }
+
+/* ---- 3-4 player rooms: the "3/4-WAY" teams, then the roulette wheel (mockup A) ---- */
+.in-multi, .in-wheel { background: radial-gradient(circle at 50% 40%, #1d4fb5, #0b1f4d 70%); }
+.in-mbox { position: absolute; inset: 0; padding: 0 16px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: calc(var(--k) * 8); color: #fff; text-align: center; }
+.in-way { font-size: calc(var(--k) * 34); color: var(--yellow); letter-spacing: 1px; }
+.in-mteam { width: min(100%, calc(var(--k) * 300)); padding: calc(var(--k) * 7) 12px; border-radius: 12px; box-shadow: 0 4px 0 rgba(0,0,0,.25); }
+.in-mteam .in-tm { font-size: calc(var(--k) * 22); }
+.in-mteam .in-tm.long { font-size: calc(var(--k) * 17); }
+.in-mteam .in-tm.xlong { font-size: calc(var(--k) * 13); }
+.in-ms-a { background: linear-gradient(160deg, #1446a0, #0b2a75); color: #fff; }
+.in-ms-b { background: linear-gradient(160deg, #e1251b, #a3140d); color: #fff; }
+.in-ms-c { background: linear-gradient(160deg, #19c266, #00a651); color: #0b1f4d; }
+.in-ms-d { background: linear-gradient(160deg, #ffd84d, #ffc20e); color: #0b1f4d; }
+.in-ms-c .in-tm, .in-ms-d .in-tm { text-shadow: none; }
+.in-multi.on .in-mteam { animation: fx-in-l .45s calc(var(--in-off, 0ms) + var(--d, 0ms)) cubic-bezier(.2,1.2,.4,1) both; }
+.in-multi.on .in-way { animation: fx-vs-pop .5s calc(var(--in-off, 0ms) + 500ms) cubic-bezier(.2,1.7,.4,1) both; }
+.in-wheel.on { animation: fx-in-fade .2s var(--in-off, 0ms) both; }
+.in-wheel-wrap { position: relative; width: calc(var(--k) * 210); height: calc(var(--k) * 210); margin: calc(var(--k) * 14) 0 calc(var(--k) * 10); }
+.in-wheel-disc { position: relative; width: 100%; height: 100%; border-radius: 50%; border: calc(var(--k) * 5) solid #fff; box-shadow: 0 6px 24px rgba(0,0,0,.4); }
+.in-wheel-lbl { position: absolute; left: 50%; top: 50%; max-width: calc(var(--k) * 78); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-weight: 800; font-size: calc(var(--k) * 12); transform: translate(-50%, -50%) rotate(var(--a)) translateY(calc(var(--k) * -62)); }
+.in-ptr { position: absolute; left: 50%; top: calc(var(--k) * -14); z-index: 2; transform: translateX(-50%); width: 0; height: 0;
+  border-left: calc(var(--k) * 13) solid transparent; border-right: calc(var(--k) * 13) solid transparent; border-top: calc(var(--k) * 24) solid var(--yellow);
+  filter: drop-shadow(0 2px 2px rgba(0,0,0,.5)); }
+.in-hub { position: absolute; left: 50%; top: 50%; z-index: 2; width: calc(var(--k) * 42); height: calc(var(--k) * 42); margin: calc(var(--k) * -21) 0 0 calc(var(--k) * -21);
+  border-radius: 50%; background: #fff; color: #0b1f4d; font-size: calc(var(--k) * 12); display: flex; align-items: center; justify-content: center; }
+.fx-reduced.fx-intro .in-multi.on .in-mteam, .fx-reduced.fx-intro .in-multi.on .in-way { animation-name: fx-in-fade; animation-timing-function: ease; }
+.fx-reduced.fx-intro .in-wheel.on { animation: fx-in-fade .4s var(--in-off, 0ms) both; }
 .rs-vs { color: var(--yellow); font-size: calc(var(--k) * 13); }
 @keyframes fx-rs-slam { from { opacity: 0; transform: scale(2.6); } to { opacity: 1; transform: none; } }
 
@@ -387,6 +418,27 @@ body.fx-scene #hostBar, body.fx-active #hostBar { position: relative; z-index: 9
 .res-best { margin-top: 12px; max-width: 100%; overflow-wrap: anywhere; padding: 6px 12px; border-radius: 10px;
   font-size: 12px; font-weight: 800; background: rgba(11,31,77,.88); color: #fff; }
 .res-reason { margin-top: 10px; max-width: 100%; overflow-wrap: anywhere; font-size: 13px; font-weight: 700; }
+/* 3-4 player rooms: the podium (mockup A), light with dark text like the score pill */
+.res-podium-wrap { margin-top: 14px; width: 100%; max-width: 340px; box-shadow: 0 4px 0 rgba(11,31,77,.18); border-radius: 14px; }
+.res-podium { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: end; gap: 6px; padding: 10px 10px 0;
+  border-radius: 14px 14px 0 0; background: #fff8e6; color: #0b1f4d; }
+.res-podium.solo { border-radius: 14px; overflow: hidden; }
+.res-other .res-podium, .res-other .res-fourth { background: #f4f7ff; }
+.res-step { min-width: 0; text-align: center; }
+.res-who { min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.res-who .chip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10.5px; padding: 1px 8px; }
+.res-pl { max-width: 100%; font-size: 12px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.res-step .res-num, .res-fourth .res-num { font-size: 20px; }
+.res-num.w { color: #067a3e; }
+.res-blk { margin-top: 4px; border-radius: 8px 8px 0 0; display: flex; justify-content: center; padding-top: 4px; font-size: 18px; color: #0b1f4d; }
+.res-blk.p1 { height: 64px; background: #ffc20e; }
+.res-blk.p2 { height: 44px; background: #c7d2ea; }
+.res-blk.p3 { height: 30px; background: #e3b07a; }
+.res-fourth { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 0 0 14px 14px;
+  background: #fff8e6; color: #0b1f4d; font-weight: 700; font-size: 13px; border-top: 1px solid rgba(11,31,77,.15); }
+.res-fourth-who { min-width: 0; display: flex; align-items: center; gap: 8px; }
+.res-fourth .res-who { flex-direction: row; }
+.res-left-tag { font-size: 10px; font-weight: 900; letter-spacing: 1px; line-height: 14px; padding: 0 6px; border-radius: 99px; background: #0b1f4d; color: #fff; }
 .res-btns { position: relative; z-index: 3; display: flex; gap: 8px; padding: 0 16px 16px; }
 .res-hero .res-btns button { flex: 1 1 0; min-width: 0; padding: 11px 10px; border-radius: 12px; font-size: 14px; font-weight: 800;
   background: #0b1f4d; color: #fff; border: 2px solid #0b1f4d; box-shadow: 0 3px 0 rgba(0,0,0,.25); }

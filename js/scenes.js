@@ -37,7 +37,15 @@
 
   // ---------- pure ----------
 
-  const introMs = () => (root.Match && root.Match.INTRO_MS) || 6500;
+  // The intro's length for this room: 6500 (VS + coin), 8500 for 3-4 players (teams + roulette).
+  const introMs = room => {
+    const M = root.Match || (typeof require === 'function' ? require('./match.js') : null);
+    return (M && M.introMsFor ? M.introMsFor(room) : M && M.INTRO_MS) || 6500;
+  };
+  const isMultiRoom = room => !!room && [3, 4].includes(room.players);
+  // Seat colours (fixed, as the room's chips): A blue, B red, C green, D yellow (C and D take dark text).
+  const SEAT_BG = { A: '#1446a0', B: '#e1251b', C: '#00a651', D: '#ffc20e' };
+  const SEAT_FG = { A: '#fff', B: '#fff', C: '#0b1f4d', D: '#0b1f4d' };
 
   // Time left before the clocks start (0 once the match is under way).
   function introRemaining(room, now) {
@@ -183,12 +191,13 @@
     return [code && 'ROOM ' + code, min ? min + ' MIN MATCH' : ''].filter(Boolean).join(' · ');
   }
 
-  // #tossLine caption: "🪙 Coin toss: <b>TEAM</b> goes first" (built from text nodes).
-  function setTossLine(line, team) {
+  // #tossLine caption: "🪙 Coin toss: <b>TEAM</b> goes first" (3-4 players: "🎡 Roulette: …"),
+  // built from text nodes.
+  function setTossLine(line, team, wheel = false) {
     if (!line) return;
     line.textContent = '';
     const b = el('b', '', team);
-    line.append('🪙 Coin toss: ', b, ' goes first');
+    line.append(wheel ? '🎡 Roulette: ' : '🪙 Coin toss: ', b, ' goes first');
   }
 
   // ---- VS intro + coin toss ----
@@ -202,9 +211,10 @@
     if (!container || !doc() || !room || !room.game) return false;
     const remaining = introRemaining(room, now);
     if (remaining <= 0) return false;
-    const total = introMs();
+    const total = introMs(room);
     const elapsed = Math.max(0, total - remaining);
     const reduced = reducedMotion();
+    if (isMultiRoom(room)) return playMultiIntro(container, room, remaining, elapsed, reduced, opts);
     const first = room.game.firstSeat === 'B' ? 'B' : 'A';
     const firstTeam = teamOf(room, first);
 
@@ -246,6 +256,112 @@
     fadeOutAt(run, ov, remaining - FADE_OUT_MS);
     run.later(remaining, () => stopRun(run));
     return true;
+  }
+
+  // ---- 3-4 player rooms: the "3/4-WAY" team intro, then the roulette wheel (mockup A) ----
+  // The wheel lands on the stored firstSeat (Match.startMatch picked it once), so every screen and the
+  // projector show the same spin; a late arrival or a refresh joins the spin at the matching point.
+  function playMultiIntro(container, room, remaining, elapsed, reduced, opts) {
+    const seats = (root.Match || lib('Match', './match.js')).seatsOf(room);
+    const first = seats.includes(room.game.firstSeat) ? room.game.firstSeat : seats[0];
+    const firstTeam = teamOf(room, first);
+    const run = createRun();
+    intro = run;
+    const line = container.querySelector('#tossLine');
+    setTossLine(line, firstTeam, true);
+    run.clearLine = () => { clearTimeout(run.lineTimer); if (line && line.isConnected) line.textContent = ''; };
+    run.lineTimer = setTimeout(run.clearLine, remaining);
+    run.onEnd = skipped => {
+      if (!skipped) { run.clearLine(); if (intro === run) intro = null; }
+      if (opts.onDone) opts.onDone();
+    };
+
+    const ov = el('div', 'fx-overlay fx-intro fx-multi' + (reduced ? ' fx-reduced' : ''));
+    if (root.Layout) root.Layout.fitStage(ov, opts.areaEl);
+    const sr = el('div', 'fx-sr', `${seats.map(s => teamFull(room, s)).join(' versus ')}. Roulette: ${teamFull(room, first)} goes first.`);
+    sr.setAttribute('role', 'status');
+    const stage = el('div', 'fx-stage');
+    stage.setAttribute('aria-hidden', 'true');
+    const teams = buildTeams(room, seats);
+    const wheel = buildWheel(room, seats, first, firstTeam);
+    stage.append(teams, wheel.scene);
+    ov.append(sr, stage, skipButton(run, 'Skip intro'));
+    container.appendChild(ov);
+    run.nodes.push(ov);
+    syncBody();
+
+    if (elapsed < MULTI_TEAMS_MS) {
+      ov.style.setProperty('--in-off', -Math.round(elapsed) + 'ms');
+      teams.classList.add('on');
+      if (elapsed < 600) run.later(600 - elapsed, () => root.Sound && root.Sound.play('vs'));
+      run.later(MULTI_TEAMS_MS - elapsed, () => startWheel(run, teams, wheel, 0, reduced));
+    } else {
+      startWheel(run, teams, wheel, elapsed - MULTI_TEAMS_MS, reduced);
+    }
+    fadeOutAt(run, ov, remaining - FADE_OUT_MS);
+    run.later(remaining, () => stopRun(run));
+    return true;
+  }
+
+  function buildTeams(room, seats) {
+    const sc = el('div', 'in-scene in-multi');
+    const box = el('div', 'in-mbox');
+    box.appendChild(el('div', 'in-way disp', `${seats.length}-WAY`));
+    seats.forEach((s, i) => {
+      const team = teamOf(room, s);
+      const band = el('div', `in-mteam in-ms-${s.toLowerCase()}`);
+      band.style.setProperty('--d', i * 120 + 'ms');
+      band.append(el('div', 'in-tm disp' + sizeClass(team), team));
+      const p = playerOf(room, s);
+      if (p) band.appendChild(el('div', 'in-pl', p.toUpperCase()));
+      box.appendChild(band);
+    });
+    const tag = roomTag(room);
+    if (tag) box.appendChild(el('div', 'in-tag', tag));
+    sc.appendChild(box);
+    return sc;
+  }
+
+  function buildWheel(room, seats, first, firstTeam) {
+    const scene = el('div', 'in-scene in-wheel');
+    const box = el('div', 'in-coin-box');
+    const wrap = el('div', 'in-wheel-wrap');
+    const disc = el('div', 'in-wheel-disc');
+    const n = seats.length;
+    const slice = 360 / n;
+    disc.style.background = 'conic-gradient(' + seats.map((s, i) => `${SEAT_BG[s]} ${i * slice}deg ${(i + 1) * slice}deg`).join(', ') + ')';
+    seats.forEach((s, i) => {
+      const lbl = el('span', 'in-wheel-lbl', teamOf(room, s));
+      lbl.style.color = SEAT_FG[s];
+      lbl.style.setProperty('--a', (i + 0.5) * slice + 'deg');
+      disc.appendChild(lbl);
+    });
+    const turns = wheelTurns(seats, first);
+    disc.dataset.turns = String(turns);
+    wrap.append(el('div', 'in-ptr'), disc, el('div', 'in-hub disp', 'GO'));
+    const result = el('div', 'in-result disp');
+    result.append(el('span', 'nm', firstTeam.toUpperCase()), ' GOES FIRST!');
+    box.append(el('div', 'in-coin-title disp', '🎡 WHO GOES FIRST?'), wrap, result, el('div', 'in-note', 'Same result on every screen'));
+    scene.appendChild(box);
+    return { scene, disc, result, turns };
+  }
+
+  // we: ms already elapsed in the spin (late arrival / refresh).
+  function startWheel(run, teams, w, we, reduced) {
+    teams.classList.remove('on');
+    w.scene.style.setProperty('--in-off', -Math.round(we) + 'ms');
+    w.scene.classList.add('on');
+    if (reduced || !w.disc.animate || we >= WHEEL_SPIN_MS) {
+      w.disc.style.transform = `rotate(${w.turns}deg)`;
+    } else {
+      const spin = w.disc.animate([{ transform: 'rotate(0deg)' }, { transform: `rotate(${w.turns}deg)` }],
+        { duration: WHEEL_SPIN_MS, easing: 'cubic-bezier(.12,.6,.18,1)', fill: 'forwards' });
+      spin.currentTime = we;
+      run.anims.push(spin);
+    }
+    if (we < WHEEL_SPIN_MS) {
+      run.later(WHEEL_SPIN_MS - we, () => { root.Sound && root.Sound.play('coin'); w.result.classList.add('go'); });
+    } else w.result.classList.add('shown');
   }
 
   function clearIntro() {
@@ -355,7 +471,8 @@
     run.onEnd = () => { if (round === run) round = null; if (opts.onDone) opts.onDone(); };
 
     const ov = el('div', 'fx-overlay fx-round' + (reduced ? ' fx-reduced' : '') + (list.length > 6 ? ' many' : ''));
-    const lines = list.map(r => `${teamOf(r, 'A')} vs ${teamOf(r, 'B')}`);
+    const seatsIn = r => (root.Match || lib('Match', './match.js')).seatsOf(r);
+    const lines = list.map(r => seatsIn(r).map(s => teamOf(r, s)).join(' vs '));
     const sr = el('div', 'fx-sr', `Round starting: ${lines.join('; ')}`);
     sr.setAttribute('role', 'status');
     const stage = el('div', 'fx-stage');
@@ -366,7 +483,10 @@
     list.forEach((r, i) => {
       const row = el('div', 'rs-match');
       row.style.setProperty('--i', String(i));
-      row.append(el('span', 'rs-team rs-a', teamOf(r, 'A')), el('span', 'rs-vs disp', 'vs'), el('span', 'rs-team rs-b', teamOf(r, 'B')));
+      seatsIn(r).forEach((s, k) => {
+        if (k) row.appendChild(el('span', 'rs-vs disp', 'vs'));
+        row.appendChild(el('span', 'rs-team rs-' + s.toLowerCase(), teamOf(r, s)));
+      });
       ul.appendChild(row);
     });
     box.appendChild(ul);
@@ -421,7 +541,7 @@
 
     if (isVoid) {
       inner.append(el('div', 'res-icon', '⚖️'), el('h2', 'res-void-head', 'This room was voided'),
-        el('p', 'res-void-note', 'It does not count for either team.'));
+        el('p', 'res-void-note', isMultiRoom(room) ? 'It does not count for any team.' : 'It does not count for either team.'));
       if (room && room.voidNote) inner.appendChild(el('p', 'res-void-note', 'Reason: ' + room.voidNote));
     } else {
       const res = room.result;
@@ -456,8 +576,12 @@
         nums.push([num, Number(s === 'A' ? res.scoreA : res.scoreB) || 0]);
         return box;
       };
-      score.append(side('A'), el('div', 'res-dash disp', '–'), side('B'));
-      inner.appendChild(score);
+      if (!isMultiRoom(room)) {
+        score.append(side('A'), el('div', 'res-dash disp', '–'), side('B'));
+        inner.appendChild(score);
+      } else if (res.reason !== 'walkover') {
+        inner.appendChild(buildPodium(room, nums)); // 3-4 players (mockup A); a walkover shows no podium
+      }
 
       inner.appendChild(el('div', 'res-plus disp' + sizeClass(team), `+1 ${team}`));
       const bw = bestWord(room);
@@ -471,7 +595,7 @@
         // "<player> left the game": the name gets the one-line "…" treatment, the rest stays readable.
         const line = el('div', 'res-reason');
         const loser = win === 'A' ? 'B' : 'A';
-        const who = res.reason === 'resign' ? (playerOf(room, loser) || teamOf(room, loser)) : '';
+        const who = res.reason === 'resign' && !isMultiRoom(room) ? (playerOf(room, loser) || teamOf(room, loser)) : '';
         if (who && reason.startsWith(who)) line.append(el('span', 'nm', who), reason.slice(who.length));
         else line.textContent = reason;
         inner.appendChild(line);
@@ -526,6 +650,47 @@
     // the win fanfare (after the ringside bell, when it rang: opts.winSoundDelayMs)
     if (animate && kind === 'winner') run.later(delay + RS_SLAM_MS + (opts.winSoundDelayMs || 0), () => root.Sound && root.Sound.play('win'));
     return hero;
+  }
+
+  // The podium (3-4 player rooms): Match.ranking's order. The recorded winner is on the tallest,
+  // centre step; places 2 and 3 beside it (a shared place has the same height), 4th on a line below.
+  // Players who left get a small "LEFT" tag. The scores count up with the hero's (nums).
+  function buildPodium(room, nums) {
+    const rank = (root.Match || lib('Match', './match.js')).ranking(room);
+    const wrap = el('div', 'res-podium-wrap');
+    const pod = el('div', 'res-podium' + (rank.length < 4 ? ' solo' : ''));
+    const who = x => {
+      const box = el('div', 'res-who');
+      const team = el('span', 'chip chip-' + x.seat.toLowerCase(), teamOf(room, x.seat));
+      team.title = teamFull(room, x.seat);
+      box.appendChild(team);
+      const p = playerOf(room, x.seat);
+      if (p) { const pl = el('div', 'res-pl', p); pl.title = playerFull(room, x.seat); box.appendChild(pl); }
+      if (x.left) box.appendChild(el('span', 'res-left-tag', 'LEFT'));
+      return box;
+    };
+    const num = x => { const n = el('div', 'res-num disp' + (x.place === 1 ? ' w' : ''), ''); nums.push([n, x.score]); return n; };
+    // display order: 2nd, 1st, 3rd
+    const steps = [rank[1], rank[0], rank[2]].filter(Boolean);
+    for (const x of steps) {
+      const st = el('div', 'res-step' + (x.place === 1 ? ' w' : ''));
+      st.dataset.seat = x.seat;
+      st.dataset.place = String(x.place);
+      st.append(who(x), num(x), el('div', `res-blk p${Math.min(3, x.place)} disp`, String(x.place)));
+      pod.appendChild(st);
+    }
+    wrap.appendChild(pod);
+    if (rank[3]) {
+      const x = rank[3];
+      const row = el('div', 'res-fourth');
+      row.dataset.seat = x.seat;
+      row.dataset.place = String(x.place);
+      const left = el('span', 'res-fourth-who');
+      left.append(el('b', 'disp', String(x.place)), who(x));
+      row.append(left, num(x));
+      wrap.appendChild(row);
+    }
+    return wrap;
   }
 
   // Ease-out count from 0 to `to`; a stopped run (re-render, route change) jumps to the final value.
