@@ -185,3 +185,66 @@ test('TIER_MIN drives celebrationTier', () => {
     assert.strictEqual(E.celebrationTier(E.TIER_MIN[i] - 1, false), i - 1, `${E.TIER_MIN[i] - 1} points`);
   }
 });
+
+// ---------- bottom-to-top words (2026-11-03) ----------
+
+const YFIREV = 'YFIREV'.split('').map((l, i) => P(5 + i, 7, l)); // VERIFY spelled upward through the centre
+
+test('vertical word gets back', () => {
+  const m = E.scoreMove({}, YFIREV);
+  assert.strictEqual(m.ok, true);
+  assert.strictEqual(m.words[0].word, 'YFIREV');
+  assert.strictEqual(m.words[0].back, 'VERIFY');
+});
+
+test('back keeps the score', () => {
+  const m = E.scoreMove({}, YFIREV);
+  let sum = 0, mult = 1;
+  for (const p of YFIREV) {
+    const sq = E.PREMIUM_GRID[p.r][p.c];
+    let v = LV[p.letter];
+    if (sq === 'dl') v *= 2; else if (sq === 'tl') v *= 3;
+    else if (sq === 'dw' || sq === 'center') mult *= 2; else if (sq === 'tw') mult *= 3;
+    sum += v;
+  }
+  assert.strictEqual(m.words[0].score, sum * mult);
+  assert.strictEqual(m.total, sum * mult);
+});
+
+test('horizontal word has no back', () => {
+  const m = E.scoreMove({}, [P(7, 6, 'C'), P(7, 7, 'A'), P(7, 8, 'T')]);
+  assert.strictEqual('back' in m.words[0], false);
+});
+
+test('palindrome has no back', () => {
+  const m = E.scoreMove({}, [P(6, 7, 'T'), P(7, 7, 'O'), P(8, 7, 'T')]);
+  assert.strictEqual(m.ok, true);
+  assert.strictEqual('back' in m.words[0], false);
+});
+
+test('single tile vertical word gets back', () => {
+  const board = { '6_7': 'A', '8_7': 'E' };
+  const m = E.scoreMove(board, [P(7, 7, 'T')]);
+  assert.deepStrictEqual(m.words, [{ word: 'ATE', score: (LV.A + LV.T + LV.E) * 2, back: 'ETA' }]); // T on the ★ doubles
+});
+
+test('cross-words: only vertical ones get back', () => {
+  const m = E.scoreMove({ '7_7': 'A', '7_8': 'T' }, [P(6, 7, 'B'), P(6, 8, 'E')]);
+  const byWord = Object.fromEntries(m.words.map(w => [w.word, w]));
+  assert.strictEqual('back' in byWord.BE, false);
+  assert.strictEqual(byWord.BA.back, 'AB');
+  assert.strictEqual(byWord.ET.back, 'TE');
+});
+
+test('shownWord joins both readings', () => {
+  assert.strictEqual(E.shownWord({ word: 'STOP', alt: 'POTS' }), 'STOP/POTS');
+});
+
+test('shownWord without alt is the word', () => {
+  assert.strictEqual(E.shownWord({ word: 'CAT', score: 5 }), 'CAT');
+  assert.strictEqual(E.shownWord({}), '');
+});
+
+test('READ_HINT copy', () => {
+  assert.strictEqual(E.READ_HINT, 'Words read left→right, top→bottom or bottom→top.');
+});

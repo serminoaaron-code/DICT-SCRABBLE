@@ -190,16 +190,24 @@
   function findWords(board, placements, direction) {
     const newMap = newMapOf(placements);
     const words = [];
-    const toWord = cells => ({ word: cells.map(x => x.letter).join(''), cells });
+    const toWord = (cells, dir) => ({ word: cells.map(x => x.letter).join(''), cells, dir });
     const main = wordThrough(board, newMap, placements[0].r, placements[0].c, direction);
-    if (main.length >= 2) words.push(toWord(main));
+    if (main.length >= 2) words.push(toWord(main, direction));
     const cross = direction === 'H' ? 'V' : 'H';
     for (const p of placements) {
       const cells = wordThrough(board, newMap, p.r, p.c, cross);
-      if (cells.length >= 2) words.push(toWord(cells));
+      if (cells.length >= 2) words.push(toWord(cells, cross));
     }
     return words;
   }
+
+  // A word as players see it: the dictionary spelling, or "STOP/POTS" when a vertical word
+  // reads as a word both ways (alt = the bottom-to-top reading, stored by Match.applyPlay).
+  function shownWord(w) {
+    return w && w.alt ? `${w.word}/${w.alt}` : String((w && w.word) || '');
+  }
+
+  const READ_HINT = 'Words read left→right, top→bottom or bottom→top.';
 
   function scoreWord(cells) {
     let sum = 0, mult = 1;
@@ -220,7 +228,14 @@
   function scoreMove(board, placements) {
     const v = validatePlacement(board, placements);
     if (!v.ok) return { ok: false, error: v.error, words: [], total: 0, bingo: false };
-    const words = findWords(board, placements, v.direction).map(w => ({ word: w.word, score: scoreWord(w.cells) }));
+    // A vertical word may also read bottom to top (QA ticket): back = that reading, set only when it
+    // differs. The score never depends on the reading: it comes from the squares.
+    const words = findWords(board, placements, v.direction).map(w => {
+      const out = { word: w.word, score: scoreWord(w.cells) };
+      const back = w.word.split('').reverse().join('');
+      if (w.dir === 'V' && back !== w.word) out.back = back;
+      return out;
+    });
     const bingo = placements.length === RACK_SIZE;
     const total = words.reduce((s, w) => s + w.score, 0) + (bingo ? BINGO_BONUS : 0);
     return { ok: true, words, total, bingo };
@@ -238,7 +253,7 @@
 
   return {
     LETTER_VALUES, TILE_DISTRIBUTION, PREMIUM_GRID, BOARD_SIZE, CENTER, RACK_SIZE, BINGO_BONUS, ERROR_TEXT, TIER_MIN,
-    createBag, drawTiles, key, getTile, applyPlacements, rackHas, removeFromRack,
-    validatePlacement, findWords, scoreMove, celebrationTier
+    READ_HINT, createBag, drawTiles, key, getTile, applyPlacements, rackHas, removeFromRack,
+    validatePlacement, findWords, scoreMove, celebrationTier, shownWord
   };
 });
