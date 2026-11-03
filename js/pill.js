@@ -20,7 +20,7 @@
   const Names = root.Names || (typeof require === 'function' ? require('./names.js') : null);
   function nameOf(room, seat) {
     const s = room.seats && room.seats[seat];
-    const name = (s && s.name) || (seat === 'A' ? room.teamAName : room.teamBName) || 'Player';
+    const name = (s && s.name) || room['team' + seat + 'Name'] || 'Player';
     return Names ? Names.short(name) : name;
   }
 
@@ -63,11 +63,11 @@
     if (room.clock.paused || room.game.pending) return null;
     const turn = room.game.turn;
     const mine = mySeat === turn;
-    const seated = mySeat === 'A' || mySeat === 'B';
+    const seated = Match.isSeat(room, mySeat);
     let who;
     if (seated) who = nameOf(room, turn);
     else {
-      const team = (turn === 'A' ? room.teamAName : room.teamBName) || 'Player';
+      const team = room['team' + turn + 'Name'] || 'Player';
       who = Names ? Names.short(team) : team;
     }
     const name = mine ? null : who.toUpperCase();

@@ -21,6 +21,19 @@
   const COIN_RESULT_AT = INTRO_VS_MS + COIN_RESULT_MS; // the result pops 4500 ms into the intro; it stays until INTRO_MS
   const ROUND_MS = 5000;
   const FADE_OUT_MS = 250;
+  // 3-4 player rooms: the "3/4-WAY" team intro, then the roulette wheel spins and lands on the stored
+  // firstSeat; "<TEAM> GOES FIRST!" shows at WHEEL_RESULT_AT and holds until Match.INTRO_MULTI_MS (8500).
+  const MULTI_TEAMS_MS = 2600;
+  const WHEEL_SPIN_MS = 3400;
+  const WHEEL_RESULT_AT = MULTI_TEAMS_MS + WHEEL_SPIN_MS;
+
+  // Degrees (clockwise) the wheel turns so firstSeat's slice centre ends under the top pointer.
+  // Slice i covers [i, i + 1) x 360/n degrees clockwise from the top, in seat order.
+  function wheelTurns(seats, firstSeat, spins = 5) {
+    const n = seats.length;
+    const i = Math.max(0, seats.indexOf(firstSeat));
+    return spins * 360 + (360 - (i + 0.5) * 360 / n);
+  }
 
   // ---------- pure ----------
 
@@ -43,21 +56,24 @@
   };
   const lib = (globalName, file) => root[globalName] || (typeof require === 'function' ? require(file) : null);
 
-  const hasResult = room => !!(room && room.status !== 'void' && room.result && (room.result.winner === 'A' || room.result.winner === 'B'));
+  const M = () => lib('Match', './match.js');
+  const hasResult = room => !!(room && room.status !== 'void' && room.result && M().isSeat(room, room.result.winner));
 
-  // Which result scene this viewer gets: the winning seat 'winner', the other seat 'other',
+  // Which result scene this viewer gets: the winning seat 'winner', the other seats 'other',
   // spectators / the host / anyone else 'neutral' (also for void rooms and rooms without a result).
   function resultViewer(room, mySeat) {
-    if (!hasResult(room) || (mySeat !== 'A' && mySeat !== 'B')) return 'neutral';
+    if (!hasResult(room) || !M().isSeat(room, mySeat)) return 'neutral';
     return mySeat === room.result.winner ? 'winner' : 'other';
   }
 
   // The reason line, with the existing copy ("<player> left the game" for a resign) and the host's note.
+  // 3-4 player rooms: a resign only ends the game when one player is left.
   function resultReason(room) {
     if (!hasResult(room)) return '';
     const res = room.result;
     let line = REASON_LINE[res.reason] || '';
-    if (res.reason === 'resign') {
+    if (res.reason === 'resign' && M().seatsOf(room).length > 2) line = 'Everyone else left the game';
+    else if (res.reason === 'resign') {
       const loser = res.winner === 'A' ? 'B' : 'A';
       line = `${playerOf(room, loser) || teamOf(room, loser)} left the game`;
     }
@@ -154,7 +170,7 @@
 
   // Names as shown: at most Names.MAX characters + "…" (QA pass); the full names stay available for
   // hover titles and screen-reader text.
-  const teamFull = (room, seat) => (seat === 'A' ? room.teamAName : room.teamBName) || (seat === 'A' ? 'Team A' : 'Team B');
+  const teamFull = (room, seat) => room['team' + seat + 'Name'] || 'Team ' + seat;
   const playerFull = (room, seat) => (room.seats && room.seats[seat] && room.seats[seat].name) || '';
   const shortName = s => { const N = lib('Names', './names.js'); return N ? N.short(s) : s; };
   const teamOf = (room, seat) => shortName(teamFull(room, seat));
@@ -587,7 +603,7 @@
   }
 
   return {
-    INTRO_VS_MS, COIN_RESULT_AT, ROUND_MS, introRemaining, playIntro, clearIntro, introSkipped, holdIntro, roundStart, clearRound,
+    INTRO_VS_MS, COIN_RESULT_AT, ROUND_MS, MULTI_TEAMS_MS, WHEEL_SPIN_MS, WHEEL_RESULT_AT, wheelTurns, introRemaining, playIntro, clearIntro, introSkipped, holdIntro, roundStart, clearRound,
     RESULT_FRESH_MS, resultViewer, resultReason, bestWord, bestWordText, resultFresh, endingCelebration, renderResult, clearResult,
     RIBBON_MS, ribbon, clearRibbon
   };

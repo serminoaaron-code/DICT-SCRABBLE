@@ -154,3 +154,13 @@ test('detect keeps alt (a vertical word that reads both ways)', () => {
   assert.deepStrictEqual(Celebrate.detect(0, r).words[0], { word: 'STOP', score: 6, alt: 'POTS' });
   assert.deepStrictEqual(Celebrate.detect(0, roomAfterCAT()).words[0], { word: 'CAT', score: 10 });
 });
+
+test('detect names the team of seat C', () => {
+  const r = roomAfterCAT();
+  Object.assign(r, { players: 3, teamC: 'tC', teamCName: 'IV-A' });
+  r.game.lastMove.seat = 'C';
+  r.seats.C = { name: 'Ana' };
+  const c = Celebrate.detect(0, r);
+  assert.strictEqual(c.teamName, 'IV-A');
+  assert.strictEqual(c.playerName, 'Ana');
+});
