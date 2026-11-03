@@ -98,3 +98,11 @@ test('resultReason cuts a long player name to 25 characters + "…"', () => {
   const room = finalRoom('A', { result: { winner: 'A', reason: 'resign', scoreA: 1, scoreB: 0, decidedAt: 1 }, seats: { A: { name: 'Maria' }, B: { name: 'M'.repeat(40) } } });
   assert.strictEqual(Scenes.resultReason(room), 'M'.repeat(25) + '… left the game');
 });
+test('bestWord / bestWordText show the dictionary spelling, both readings as STOP/POTS', () => {
+  const g = bm => ({ game: { bestMove: bm } });
+  const both = finalRoom('A', g({ seat: 'A', words: [{ word: 'STOP', score: 30, alt: 'POTS' }], total: 30, bingo: false }));
+  assert.strictEqual(Scenes.bestWord(both).word, 'STOP/POTS');
+  assert.strictEqual(Scenes.bestWordText(both), '⭐ Best word: STOP/POTS · 30 pts (Awesome!)');
+  const up = finalRoom('A', g({ seat: 'A', words: [{ word: 'VERIFY', score: 30 }], total: 30, bingo: false }));
+  assert.strictEqual(Scenes.bestWord(up).word, 'VERIFY');
+});

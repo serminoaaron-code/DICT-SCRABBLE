@@ -44,7 +44,9 @@
     return {
       tier: tierFor({ total, bingo }),
       total,
-      words: (lm.words || []).map(w => ({ word: String(w.word || ''), score: Number(w.score) || 0 })),
+      // alt: the second reading of a vertical word that is a word both ways ("STOP/POTS")
+      words: (lm.words || []).map(w => Object.assign({ word: String(w.word || ''), score: Number(w.score) || 0 },
+        typeof w.alt === 'string' && w.alt ? { alt: w.alt } : {})),
       bingo,
       seat,
       playerName: (seatInfo && seatInfo.name) ? short(seatInfo.name) : teamName,
@@ -193,15 +195,19 @@
     return impossibleTier(run, ov, c, later, end);
   }
 
+  // The main word's first reading (the IMPOSSIBLE!!! letter tiles) and as shown in text ("STOP/POTS").
   function mainWord(c) {
     return (c.words[0] && c.words[0].word) || '';
+  }
+  function mainShown(c) {
+    return c.words[0] ? Engine.shownWord(c.words[0]) : '';
   }
 
   function overlay(run, opts, c, reduced) {
     const ov = el('div', `fx-overlay fx-tier-${c.tier}${reduced ? ' fx-reduced' : ''}`);
     ov.dataset.mine = opts.mine ? '1' : '0';
     // Screen readers get one short line; the animated stage (with its count-up) stays silent.
-    const sr = el('div', 'fx-sr', `${TITLES[c.tier]} ${c.total} points${c.bingo ? ', bingo' : ''}: ${mainWord(c)}, by ${c.playerName}`);
+    const sr = el('div', 'fx-sr', `${TITLES[c.tier]} ${c.total} points${c.bingo ? ', bingo' : ''}: ${mainShown(c)}, by ${c.playerName}`);
     sr.setAttribute('role', 'status');
     ov.appendChild(sr);
     const stage = el('div', 'fx-stage');
@@ -357,7 +363,7 @@
   function texts(box, c, title) {
     const t = el('div', 'fx-title disp', title);
     const pts = el('div', 'fx-pts disp', '+0');
-    const word = el('div', 'fx-word', mainWord(c));
+    const word = el('div', 'fx-word', mainShown(c));
     box.append(t, pts, word);
     return { t, pts, word };
   }
@@ -446,7 +452,7 @@
   // ---- reduced motion: one calm fade card, no shake/flash/confetti/rays ----
   function reducedCard(run, ov, c, later, end) {
     const card = el('div', 'fx-card');
-    card.append(el('div', 'fx-title disp', TITLES[c.tier]), el('div', 'fx-pts disp', '+' + c.total), el('div', 'fx-word', mainWord(c)));
+    card.append(el('div', 'fx-title disp', TITLES[c.tier]), el('div', 'fx-pts disp', '+' + c.total), el('div', 'fx-word', mainShown(c)));
     if (c.tier === 4) {
       if (c.bingo) card.appendChild(el('div', 'fx-card-note', 'BINGO +50'));
       card.appendChild(el('div', 'fx-card-note', `BY ${c.playerName} · ${c.teamName}`.toUpperCase()));

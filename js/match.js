@@ -261,8 +261,24 @@
     return r;
   }
 
+  // The words as stored: { word, score } plus alt when a vertical word reads as a word both ways.
+  // spellings (from the player's dictionary check, aligned with words) may only pick the board
+  // reading, its exact reverse for a vertical word (back), or both; anything else is ignored, so a
+  // client can never store other text or a right-to-left reading. back itself is never stored.
+  function storedWords(words, spellings) {
+    const ok = Array.isArray(spellings) && spellings.length === words.length;
+    return words.map((w, i) => {
+      const out = { word: w.word, score: w.score };
+      const sp = ok ? spellings[i] : null;
+      if (!sp || typeof sp !== 'object' || !w.back) return out;
+      if (sp.alt === undefined && sp.word === w.back) out.word = w.back;
+      else if (sp.word === w.word && sp.alt === w.back) out.alt = w.back;
+      return out;
+    });
+  }
+
   // Applies a validated play without clock/turn-order guards (used by applyPlay and appeals).
-  function playCore(room, seat, placements, now, unverified) {
+  function playCore(room, seat, placements, now, unverified, spellings = null) {
     const m = prepareMove(room, seat, placements);
     if (!m.ok) return null;
     const r = clone(room);
@@ -274,18 +290,19 @@
     g.bag = d.bag;
     g.scores[seat] += m.total;
     // cells: the squares this play filled (the word drop / projector glow); words carry no positions
-    g.lastMove = { seat, type: 'play', words: m.words, cells: placements.map(p => ({ r: p.r, c: p.c })), total: m.total, bingo: m.bingo, unverified: !!unverified, at: now };
+    const words = storedWords(m.words, spellings);
+    g.lastMove = { seat, type: 'play', words, cells: placements.map(p => ({ r: p.r, c: p.c })), total: m.total, bingo: m.bingo, unverified: !!unverified, at: now };
     if (!g.bestMove || m.total > g.bestMove.total) {
-      g.bestMove = { seat, words: m.words, total: m.total, bingo: m.bingo };
+      g.bestMove = { seat, words: words.map(w => ({ ...w })), total: m.total, bingo: m.bingo };
     }
     const tier = Engine.celebrationTier(m.total, m.bingo);
     const wentOut = g.racks[seat].length === 0 && g.bag.length === 0;
     return endTurn(r, seat, now, wentOut, DROP_MS + CELEBRATE_MS[tier]);
   }
 
-  function applyPlay(room, seat, placements, { now, expectedMoveCount, unverified = false }) {
+  function applyPlay(room, seat, placements, { now, expectedMoveCount, unverified = false, spellings = null }) {
     if (!canAct(room, seat, expectedMoveCount, now)) return null;
-    return playCore(room, seat, placements, now, unverified);
+    return playCore(room, seat, placements, now, unverified, spellings);
   }
 
   function applyPass(room, seat, { now, expectedMoveCount, timeout = false, expectedTurnStartedAt }) {

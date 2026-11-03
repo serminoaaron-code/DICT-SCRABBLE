@@ -327,7 +327,7 @@
     const who = esc(playerOf(room, lm.seat));
     if (lm.type === 'pass') return `${who} passed`;
     if (lm.type === 'timeout') return `${who} ran out of time`;
-    const words = lm.words.map(w => esc(w.word)).join(', ');
+    const words = lm.words.map(w => esc(ScrabbleEngine.shownWord(w))).join(', '); // "VERIFY", "STOP/POTS"
     return `${who} played ${words} (${lm.total})${lm.unverified ? ' · <span class="muted">unverified</span>' : ''}`;
   }
 
@@ -519,16 +519,18 @@
       const expectedMoveCount = room.game.moveCount;
       ui.busy = true; $('#playBtn').textContent = '🔍 Checking…'; update(el, room, ctx);
       try {
-        const check = await Dictionary.checkWords(m.words.map(w => w.word));
+        // Vertical words are checked both ways (top to bottom, bottom to top); spellings = what to show.
+        const check = await Dictionary.checkPlay(m.words);
         if (check.rejected.length) {
-          ui.rejected = { placements, words: m.words, rejectedWords: check.rejected, total: m.total, expectedMoveCount };
+          const words = m.words.map(w => ({ word: w.word, score: w.score })); // the appeal stores no back
+          ui.rejected = { placements, words, rejectedWords: check.rejected, total: m.total, expectedMoveCount };
           return;
         }
         // Turn moments #3: which rack tiles this play uses, recorded before the write; the room update
         // (local first) may arrive before mutateRoom resolves, and the refill needs it.
         ui.lastUsed = ui.temp.map(t => t.rackIndex);
         ui.lastRack = room.game.racks[seat].slice();
-        const res = await Store.mutateRoom(ctx.code, r => Match.applyPlay(r, seat, placements, { now: Store.serverNow(), expectedMoveCount, unverified: check.unverified }));
+        const res = await Store.mutateRoom(ctx.code, r => Match.applyPlay(r, seat, placements, { now: Store.serverNow(), expectedMoveCount, unverified: check.unverified, spellings: check.spellings }));
         if (res.committed) { ui.temp = []; ui.selected = null; Sound.play('accept'); }
         else { UI.toast('Move not accepted (time up or the game changed).', 'error'); ui.temp = []; ui.lastUsed = null; ui.lastRack = null; }
       } finally {
@@ -738,6 +740,7 @@
 
     // Bottom sheet (empty = hidden): the recall / ask-host choice, or my appeal waiting for the host.
     let sheet = ui.rejected ? `<div class="sheet-msg">❌ <b>${ui.rejected.rejectedWords.map(esc).join(', ')}</b> not found in the dictionary.</div>
+        <div class="sheet-hint">${esc(ScrabbleEngine.READ_HINT)}</div>
         <div class="sheet-actions"><button class="secondary" data-act="recall">↩ Recall</button><button class="btn-primary" data-act="appeal">⚖️ Ask host</button></div>` : '';
     if (isSeat(seat) && g.pending && g.pending.seat === seat) {
       sheet = '<div class="sheet-msg">⚖️ Waiting for the host to approve your word…</div>';

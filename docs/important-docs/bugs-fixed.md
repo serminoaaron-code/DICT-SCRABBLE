@@ -319,6 +319,17 @@ Every bug we've fixed is listed here with steps to **try to make it happen again
   2. Watch for two **Z**, **Q**, **X**, **J** or **K** tiles in the same game, counting both racks and the board.
 - **Expected now:** you never see more than one of each of those letters in a game.
 
+### BF-30: Words spelled bottom to top shown backwards (YFIREV)
+- **Area:** rules · **Fixed in:** PR #15 · **Found by:** QA, desktop
+- **Used to happen:** a word spelled upward, from the bottom tile to the top (V at the bottom, Y at the top), was read top to bottom only. The log said "played **YFIREV**", and it only counted if the dictionary was slow or the host approved it on appeal.
+- **Try to trigger it:** use a game where you can play these. Run them one at a time, in any order.
+  1. **Left to right:** play **CAT** across. It's accepted and the log says "played CAT".
+  2. **Top to bottom:** play **CAT** down, C at the top. It's accepted, "played CAT".
+  3. **Bottom to top:** on an empty board, play **VERIFY** upward in the ★'s column so the column reads Y-F-I-R-E-V from the top, with **Y two squares above the ★** (so the **I** sits on the ★). It's accepted. The log, the projector and the best word say **VERIFY**. The tiles stay exactly where you put them, and it scores **30**: (4+4+1+1+1+4) × 2 for the ★. (Placed elsewhere, the score changes with the bonus squares under the tiles, as for any word.)
+  4. **Right to left:** play **CAT** with C on the right, so the row reads T-A-C. It's refused: "TAC not found in the dictionary", with the hint "Words read left→right, top→bottom or bottom→top." No points, and it's still your turn.
+  5. **Both ways:** play **STOP** down (S at the top). STOP reads down and POTS reads up, so the log says "played **STOP/POTS**". The points are counted once.
+- **Expected now:** steps 1, 2, 3 and 5 score, step 4 doesn't, and every screen shows the real word. The How to play page (Player, "Make a word") mentions the three directions too.
+
 ---
 
 ## QA results log
