@@ -714,3 +714,68 @@ test('tauntWindow: the game screen, after the intro, not frozen', () => {
   for (const status of ['final', 'waiting']) assert.strictEqual(M.tauntWindow(Object.assign(M.normalizeRoom(liveRoom()), { status }), T0), false, status);
   assert.strictEqual(M.tauntWindow(Object.assign(M.normalizeRoom(liveRoom()), { status: 'hostDecision' }), T0), true, 'hostDecision');
 });
+
+// ---------- bottom-to-top words (2026-11-03) ----------
+
+const YFIREV = 'YFIREV'.split('').map((l, i) => P(5 + i, 7, l)); // VERIFY spelled upward through the centre
+const STOP_V = 'STOP'.split('').map((l, i) => P(6 + i, 7, l));   // STOP down, POTS up
+const RACK_YFIREV = ['Y', 'F', 'I', 'R', 'E', 'V', 'A'];
+const RACK_STOP = ['S', 'T', 'O', 'P', 'A', 'E', 'R'];
+const playA = (placements, rack, extra = {}) =>
+  M.applyPlay(liveRoom({ game: { racks: { A: rack.slice(), B: RACK_CAT.slice() } } }), 'A', placements, { now: 5000, expectedMoveCount: 0, ...extra });
+
+test('spellings: bottom-to-top word is stored as the dictionary word', () => {
+  const plain = playA(YFIREV, RACK_YFIREV);
+  const n = playA(YFIREV, RACK_YFIREV, { spellings: [{ word: 'VERIFY' }] });
+  const S = plain.game.lastMove.words[0].score;
+  assert.deepStrictEqual(n.game.lastMove.words, [{ word: 'VERIFY', score: S }]);
+  assert.deepStrictEqual(n.game.bestMove.words, [{ word: 'VERIFY', score: S }]);
+  assert.strictEqual(n.game.scores.A, plain.game.scores.A);
+  assert.strictEqual(n.game.lastMove.total, plain.game.lastMove.total);
+  assert.deepStrictEqual(n.game.board, plain.game.board);
+  assert.strictEqual(n.game.board['5_7'], 'Y');
+  assert.strictEqual(n.game.board['10_7'], 'V');
+});
+
+test('spellings: both readings stored as word + alt', () => {
+  const n = playA(STOP_V, RACK_STOP, { spellings: [{ word: 'STOP', alt: 'POTS' }] });
+  const score = n.game.lastMove.words[0].score;
+  assert.deepStrictEqual(n.game.lastMove.words, [{ word: 'STOP', score, alt: 'POTS' }]);
+  assert.deepStrictEqual(n.game.bestMove.words, [{ word: 'STOP', score, alt: 'POTS' }]);
+});
+
+test('spellings: right-to-left is never accepted', () => {
+  const n = playA(CAT, RACK_CAT, { spellings: [{ word: 'TAC' }] });
+  assert.deepStrictEqual(n.game.lastMove.words, [{ word: 'CAT', score: 10 }]);
+  const both = playA(CAT, RACK_CAT, { spellings: [{ word: 'CAT', alt: 'TAC' }] });
+  assert.deepStrictEqual(both.game.lastMove.words, [{ word: 'CAT', score: 10 }]);
+});
+
+test('spellings: arbitrary text is refused', () => {
+  for (const sp of [{ word: '<img src=x>' }, { word: 'VERIFY', alt: 'HELLO' }, { word: 'YFIREV', alt: 'YFIREV' }, null, 'VERIFY']) {
+    const n = playA(YFIREV, RACK_YFIREV, { spellings: [sp] });
+    assert.deepStrictEqual(Object.keys(n.game.lastMove.words[0]).sort(), ['score', 'word'], JSON.stringify(sp));
+    assert.strictEqual(n.game.lastMove.words[0].word, 'YFIREV', JSON.stringify(sp));
+  }
+});
+
+test('spellings: wrong length falls back to the board reading', () => {
+  for (const spellings of [[], [{ word: 'VERIFY' }, { word: 'X' }], 'VERIFY', {}]) {
+    const n = playA(YFIREV, RACK_YFIREV, { spellings });
+    assert.strictEqual(n.game.lastMove.words[0].word, 'YFIREV', JSON.stringify(spellings));
+  }
+});
+
+test('no spellings: a vertical play stores no back', () => {
+  const n = playA(YFIREV, RACK_YFIREV);
+  assert.deepStrictEqual(Object.keys(n.game.lastMove.words[0]).sort(), ['score', 'word']);
+  assert.strictEqual(n.game.lastMove.words[0].word, 'YFIREV');
+  assert.deepStrictEqual(Object.keys(n.game.bestMove.words[0]).sort(), ['score', 'word']);
+});
+
+test('approved appeal shows the board reading', () => {
+  const r = liveRoom({ game: { racks: { A: RACK_YFIREV.slice(), B: RACK_CAT.slice() } }, clock: { endsAt: 400000, turnStartedAt: 100000 } });
+  const asked = M.requestAppeal(r, 'A', YFIREV, { now: 100000, expectedMoveCount: 0, words: [{ word: 'YFIREV', score: 30 }], rejectedWords: ['YFIREV'], total: 30 });
+  const n = M.resolveAppeal(asked, true, { now: 160000 });
+  assert.deepStrictEqual(n.game.lastMove.words, [{ word: 'YFIREV', score: 30 }]);
+});
