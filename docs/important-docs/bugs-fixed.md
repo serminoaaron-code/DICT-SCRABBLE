@@ -35,7 +35,7 @@ Every bug we've fixed is listed here with steps to **try to make it happen again
   1. Start a game: Player A on device 1, Player B on device 2.
   2. On a **third** device or browser, open the site and enter the room code.
   3. As the host, open the room and press **Free <Player A>'s seat**.
-  4. On the third device, press **Take QA-A's seat**.
+  4. On the third device, tap QA-A's seat tile ("Free seat · Tap to take it").
 - **Expected now:** the third device takes over seat A with **the same tiles and score**, and the game continues.
 
 ### BF-02: "Just watch" could not be undone
@@ -44,7 +44,7 @@ Every bug we've fixed is listed here with steps to **try to make it happen again
 - **Try to trigger it:**
   1. Join a room that is still waiting, and tap **Just watch**.
   2. Tap **Stop watching / take a seat**.
-- **Expected now:** the seat buttons come back, and you can play for a team.
+- **Expected now:** the seat tiles come back (free seats say "Free seat · Tap to join"), and you can play for a team.
 
 ### BF-03: Old device silently takes back a freed seat
 - **Area:** joining · **Fixed in:** PR #3 · **Found by:** code review
@@ -54,7 +54,7 @@ Every bug we've fixed is listed here with steps to **try to make it happen again
   2. On Player A's device, go to **Home**.
   3. As the host, press **Free <Player A>'s seat**.
   4. On Player A's old device, open the room link again.
-- **Expected now:** the old device shows the message "Your seat was freed…" and a **Take QA-A's seat** button. It does **not** go back into the seat on its own.
+- **Expected now:** the old device shows the message "Your seat was freed…" and QA-A's seat as a tile to tap ("Free seat · Tap to take it"). It does **not** go back into the seat on its own.
 
 ### BF-04: "Leave seat" right as the host presses Start
 - **Area:** lobby · **Fixed in:** PR #3 · **Found by:** code review
@@ -79,7 +79,16 @@ Every bug we've fixed is listed here with steps to **try to make it happen again
   1. Add a team with a long name (about 40 characters).
   2. Join its seat with a 40-character player name, e.g. `MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM`, on a phone (or a 360px-wide window).
   3. Look at the lobby as that player and as the host.
-- **Expected now:** each seat row stays on one line. The long name (and a long team chip) ends in "…", while "(you)", the **Ready / Not ready** badge and **Remove** stay whole. Hovering the name on a laptop shows the full name.
+- **Expected now:** each seat is a tile: the team stays on its own line, the long player name ends in "…" (a long team name too), and the **YOU** tag, the **Ready / Not ready** tag and the host's **Remove** stay whole. Hovering a name on a laptop shows the full name.
+
+### BF-33: Team names jump around on the waiting screen
+- **Area:** lobby · **Fixed in:** PR #20 · **Found by:** QA (PM ticket "room and lobby")
+- **Used to happen:** in a 3–4 player room, the "TEAM vs TEAM vs TEAM" line at the top broke differently on a phone and a laptop and left a "vs" hanging at the end of a line. Below it, each seat row squeezed its team name to make room for the player's name, so the same team showed as "DICT-NCR", "DICT…" or "D…" as players joined, got ready, left or were removed.
+- **Try to trigger it:**
+  1. Add four teams with similar names (e.g. `QA-NCR`, `QA-CAR`, `QA-IV-A`, `QA-RIV`) and create a **4-player** room.
+  2. Open the room on a phone and on a laptop. Join seats one by one; use a long player name (about 40 characters) for one of them.
+  3. Press **I'm ready** on some, **Leave seat** on one, and have the host **Remove** another.
+- **Expected now:** the top line reads **4-WAY MATCH** over the four teams numbered 1–4 (2 × 2 on a phone and on the laptop alike), with no "vs" left hanging. It never moves while people join, get ready, leave or are removed, and every seat tile shows its full team name on its own line, whatever the player's name. A 2-player room reads **TEAM VS TEAM**.
 
 ---
 
@@ -92,18 +101,18 @@ Every bug we've fixed is listed here with steps to **try to make it happen again
   1. Start a **1-minute** game.
   2. Close both players' tabs, or lock both phones.
   3. Leave the host on the **dashboard**, not in the room.
-- **Expected now:** when time runs out, the room card switches to **Final · +1 …** by itself, and the standings update.
+- **Expected now:** when time runs out, the room moves to the **Finished** tab by itself (a **FINISHED** badge and "🏆 +1 …"), and the standings update.
 
 ### BF-07: Corrections and voids lose the reason
 - **Area:** results · **Fixed in:** PR #3 · **Found by:** code review
 - **Used to happen:** correcting a result replaced the original reason, and voiding stored no reason at all.
 - **Try to trigger it:**
   1. Finish a game.
-  2. On the dashboard, press **Correct result**, type a reason, and confirm.
+  2. On the dashboard's **Finished** tab, press **Correct result** on that room, type a reason, and confirm.
   3. Press **Void**, type a reason, and confirm.
 - **Expected now:**
   - After **Correct result**, the card shows "corrected by host: <your reason>".
-  - After **Void**, the card shows "Void: <your reason>", and the players' result screen shows the reason too.
+  - After **Void**, the room moves to the **Void** tab and its card shows "Void: <your reason>"; the players' result screen shows the reason too.
 
 ### BF-08: A host button click silently does nothing
 - **Area:** host controls · **Fixed in:** PR #3 · **Found by:** automated testing

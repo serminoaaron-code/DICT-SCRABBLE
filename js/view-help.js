@@ -40,6 +40,8 @@
   const tl = (l, cls = '') => `<span class="gh-tl ${cls}">${l}</span>`;
   const sq = (cls, t) => `<span class="gh-sq ${cls}">${t}</span>`;
   const bt = (cls, t) => `<span class="gh-bt ${cls}">${t}</span>`;
+  // a free seat tile, as on the waiting screen: seat number in the team colour, the team, "Free seat", "Tap to join"
+  const seat = (n, cls, team) => `<span class="gh-seat"><span class="gh-seat-top"><span class="gh-num ${cls}">${n}</span>${team}</span><b>Free seat</b><span class="gh-join">Tap to join</span></span>`;
   const inp = (label, v) => `<span class="gh-in">${label} <b>${v}</b></span>`;
   const chip = (cls, t) => `<span class="gh-chip ${cls}">${t}</span>`;
   const mini = html => `<div class="gh-mini" aria-hidden="true">${html}</div>`;
@@ -61,8 +63,8 @@
         steps: [
           step('Join your room', inp('Code', 'K7Q-42M') + inp('Your name', 'Maria') + bt('blue', 'Find room'),
             'Your host gives you a 6-character code. Type it on the <b>Home</b> page with your name.'),
-          step('Take your seat, press Ready', bt('blue', 'Play for NCR') + bt('red', 'Play for CAR') + bt('green', "I'm ready"),
-            "Pick your team's seat (2 to 4 players, one per team). When all players are ready, the host starts the game."),
+          step('Take your seat, press Ready', seat(1, 'a', 'NCR') + seat(2, 'b', 'CAR') + bt('green', "✓ I'm ready"),
+            "Tap your team's free seat (2 to 4 players, one per team), then press <b>I'm ready</b>. When all players are ready, the host starts the game."),
           step('Coin toss or roulette', '<span class="gh-team">NCR</span><b class="gh-vs">VS</b><span class="gh-team b">CAR</span><span class="gh-coin"></span><span class="gh-or">or</span><span class="gh-wheel"></span>',
             'A coin decides who goes first; with 3 or 4 players a roulette wheel picks, then turns go around the table. Get ready: the clocks start right after.'),
           step('Make a word', tl('C') + tl('A', 'sel') + tl('T') + tl('S') + '<span class="gh-arrow">→</span>' + sq('st', '★'),
