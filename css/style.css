@@ -23,6 +23,9 @@
   /* readable text on the light status-tint backgrounds above, fixed in both themes */
   --green-ink: #067a3e;
   --red-ink: #c81e15;
+  /* the warning tint (a player left the screen, an appeal to decide), fixed in both themes like the two above */
+  --warn-bg: #fff3c4;
+  --warn-ink: #6b4a00;
   --gold: var(--yellow);
 
   /* legacy aliases so existing component rules stay theme-correct without a
@@ -152,8 +155,9 @@ html[data-theme="dark"] .panel, html[data-theme="dark"] .card { box-shadow: 0 10
 .badge.live { border-color: var(--green); color: var(--navy); background: var(--green); }
 .badge.waiting { }
 .badge.final { border-color: var(--gold); color: #92400e; background: var(--cream); }
-.badge.void { text-decoration: line-through; }
-.badge.warn, .badge.paused, .badge.appeal, .badge.hostDecision, .badge.suddenDeath { border-color: var(--red); color: #fff; background: var(--red); }
+.badge.void { border-color: var(--line); color: var(--text); background: var(--line); }
+.badge.warn, .badge.appeal, .badge.hostDecision, .badge.suddenDeath { border-color: var(--red); color: #fff; background: var(--red); }
+.badge.paused { border-color: var(--yellow); color: var(--navy); background: var(--yellow); }
 .warn-line { background: var(--red-bg); color: var(--red-ink); border: 2px solid #fecaca; border-radius: 10px; padding: 8px 10px; font-size: 12px; font-weight: 600; }
 .ok-line { background: var(--green-bg); color: var(--green-ink); border: 2px solid #a7f3d0; border-radius: 10px; padding: 8px 10px; font-size: 12px; font-weight: 600; }
 /* these two sit on a fixed light tint in both themes (above): a nested .muted note must not
@@ -193,12 +197,88 @@ html[data-theme="dark"] .panel, html[data-theme="dark"] .card { box-shadow: 0 10
 /* minmax(0, …): a column never grows to fit its widest content (a dropdown as long as a long team name). */
 .dash { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr) minmax(0, 1fr); gap: 16px; align-items: start; }
 .dash .panel + .panel, .dash .card + .card { margin-top: 0; }
+/* large displays (host room cards redesign): the dashboard grows past the 1100px page and the rooms get the room */
+@media (min-width: 1280px) {
+  /* both behind :has(), so a browser without it keeps the 1100px page and its usual columns together */
+  main:has(.dash) { max-width: 1560px; }
+  main:has(.dash) .dash { grid-template-columns: minmax(0, 1fr) minmax(0, 2.2fr) minmax(0, 1fr); }
+}
 .list-item { display: flex; justify-content: space-between; align-items: center; gap: 8px; border: 2px solid var(--line); border-radius: 12px; padding: 8px 11px; margin: 6px 0; background: var(--bg); }
 .list-item .name { font-weight: 700; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.room-card { border: 2px solid var(--line); border-radius: 14px; padding: 11px 12px; margin: 10px 0; background: var(--bg); }
-.room-card .teams { font-weight: 800; overflow-wrap: anywhere; min-width: 0; max-width: 100%; } /* long team chips end in "…" */
-.room-card .meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
-.room-card .actions { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
+/* Host room cards (redesign 2026-11-03, design "A"): head (teams + status), facts, Player List + Seat Overview
+   (side by side when the card is wide, stacked when narrow: a container query), compact alerts, one action row. */
+.room-card { container-type: inline-size; border: 2px solid var(--line); border-radius: 16px; padding: 12px 14px; margin: 12px 0; background: var(--bg); }
+.room-card.rc-suddenDeath, .room-card.rc-appeal, .room-card.rc-hostDecision { border-color: var(--red); }
+.rc-head { display: flex; justify-content: space-between; align-items: center; gap: 8px 10px; flex-wrap: wrap; }
+.room-card .rc-head .meta { margin-top: 0; min-width: 0; }
+.room-card .badge { font-size: 12px; padding: 5px 12px; font-weight: 900; }
+.room-card .meta { font-size: 13px; color: var(--muted); margin-top: 8px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; }
+.room-card .meta .code { color: var(--text); letter-spacing: 1px; }
+.rc-label { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rc-pill { display: inline-block; padding: 1px 9px; border-radius: 999px; font-weight: 900; font-size: 12px; }
+.rc-pill.full { background: var(--green); color: var(--navy); }
+.rc-pill.part { background: var(--yellow); color: var(--navy); }
+.rc-pill.none { background: var(--line); color: var(--text); }
+.rc-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; margin-top: 10px; padding: 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+@container (min-width: 560px) { .rc-body { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); } }
+.rc-body h4 { margin: 0 0 8px; font-size: 13px; color: var(--text); }
+/* A player row. By default (a narrow list: phone, stacked card, or the left column at 1366) the tags go on a
+   second line under the name, so the name keeps its width; a wide list puts everything on one line. The query is
+   on the player list itself (its own container), and without container-query support the safe stacked form stays. */
+.rc-players { container: players / inline-size; min-width: 0; }
+.rc-row { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; align-items: center; gap: 4px 8px; padding: 6px 8px; margin-bottom: 6px; border-radius: 10px; background: var(--bg); }
+.rc-row .rc-num { grid-row: 1; grid-column: 1; }
+.rc-row .rc-who { grid-row: 1; grid-column: 2; }
+.rc-row .rc-score { grid-row: 1; grid-column: 3; }
+.rc-row .rc-tags { grid-row: 2; grid-column: 2 / -1; justify-content: flex-start; }
+.rc-row .rc-tags:empty { display: none; }
+@container players (min-width: 420px) {
+  .rc-row { grid-template-columns: 26px minmax(9ch, 1fr) fit-content(58%) auto; }
+  .rc-row .rc-tags { grid-row: 1; grid-column: 3; justify-content: flex-end; }
+  .rc-row .rc-score { grid-column: 4; }
+}
+.rc-row:last-child { margin-bottom: 0; }
+/* a seat that left the game: a dashed edge, never faded (faded text would drop under AA) */
+.rc-row.gone { background: transparent; outline: 1px dashed var(--muted); outline-offset: -1px; }
+.rc-num { width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: 900; font-size: 13px; }
+.rc-num.s-a { background: var(--blue); color: #fff; } .rc-num.s-b { background: var(--red); color: #fff; }
+.rc-num.s-c { background: var(--green); color: var(--navy); } .rc-num.s-d { background: var(--yellow); color: var(--navy); }
+.rc-who { min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+.rc-name { font-weight: 800; font-size: 14px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rc-name.empty, .rc-seat-who.empty { font-style: italic; font-weight: 600; color: var(--muted); }
+.rc-team { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rc-tags { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
+.rc-tag { padding: 2px 8px; border-radius: 999px; font-weight: 800; font-size: 11.5px; white-space: nowrap; }
+.rc-tag.ok { background: var(--green-bg); color: var(--green-ink); }
+.rc-tag.warn { background: var(--warn-bg); color: var(--warn-ink); }
+.rc-tag.off { background: var(--line); color: var(--text); }
+.rc-tag.bad { background: var(--red-bg); color: var(--red-ink); }
+.rc-tag.turn { background: var(--yellow); color: var(--navy); }
+.rc-score { min-width: 32px; text-align: right; font: 900 15px 'Archivo Black', Impact, sans-serif; color: var(--text); }
+.rc-seats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.rc-seats.n3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.rc-seats.n4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+/* a narrow seat overview (the right column at 1366): four seats as 2 × 2, so names keep their width */
+.rc-overview { container: overview / inline-size; min-width: 0; }
+@container overview (max-width: 340px) { .rc-seats.n4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.rc-seat { min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 8px 4px; border: 2px solid var(--line); border-radius: 12px; background: var(--bg); text-align: center; font-size: 12px; }
+.rc-seat.taken { border-color: var(--green); }
+.rc-seat.gone { border-style: dashed; }
+.rc-seat-n { font-weight: 900; font-size: 13px; color: var(--text); }
+.rc-seat-who { max-width: 100%; font-weight: 800; font-size: 13px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rc-seat-sub { max-width: 100%; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rc-alert, .rc-fair { margin-top: 10px; padding: 7px 10px; border-radius: 10px; background: var(--warn-bg); color: var(--warn-ink); font-size: 13px; font-weight: 700; }
+.rc-result { margin-top: 10px; padding: 7px 10px; border-radius: 10px; background: var(--green-bg); color: var(--green-ink); font-size: 13px; font-weight: 800; }
+.rc-result .rc-why { font-weight: 600; }
+.rc-voidnote { margin-top: 8px; font-size: 13px; color: var(--muted); }
+.room-card .actions { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.rc-btn { display: inline-flex; align-items: center; padding: 6px 12px; font-size: 12px; font-weight: 800; border-radius: 9px; background: var(--surface); color: var(--text); border: 2px solid var(--line); text-decoration: none; }
+.rc-btn:hover { filter: brightness(1.06); }
+.rc-sep { width: 2px; align-self: stretch; min-height: 24px; background: var(--line); margin: 0 2px; }
+.rc-void { margin-left: auto; }
+/* the "share this code" box after Create room: the code big, its two buttons beside it */
+#nrCreated:not(.hidden) { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 12px; border: 2px solid var(--line); border-radius: 14px; background: var(--bg); }
+#nrCreated .code-big { padding: 6px 14px; }
 /* Host room list: Active / Finished / Void tabs and the page buttons (feature #8). */
 .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
 .tabs .tab { padding: 6px 12px; font-size: 12.5px; border-radius: 999px; background: var(--surface); color: var(--text); border: 2px solid var(--line); box-shadow: none; }
@@ -224,18 +304,59 @@ table.standings td.pts { font-weight: 800; color: var(--text); }
 table.standings tr:first-child td { font-weight: 700; }
 
 /* ---------- room: lobby ---------- */
-.versus { font-size: 20px; font-weight: 800; color: var(--text); text-align: center; overflow-wrap: anywhere; display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; }
-.versus .vs-sep { color: var(--muted); font-size: 13px; font-weight: 700; text-transform: uppercase; }
-.seat { display: flex; justify-content: space-between; align-items: center; gap: 8px; border: 2px solid var(--line); border-radius: 12px; padding: 10px 12px; background: var(--bg); }
-.seat.ready { border-color: var(--green); background: var(--green-bg); color: var(--navy); }
-.seat.empty { border-style: dashed; color: var(--muted); }
-/* Lobby seat row stays on one line: long team/player names end in "…" (full name in the title). */
-.seat-who { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.seat-who .dot { flex: none; margin-right: 0; }
-.seat-who .chip { display: block; flex: 0 1 auto; min-width: 0; max-width: 45%; overflow: hidden; text-overflow: ellipsis; }
-.seat-who .seat-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.seat-who .seat-sep, .seat-who .seat-you { flex: none; }
-.seat > .seat-side { flex: none; flex-wrap: nowrap; }
+/* The one team line (js/teamline.js) on the host room cards, the lobby and the seat picker: equal chips, never a
+   dangling "vs". 2 teams: TEAM VS TEAM. 3-4: a "3-/4-WAY MATCH" label over chips numbered like the seats; a narrow
+   line puts 4 teams 2 x 2 and 3 teams 2 + 1 (container queries on the line's own width). */
+.teamline { container: teamline / inline-size; display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.tl-lab { font-size: 10.5px; font-weight: 900; letter-spacing: 1.5px; color: var(--muted); }
+.tl-grid { display: grid; gap: 6px; align-items: center; }
+.teamline.n2 .tl-grid { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); }
+.teamline.n3 .tl-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.teamline.n4 .tl-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@container teamline (max-width: 440px) { .teamline.n4 .tl-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container teamline (max-width: 380px) {
+  .teamline.n3 .tl-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .teamline.n3 .tl-chip:last-child { grid-column: 1 / -1; }
+}
+.tl-chip { display: block; min-width: 0; max-width: none; text-align: center; font-size: 13px; padding: 5px 10px; }
+.tl-num { display: inline-block; width: 17px; height: 17px; margin-right: 6px; border-radius: 50%; font-size: 10.5px; line-height: 17px; background: var(--cream); color: var(--navy); } /* solid: navy on cream is AA on every chip */
+.tl-vs { color: var(--muted); font-weight: 900; font-size: 12px; letter-spacing: 1px; }
+.rc-head + .teamline { margin-top: 10px; }
+/* The players' waiting screen and seat picker (lobby redesign "A"): head + team line, a tile per seat
+   (2 columns), a "1 of 4 ready" bar, the big button, a note, a small footer. */
+.lb-head { display: flex; justify-content: space-between; align-items: center; gap: 6px 10px; flex-wrap: wrap; }
+.lb-head .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-size: 13px; color: var(--muted); min-width: 0; }
+.lb-head .meta .code { color: var(--text); letter-spacing: 1px; }
+.lb-seats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 8px; } /* row gap: room for the YOU tag */
+.lb-seat { position: relative; min-width: 0; display: flex; flex-direction: column; align-items: stretch; gap: 4px; padding: 10px; border: 2px solid var(--line); border-radius: 14px; background: var(--bg); color: var(--text); text-align: left; font-weight: 600; box-shadow: none; }
+button.lb-seat { cursor: pointer; }
+button.lb-seat:disabled { opacity: 1; cursor: default; }
+.lb-seat.taken { border-color: var(--green); }
+.lb-seat.empty { border-style: dashed; }
+button.lb-seat.free { border-color: var(--green); border-style: dashed; }
+button.lb-seat.free:hover { filter: none; border-style: solid; }
+.lb-seat.me { border-color: var(--yellow); box-shadow: inset 0 0 0 2px var(--yellow); }
+.lb-top { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.lb-team { min-width: 0; font-size: 12px; font-weight: 800; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lb-name { display: flex; align-items: center; gap: 2px; min-width: 0; font-size: 15px; font-weight: 900; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lb-name .seat-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.lb-name .dot { flex: none; margin-right: 4px; }
+.lb-name .lb-txt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lb-name.empty { font-size: 13px; font-weight: 600; font-style: italic; color: var(--muted); }
+.lb-sub { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lb-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.lb-join { align-self: flex-start; }
+.lb-you { position: absolute; top: -10px; right: 8px; padding: 1px 8px; border-radius: 999px; background: var(--yellow); color: var(--navy); font-size: 10.5px; font-weight: 900; letter-spacing: .5px; }
+.lb-remove { align-self: flex-start; min-height: 28px; padding: 4px 0; background: none; color: var(--text); font-size: 12px; font-weight: 800; text-decoration: underline; box-shadow: none; border-radius: 0; }
+.lb-prog-row { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--muted); }
+.lb-prog-row b { color: var(--text); }
+.lb-bar { height: 8px; margin-top: 5px; border-radius: 999px; background: var(--line); overflow: hidden; }
+.lb-bar i { display: block; height: 100%; border-radius: 999px; background: var(--green); transition: width .3s ease; }
+@media (prefers-reduced-motion: reduce) { .lb-bar i { transition: none; } }
+button.btn-go { background: var(--green); color: var(--navy); }
+.lb-note { margin: 0; }
+.lb-foot { display: flex; justify-content: space-between; align-items: center; gap: 6px 10px; flex-wrap: wrap; padding-top: 8px; border-top: 1px solid var(--line); }
+.lb-links { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #9aa5b8; margin-right: 6px; vertical-align: middle; }
 .dot.on { background: var(--green); }
 

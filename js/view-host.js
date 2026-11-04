@@ -33,10 +33,12 @@
 
   // ---------- Rooms panel ----------
 
-  const PHASE_LABEL = {
-    waiting: 'Waiting', live: 'Live', paused: 'Paused', appeal: 'Appeal pending',
-    suddenDeath: 'Sudden death', hostDecision: 'Host decision', final: 'Final', void: 'Void'
+  // the room card's status badge (CSS shows it in capitals)
+  const BADGE = {
+    waiting: '🕒 Waiting', live: '● Live', paused: '⏸ Paused', appeal: '⚖️ Appeal',
+    suddenDeath: '● Sudden death', hostDecision: '⚖️ Host decision', final: '✓ Finished', void: '🗑 Void'
   };
+  const PLAYING = ['live', 'paused', 'appeal', 'suddenDeath', 'hostDecision'];
   const PHASE_ORDER = { live: 0, appeal: 0, paused: 0, suddenDeath: 0, hostDecision: 0, waiting: 1, final: 2, void: 3 };
   const REASON_TEXT = {
     time: 'time', suddenDeath: 'sudden death', bagOut: 'tiles out', resign: 'left the game',
@@ -49,7 +51,6 @@
     return Names.short((state.teams[id] && state.teams[id].name) || room['team' + seat + 'Name'] || '?');
   }
 
-  const SEAT_CHIP = s => 'chip-' + s.toLowerCase();
 
   function clockText(room) {
     const phase = Match.roomPhase(room);
@@ -160,7 +161,7 @@
           const names = ids.map(id => `<b class="nm">${esc(Names.short(state.teams[id].name))}</b>`).join(' vs ');
           box.innerHTML = `<div class="small-text muted">Room created for ${names}. Share this code:</div>
             <div class="code-big" id="nrCode">${esc(pretty)}</div>
-            <div class="row"><button type="button" class="btn-secondary small" id="nrCopy">Copy code</button><a href="#room=${esc(code)}">Open room →</a></div>`;
+            <div class="row"><button type="button" class="btn-secondary small" id="nrCopy">⧉ Copy code</button><a class="rc-btn" href="#room=${esc(code)}">Open room ↗</a></div>`;
           box.classList.remove('hidden');
           $('#nrCopy').onclick = async () => {
             try { await navigator.clipboard.writeText(pretty); UI.toast('Code copied.', 'ok'); }
@@ -190,59 +191,106 @@
         return `<details class="pick" data-pick="${esc(key)}"${openPick.has(key) ? ' open' : ''}><summary class="btn-secondary small">${esc(label)}</summary><div class="pick-list">${btns}</div></details>`;
       }
 
+      // A room card (host room cards redesign, 2026-11-03, design "A"): teams + status, the room facts,
+      // then for a waiting or running room a Player List and a Seat Overview (RoomList.seatRows / seatTags),
+      // then the actions in one fixed order. Finished and void rooms stay compact: the result line only.
+      function playersHtml(room, phase) {
+        const rows = RoomList.seatRows(room);
+        const taken = rows.filter(r => r.taken).length;
+        const showScore = PLAYING.includes(phase);
+        const list = rows.map(r => {
+          const team = teamName(state, room, r.seat);
+          const full = r.taken ? r.name : '';
+          const tags = RoomList.seatTags(r, phase).map(t => `<span class="rc-tag ${t.kind}">${esc(t.text)}</span>`).join('');
+          return `<div class="rc-row${r.out ? ' gone' : ''}" data-seat="${r.seat}">
+            <span class="rc-num s-${r.seat.toLowerCase()}" aria-label="Seat ${r.num}">${r.num}</span>
+            <span class="rc-who"><span class="rc-name${r.taken ? '' : ' empty'}"${r.taken ? ` title="${esc(full)}"` : ''}>${r.taken ? esc(Names.short(full)) : 'Empty'}</span><span class="rc-team" title="${esc(team)}">${esc(team)}</span></span>
+            <span class="rc-tags">${tags}</span>
+            ${showScore ? `<span class="rc-score" aria-label="Score">${r.score === null ? '' : r.score}</span>` : ''}
+          </div>`;
+        }).join('');
+        const tiles = rows.map(r => {
+          const cls = !r.taken ? '' : r.out ? ' gone' : ' taken';
+          return `<div class="rc-seat${cls}" data-seat="${r.seat}"><span class="rc-seat-n">🪑 ${r.num}</span>
+            <span class="rc-seat-who${r.taken ? '' : ' empty'}"${r.taken ? ` title="${esc(r.name)}"` : ''}>${r.taken ? esc(Names.short(r.name)) : 'Empty'}</span>
+            <span class="rc-seat-sub">${r.out ? (r.out === 'left' ? 'LEFT' : 'OUT') : esc(teamName(state, room, r.seat))}</span></div>`;
+        }).join('');
+        return `<div class="rc-body">
+          <section class="rc-players" aria-label="Players"><h4>👥 Players (${taken}/${rows.length})</h4>${list}</section>
+          <section class="rc-overview" aria-label="Seat overview"><h4>🪑 Seat overview</h4><div class="rc-seats n${rows.length}">${tiles}</div></section>
+        </div>`;
+      }
+
+      // a finished or void card has no player list: its screen-leave counts stay visible for the host's call
+      function fairLine(room) {
+        if (room.status !== 'final' && room.status !== 'void') return '';
+        const who = RoomList.fairPlayLine(room);
+        if (!who.length) return '';
+        return `<div class="rc-fair">⚠️ Left the screen: ${who.map(p => `<span class="nm" title="${esc(p.name)}">${esc(Names.short(p.name))}</span> ${p.leaves}×`).join(' · ')}</div>`;
+      }
+
       function cardHtml(room) {
         const phase = Match.roomPhase(room);
         const seats = Match.seatsOf(room);
         const multi = seats.length > 2;
         const nameA = teamName(state, room, 'A'), nameB = teamName(state, room, 'B');
         const seatsTaken = seats.filter(s => room.seats[s]).length;
-        const warnings = seats
-          .filter(s => room.fairPlay[s].screenLeaves > 0 && room.seats[s])
-          .map(s => `<div class="warn-line">⚠️ ${esc(room.seats[s].name)} left the screen ${room.fairPlay[s].screenLeaves}×</div>`).join('');
+        const live = PLAYING.includes(phase);
+        const code = esc(room.code);
         let status = '';
         if (room.status === 'final' && room.result) {
           const winName = teamName(state, room, room.result.winner);
           const note = room.result.note ? ': ' + esc(room.result.note) : '';
-          const why = room.result.reason !== 'time' ? ` <span class="muted">(${esc(REASON_TEXT[room.result.reason] || room.result.reason)}${note})</span>` : '';
+          const why = room.result.reason !== 'time' ? ` <span class="rc-why">(${esc(REASON_TEXT[room.result.reason] || room.result.reason)}${note})</span>` : '';
           const scores = seats.map(s => Number(room.result['score' + s]) || 0).join('–');
-          status = `<div class="ok-line">+1 <span class="nm" title="${esc(winName)}">${esc(winName)}</span> · ${scores}${why}</div>`;
+          status = `<div class="rc-result">🏆 +1 <span class="nm" title="${esc(winName)}">${esc(winName)}</span> · ${scores}${why}</div>`;
         }
-        const live = ['live', 'paused', 'appeal', 'suddenDeath', 'hostDecision'].includes(phase);
-        const actions = [`<a class="small-text" href="#room=${esc(room.code)}">Open room →</a>`];
+        // actions, always in this order: Open room · Pin | Walkover / Correct result | Void (on the right)
+        const lead = [`<a class="rc-btn" href="#room=${code}">Open room ↗</a>`];
         if (room.status === 'waiting' || live) {
           const pinned = state.pinned === room.code;
-          actions.push(`<button class="btn-secondary small" data-pin="${esc(room.code)}">${pinned ? 'Unpin' : '📌 Pin to big screen'}</button>`);
+          lead.push(`<button class="btn-secondary small" data-pin="${code}">${pinned ? '📌 Unpin' : '📌 Pin to big screen'}</button>`);
         }
+        const decide = [];
         if (room.status === 'waiting') {
-          if (multi) actions.push(picker(room, 'walkover', 'Walkover…', seats));
+          if (multi) decide.push(picker(room, 'walkover', '⚖️ Walkover…', seats));
           else {
-            actions.push(`<button class="btn-secondary small nm-btn" data-walkover="A" data-code="${esc(room.code)}" title="Walkover → ${esc(nameA)}">Walkover → ${esc(nameA)}</button>`);
-            actions.push(`<button class="btn-secondary small nm-btn" data-walkover="B" data-code="${esc(room.code)}" title="Walkover → ${esc(nameB)}">Walkover → ${esc(nameB)}</button>`);
+            decide.push(`<button class="btn-secondary small nm-btn" data-walkover="A" data-code="${code}" title="Walkover → ${esc(nameA)}">⚖️ Walkover → ${esc(nameA)}</button>`);
+            decide.push(`<button class="btn-secondary small nm-btn" data-walkover="B" data-code="${code}" title="Walkover → ${esc(nameB)}">⚖️ Walkover → ${esc(nameB)}</button>`);
           }
-          actions.push(`<button class="danger small" data-void="${esc(room.code)}">Void</button>`);
         } else if (room.status === 'final') {
-          if (multi && room.result) actions.push(picker(room, 'correct', 'Correct result…', seats.filter(s => s !== room.result.winner)));
-          else actions.push(`<button class="btn-secondary small" data-correct="${esc(room.code)}">Correct result</button>`);
-          actions.push(`<button class="danger small" data-void="${esc(room.code)}">Void</button>`);
+          if (multi && room.result) decide.push(picker(room, 'correct', '✎ Correct result…', seats.filter(s => s !== room.result.winner)));
+          else decide.push(`<button class="btn-secondary small" data-correct="${code}">✎ Correct result</button>`);
         }
-        const chips = seats.map(s => {
-          const n = teamName(state, room, s);
-          return `<span class="chip ${SEAT_CHIP(s)}" title="${esc(n)}">${esc(n)}</span>`;
-        }).join(' <span class="vs-sep muted small-text">vs</span> ');
-        return `<div class="room-card" data-room="${esc(room.code)}">
-          <div class="spread">
-            <span class="teams">${chips}</span>
-            <span class="badge ${esc(phase)}">${live ? '● ' : ''}${esc(PHASE_LABEL[phase] || phase)}${live ? ` <span data-clock="${esc(room.code)}">${esc(clockText(room))}</span>` : ''}</span>
+        const canVoid = room.status === 'waiting' || room.status === 'final';
+        const actions = lead.join('') + (decide.length ? '<span class="rc-sep" aria-hidden="true"></span>' + decide.join('') : '')
+          + (canVoid ? `<button class="danger small rc-void" data-void="${code}">🗑 Void</button>` : '');
+        // the one team line (js/teamline.js): full names in, TeamLine shortens and escapes them
+        const lineup = TeamLine.html(seats.map(s => {
+          const id = Match.teamOf(room, s);
+          return { seat: s, name: (state.teams[id] && state.teams[id].name) || room['team' + s + 'Name'] || '?' };
+        }));
+        const n = seats.length;
+        const seatPill = seatsTaken === n ? 'full' : seatsTaken ? 'part' : 'none';
+        const clock = ['live', 'paused', 'appeal'].includes(phase) ? ` <span data-clock="${code}">${esc(clockText(room))}</span>` : '';
+        const alert = phase === 'appeal' ? '⚖️ Appeal pending: open the room to decide'
+          : phase === 'hostDecision' ? '⚖️ Still tied: open the room to award the win' : '';
+        return `<div class="room-card rc-${esc(phase)}" data-room="${code}">
+          <div class="rc-head">
+            <div class="meta rc-meta"><span>📍 <span class="code">${esc(Match.formatCode(room.code))}</span></span><span>⏱ ${Math.round(room.matchLengthSec / 60)} min</span>
+              <span>👥 Seats <span class="rc-pill ${seatPill}">${seatsTaken}/${n}</span></span>${room.label ? `<span class="rc-label" title="${esc(room.label)}">🏷 ${esc(room.label)}</span>` : ''}</div>
+            <span class="badge ${esc(phase)}">${esc(BADGE[phase] || phase)}${clock}</span>
           </div>
-          <div class="meta"><span class="code">${esc(Match.formatCode(room.code))}</span> · ${Math.round(room.matchLengthSec / 60)} min · seats ${seatsTaken}/${seats.length}${room.label ? ' · ' + esc(room.label) : ''}</div>
-          ${phase === 'appeal' ? '<div class="warn-line">⚖️ Appeal pending: open the room to decide</div>' : ''}
-          ${phase === 'hostDecision' ? '<div class="warn-line">Still tied: open the room to award the win</div>' : ''}
-          ${warnings}${status}${room.status === 'void' && room.voidNote ? `<div class="meta">Void: ${esc(room.voidNote)}</div>` : ''}
-          <div class="actions">${actions.join('')}</div>
+          ${lineup}
+          ${room.status === 'waiting' || live ? playersHtml(room, phase) : ''}
+          ${alert ? `<div class="rc-alert">${alert}</div>` : ''}
+          ${status}${room.status === 'void' && room.voidNote ? `<div class="rc-voidnote">Void: ${esc(room.voidNote)}</div>` : ''}
+          ${fairLine(room)}
+          <div class="actions rc-actions">${actions}</div>
         </div>`;
       }
 
-      const TAB_LABEL = { active: 'Active', finished: 'Finished', void: 'Void' };
+      const TAB_LABEL = { active: '▶ Active', finished: '✓ Finished', void: '🗑 Void' };
       const TAB_EMPTY = { active: 'No active rooms. Create one above.', finished: 'No finished rooms yet.', void: 'No void rooms.' };
 
       // Keyboard focus on a tab or a page button survives the rebuild that every room update causes.

@@ -9,11 +9,20 @@
   const isSeatCode = s => Match.ALL_SEATS.includes(s); // a stored seat (before the room is known)
   const multi = room => seatsOf(room).length > 2;
 
-  // Team colour chip: Team A is always blue, Team B red, C green, D yellow, everywhere.
   // Names as shown: at most Names.MAX characters + "…" (QA pass); full names stay in titles.
+  // Team colours (A blue, B red, C green, D yellow) come from the chip-* / s-* classes everywhere.
   const short = s => Names.short(s);
-  const chip = (seat, name) => `<span class="chip chip-${seat.toLowerCase()}" title="${esc(name)}">${esc(short(name))}</span>`;
-  const versusHtml = room => `<div class="versus">${seatsOf(room).map(s => chip(s, Match.teamNameOf(room, s))).join('<span class="vs-sep">vs</span>')}</div>`;
+  // The lobby and the seat picker (lobby redesign "A", 2026-11-03): the room facts + a status badge, then the one
+  // team line (js/teamline.js), the same as on the host room cards.
+  const lobbyHead = (room, badge, roomCode) => { // roomCode: the route code (a room record may lack its own)
+    const SEATS = seatsOf(room);
+    const taken = SEATS.filter(s => room.seats[s]).length;
+    const pill = taken === SEATS.length ? 'full' : taken ? 'part' : 'none';
+    return `<div class="lb-head"><div class="meta lb-meta"><span>📍 <span class="code">${esc(Match.formatCode(roomCode))}</span></span><span>⏱ ${Math.round(room.matchLengthSec / 60)} min</span>
+        <span>👥 Seats <span class="rc-pill ${pill}">${taken}/${SEATS.length}</span></span>${room.label ? `<span class="rc-label" title="${esc(room.label)}">🏷 ${esc(room.label)}</span>` : ''}</div>${badge}</div>
+      ${TeamLine.html(SEATS.map(s => ({ seat: s, name: Match.teamNameOf(room, s) })))}`;
+  };
+  const seatTop = (room, seat, extra = '') => `<span class="lb-top"><span class="rc-num s-${seat.toLowerCase()}">${seatsOf(room).indexOf(seat) + 1}</span><span class="lb-team" title="${esc(Match.teamNameOf(room, seat))}">${esc(short(Match.teamNameOf(room, seat)))}</span>${extra}</span>`;
   // "A", "A and B", "A, B and C"
   const andList = xs => (xs.length < 3 ? xs.join(' and ') : xs.slice(0, -1).join(', ') + ' and ' + xs[xs.length - 1]);
 
@@ -166,26 +175,31 @@
 
     function renderChoices(room) {
       const inPlay = room.status !== 'waiting';
+      // a seat tile: a free seat is the button to tap, a taken one is shown but disabled
       const btn = seat => {
         const s = room.seats[seat];
         const team = nameOf(room, seat);
-        if (s) return `<button class="nm-btn" disabled title="${esc(team)}: taken by ${esc(s.name)}">${esc(short(team))}: taken by ${esc(short(s.name))}</button>`;
+        if (s) return `<button type="button" class="lb-seat taken" disabled title="${esc(team)}: taken by ${esc(s.name)}">${seatTop(room, seat)}
+          <span class="lb-name"><span class="lb-txt" title="${esc(s.name)}">${esc(short(s.name))}</span></span><span class="lb-sub">Seat taken by ${esc(short(s.name))}</span></button>`;
         // An empty seat in a running game: the player is continuing on a new device (host freed the seat).
-        return `<button class="nm-btn" data-claim="${seat}" title="${esc(team)}">${inPlay ? `Take ${esc(short(team))}'s seat` : `Play for ${esc(short(team))}`}</button>`;
+        // The team is on the tile's top line, so the label stays short on a phone; the full action is the button's name.
+        const action = inPlay ? `Take ${short(team)}'s seat` : `Play for ${short(team)}`;
+        return `<button type="button" class="lb-seat free" data-claim="${seat}" title="${esc(action)}" aria-label="${esc(action)}">${seatTop(room, seat)}
+          <span class="lb-name"><span class="lb-txt">Free seat</span></span><span class="rc-tag ok lb-join">${inPlay ? 'Tap to take it' : 'Tap to join'}</span></button>`;
       };
       const SEATS = seatsOf(room);
       const anyFree = SEATS.some(s => !room.seats[s]);
+      const badge = inPlay ? '<span class="badge live">● Live</span>' : '<span class="badge waiting">🕒 Waiting</span>';
       el.innerHTML = `
-        <div class="card narrow stack">
-          ${versusHtml(room)}
-          <div class="center muted small-text">Room <span class="code">${esc(Match.formatCode(code))}</span>${room.label ? ' · ' + esc(room.label) : ''}</div>
+        <div class="card narrow stack lobby-card">
+          ${lobbyHead(room, badge, code)}
           <div><label for="choiceName">Your name</label><input id="choiceName" maxlength="40" placeholder="Your name"></div>
-          ${!inPlay ? SEATS.map(btn).join('')
+          ${!inPlay ? `<div class="lb-seats">${SEATS.map(btn).join('')}</div>`
             : (anyFree ? '<p class="muted small-text center">This match is in progress. If you are a player switching devices, take your seat:</p>' +
-                SEATS.filter(s => !room.seats[s]).map(btn).join('')
+                `<div class="lb-seats">${SEATS.filter(s => !room.seats[s]).map(btn).join('')}</div>`
               : '<p class="muted small-text center">This match has already started. You can watch it. (Switching devices? Ask the host to free your seat.)</p>')}
           <button class="btn-secondary" data-watch="1">👁️ Just watch</button>
-          <a href="#" class="small-text">← Back to start</a>
+          <div class="lb-foot"><a href="#" class="small-text">← Back to start</a></div>
         </div>`;
       const nameInput = el.querySelector('#choiceName');
       nameInput.value = Store.local.get('scrabble.name') || '';
@@ -212,37 +226,45 @@
     function renderLobby(room) {
       const host = App.isHost();
       const hostOnline = Object.values(room.presence).includes('host');
-      const seatRow = seat => {
+      // a seat tile: seat number + team on its own line (a player's name never squeezes it), the player or
+      // "Waiting for player…", the online dot and Ready; YOU on your own seat; Remove for the host
+      const seatTile = seat => {
         const s = room.seats[seat];
-        const team = chip(seat, nameOf(room, seat));
-        if (!s) return `<div class="seat empty"><span class="seat-who">${team}</span><span class="small-text seat-side">Waiting for player…</span></div>`;
+        const you = state.mySeat === seat ? '<span class="lb-you">YOU</span>' : '';
+        if (!s) return `<div class="lb-seat empty" data-seat-row="${seat}">${seatTop(room, seat)}<span class="lb-name empty"><span class="lb-txt">Waiting for player…</span></span></div>`;
         const online = Match.isSeatOnline(room, seat);
-        // One line: a long team or player name ends in "…" (full name on hover) instead of wrapping the row.
-        return `<div class="seat ${s.ready ? 'ready' : ''}" data-seat-row="${seat}">
-          <span class="seat-who"><span class="dot ${online ? 'on' : ''}"></span>${team}<span class="seat-sep">·</span><b class="seat-name" title="${esc(s.name)}">${esc(short(s.name))}</b>${state.mySeat === seat ? '<span class="seat-you">(you)</span>' : ''}</span>
-          <span class="row seat-side">
-            <span class="badge ${s.ready ? 'live' : ''}">${s.ready ? 'Ready' : 'Not ready'}</span>
-            ${host ? `<button class="btn-secondary small" data-remove="${seat}">Remove</button>` : ''}
-          </span></div>`;
+        return `<div class="lb-seat taken${s.ready ? ' ready' : ''}${you ? ' me' : ''}" data-seat-row="${seat}">${you}${seatTop(room, seat)}
+          <span class="lb-name"><span class="dot ${online ? 'on' : ''}" title="${online ? 'Connected' : 'Offline'}"></span><b class="seat-name" title="${esc(s.name)}">${esc(short(s.name))}</b></span>
+          <span class="lb-tags"><span class="rc-tag ${s.ready ? 'ok' : 'off'}">${s.ready ? '✓ Ready' : 'Not ready'}</span>${online ? '' : '<span class="rc-tag off">📴 Offline</span>'}</span>
+          ${host ? `<button type="button" class="lb-remove" data-remove="${seat}">Remove</button>` : ''}</div>`;
       };
       const SEATS = seatsOf(room);
       const mine = Match.isSeat(room, state.mySeat) ? room.seats[state.mySeat] : null;
       const bothReady = SEATS.every(s => room.seats[s] && room.seats[s].ready);
       const who = multi(room) ? 'all players' : 'both players';
+      const nReady = SEATS.filter(s => room.seats[s] && room.seats[s].ready).length;
+      const open = SEATS.filter(s => !room.seats[s]).length;
+      const badge = bothReady ? '<span class="badge live">✓ All ready</span>' : '<span class="badge waiting">🕒 Waiting</span>';
+      const firstPick = multi(room) ? 'The roulette picks who goes first.' : 'The coin toss picks who goes first.';
+      const note = host ? (bothReady ? `${multi(room) ? 'All players are ready.' : 'Both players are ready.'} ${firstPick}` : `Start unlocks when ${who} are ready.`)
+        : mine ? (bothReady ? 'Everyone is ready. Waiting for the host to start the match…' : `The host starts the match when ${who} are ready.`)
+        : '👁️ Waiting for the host to start the match…';
       el.innerHTML = `
-        <div class="card narrow stack">
-          ${versusHtml(room)}
-          <div class="center muted small-text">Room <span class="code">${esc(Match.formatCode(code))}</span> · ${Math.round(room.matchLengthSec / 60)} min${room.label ? ' · ' + esc(room.label) : ''}</div>
-          ${SEATS.map(seatRow).join('')}
-          <div class="seat"><span><span class="dot ${hostOnline ? 'on' : ''}"></span>⚙ Host</span><span class="small-text muted" id="watchCount">👁️ ${Match.watcherCount(room)} watching</span></div>
-          ${mine ? `<button id="readyBtn" class="${mine.ready ? 'btn-secondary' : 'btn-primary'}">${mine.ready ? 'Not ready' : "I'm ready"}</button>` : ''}
-          ${host ? `<button id="startBtn" class="btn-primary" ${bothReady ? '' : 'disabled'}>▶ Start match</button>
-                    <div class="small-text muted center">${bothReady ? (multi(room) ? 'All players are ready.' : 'Both players are ready.') : `Start unlocks when ${who} are ready.`}</div>` : ''}
-          ${!mine && !host ? '<p class="muted small-text center">Waiting for the host to start the match…</p>' : ''}
-          <div class="row" style="justify-content:space-between;">
-            <a href="#" class="small-text">← Back to start</a>
-            ${mine ? '<button class="link small-text" id="leaveSeat">Leave seat</button>' : ''}
-            ${state.mySeat === 'watch' ? '<button class="link small-text" id="stopWatching">Stop watching / take a seat</button>' : ''}
+        <div class="card narrow stack lobby-card">
+          ${lobbyHead(room, badge, code)}
+          <div class="lb-seats">${SEATS.map(seatTile).join('')}</div>
+          <div class="lb-prog"><div class="lb-prog-row"><b>${nReady} of ${SEATS.length} ready</b><span>${open ? `${open} seat${open > 1 ? 's' : ''} open` : 'all seats taken'}</span></div>
+            <div class="lb-bar" role="progressbar" aria-label="Players ready" aria-valuemin="0" aria-valuemax="${SEATS.length}" aria-valuenow="${nReady}"><i style="width:${Math.round(nReady / SEATS.length * 100)}%"></i></div></div>
+          ${mine ? `<button id="readyBtn" class="${mine.ready ? 'btn-secondary' : 'btn-go'}">${mine.ready ? 'Not ready' : "✓ I'm ready"}</button>` : ''}
+          ${host ? `<button id="startBtn" class="btn-primary" ${bothReady ? '' : 'disabled'}>▶ Start match</button>` : ''}
+          <p class="small-text muted center lb-note">${note}</p>
+          <div class="lb-foot">
+            <span class="small-text"><span class="dot ${hostOnline ? 'on' : ''}"></span>⚙ Host · <span id="watchCount">👁️ ${Match.watcherCount(room)} watching</span></span>
+            <span class="lb-links">
+              <a href="#" class="small-text">← Back to start</a>
+              ${mine ? '<button class="link small-text" id="leaveSeat">Leave seat</button>' : ''}
+              ${state.mySeat === 'watch' ? '<button class="link small-text" id="stopWatching">Stop watching / take a seat</button>' : ''}
+            </span>
           </div>
         </div>`;
 
