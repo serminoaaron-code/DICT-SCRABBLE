@@ -59,6 +59,13 @@
 .gh-team.b { background: var(--red); }
 .gh-team.c { background: var(--green); color: var(--navy); }
 .gh-or { color: var(--muted); font-weight: 700; font-size: 12px; }
+/* a free seat tile, as on the waiting screen (js/view-room.js .lb-seat) */
+.gh-seat { display: inline-flex; flex-direction: column; gap: 2px; min-width: 96px; padding: 6px 8px; border: 2px dashed var(--green); border-radius: 10px; background: var(--bg); color: var(--text); font-size: 12px; }
+.gh-seat-top { display: flex; align-items: center; gap: 5px; color: var(--muted); font-weight: 800; }
+.gh-seat b { font-size: 13px; }
+.gh-num { width: 18px; height: 18px; border-radius: 50%; font: 900 11px/18px Inter, sans-serif; text-align: center; }
+.gh-num.a { background: var(--blue); color: #fff; } .gh-num.b { background: var(--red); color: #fff; }
+.gh-join { align-self: flex-start; padding: 1px 7px; border-radius: 999px; background: var(--green-bg); color: var(--green-ink); font-weight: 800; font-size: 11px; }
 /* a small roulette wheel (3-4 player rooms), seat colours as the real one */
 .gh-wheel { width: 30px; height: 30px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px var(--line);
   background: conic-gradient(var(--blue) 0 90deg, var(--red) 90deg 180deg, var(--green) 180deg 270deg, var(--yellow) 270deg 360deg);

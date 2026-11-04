@@ -1,6 +1,6 @@
-# Dry-run checklist (Mon 2026-11-02 evening)
+# Dry-run checklist
 
-**Goal:** prove one full tournament evening works with real people on real devices.
+**Goal:** prove one full tournament evening works with real people on real devices. First written for the Mon 2026-11-02 dry run; kept up to date with every change since (last: 2026-11-04, the new host room cards and waiting screen).
 
 > **Update 2026-11-02:** Tue 2026-11-03 is a **game test day**, not the tournament. The tournament date isn't set yet. Until then, keep testing in the playground and keep shipping game features through PRs.
 
@@ -25,27 +25,35 @@ Tick each box. If something fails, note what you did, what you saw, and on which
 - [ ] Add teams `TEST-A` and `TEST-B`. Both show in **Standings** at 0-0.
 - [ ] Try creating a room with the same team on both sides. It's blocked.
 - [ ] Create **TEST-A vs TEST-B, custom 3 minutes**. A code like `K7Q-42M` appears. **Copy code** works.
+- [ ] The new room's card (Active tab) shows, from top to bottom: the code, **3 min** and **Seats 0/2** with a **WAITING** badge; **TEST-A VS TEST-B**; a **Players** list and a **Seat overview** with two empty seats; then **Open room · Pin to big screen | Walkover → TEST-A · Walkover → TEST-B** and a red **Void** on the right. On a wide laptop screen the player list and seat overview sit side by side.
 
 ## 2. Look and feel (dark mode, sound)
 - [ ] On each device, tap the **☀️/🌙** switch in the header. The whole page (join page, dashboard) flips to dark and every bit of text stays easy to read — no washed-out or invisible labels on pills, chips, badges, buttons or cards.
 - [ ] Refresh the page. The theme you picked is still there.
 - [ ] Tap the **🔇/🔊** switch. It starts muted (🔇) on a device that's never turned it on. Turning it on shows 🔊 and survives a refresh.
 - [ ] With sound on, play a few turns (section 4) and confirm you hear short tones for placing a tile, a word being accepted, and your turn starting — all quiet, none longer than a second or so.
+- [ ] **🎵 Music** is on by default: once a match starts, the music begins with your first tap, and switches to a faster track in the last minute. 🎵 turns only the music off.
+- [ ] **iPhone (iOS 17+):** with the phone on **silent**, the music and sounds still play after your first tap in a match.
+- [ ] On the board, the bonus squares are soft colours with coloured labels (3W red, 2W purple, 3L green, 2L cyan), easy to read in both themes. Every tile, on the board and in the rack, shows its points, also on a phone.
 
 ## 3. Joining
-- [ ] Player A: open the site, enter the code in **lowercase**, enter a name, then **Play for TEST-A**.
-- [ ] Player B (phone): join with the code, then **Play for TEST-B**. The TEST-A button shows "taken by …".
-- [ ] Spectator: join with the code, then **Just watch**. The host lobby shows "👁️ 1 watching".
-- [ ] Player A **refreshes** the page. They're back in the TEST-A seat without doing anything.
-- [ ] Host: **Remove** Player A. Player A sees the join buttons again and rejoins.
+- [ ] Player A: open the site, enter the code in **lowercase**, enter a name, then tap the **TEST-A** seat tile ("Free seat · Tap to join").
+- [ ] Player B (phone): join with the code, then tap the **TEST-B** tile. The TEST-A tile now shows Player A and "Seat taken by …", and can't be tapped.
+- [ ] The waiting screen shows the code, minutes and seats on top, **TEST-A VS TEST-B**, a tile per seat (team, player, green dot when connected, Ready / Not ready), a yellow **YOU** on your own seat, and a "0 of 2 ready" bar.
+- [ ] Spectator: join with the code, then **Just watch**. The footer of the waiting screen shows "👁️ 1 watching".
+- [ ] Player A **refreshes** the page. They're back in the TEST-A seat (YOU on it) without doing anything.
+- [ ] Host: open the room and press **Remove** on Player A's tile. Player A sees the seat tiles again and rejoins.
+- [ ] While players join, get ready, leave and rejoin, the team line at the top and every tile's team name **stay put**: nothing jumps, and no name gets squeezed to "D…".
 
 ## 4. Start and play
-- [ ] **Start match** stays disabled until both players press **I'm ready**.
-- [ ] Host presses **Start**. All screens briefly show a **VS intro** (the two team names) followed by a **coin toss** animation, then "🪙 Coin toss: … goes first". The game only unlocks the first turn once the intro finishes (about 5 seconds) — the pill shows "Get ready" until then.
+- [ ] **Start match** stays disabled until both players press **I'm ready**. The bar fills to "2 of 2 ready" and the badge turns **ALL READY**.
+- [ ] Host presses **Start**. All screens briefly show a **VS intro** (the two team names) followed by a **coin toss** animation, then "🪙 Coin toss: … goes first". The game only unlocks the first turn once the intro finishes (about 6.5 seconds) — the pill shows "Get ready" until then.
 - [ ] A first word that doesn't cover the ★ is refused with a message.
 - [ ] A real word across the ★ scores the same on every screen, and the rack refills to 7.
 - [ ] That first play also fires a **word celebration** (a tier banner like "Cool!" or "Awesome!" with the score flying into the score bar) on the host, both players and the spectator at the same time. Score a bigger word later in the game and confirm a higher tier shows (bigger effects, more confetti), up to "IMPOSSIBLE!!!" for a 7-tile bingo.
 - [ ] On the phone: tap a tile, then tap a square. Placing, Recall and Play all work. The celebration overlay doesn't block the board underneath, and its **✕ Skip** button dismisses it early.
+- [ ] **Drag** a tile from the rack onto the board (mouse on the laptop, finger on the phone); drag it back to the rack. **🔀** shuffles the rack.
+- [ ] A word spelled **upward** (e.g. VERIFY with the V at the bottom) is accepted and every screen shows "VERIFY". A word spelled right to left is refused with the hint "Words read left→right, top→bottom or bottom→top."
 - [ ] A made-up word shows "not found", with **Recall** and **Ask host**.
 - [ ] **Ask host**: both clocks freeze, and the host sees the word with **Approve** / **Deny**.
   - [ ] **Approve** adds the score and passes the turn.
@@ -54,7 +62,8 @@ Tick each box. If something fails, note what you did, what you saw, and on which
 
 ## 5. Host controls
 - [ ] **Pause** freezes both clocks on every screen, and **Resume** continues from the same time.
-- [ ] Player A switches to another app or tab. The host sees "⚠️ … left the screen 1×" in the room and on the dashboard card, and the game continues.
+- [ ] Player A switches to another app or tab. The host sees "⚠️ … left the screen 1×" in the room, and a small **⚠️ Left the screen · 1×** tag on Player A's row of the dashboard card. The game continues.
+- [ ] On the dashboard, the live card shows **● LIVE** with the clock, **▶ Turn** on the player whose turn it is, and both scores.
 - [ ] Player B turns on airplane mode (or closes the tab). Everyone sees "… disconnected". Player B reconnects, and the notice disappears.
 
 ## 6. Ending
@@ -62,7 +71,8 @@ Tick each box. If something fails, note what you did, what you saw, and on which
 - [ ] Repeat with a new 2-minute room and **close the host's window before 0:00**. A player's screen still records the result and shows its result screen. Reopening the host shows the same single result, not two.
 - [ ] New room: both players only **Pass** until time is up while the scores are tied. Sudden death starts, and after 3 tied rounds the host gets **Award the win** buttons.
 - [ ] New room: a player opens the **⋯** menu and presses **Leave**. A confirm box names their team and says they'll lose the match; confirming it, the other team wins.
-- [ ] New room: nobody joins. The host uses **Walkover → TEST-A** on the dashboard, and it counts as +1. On another waiting room, **Void** counts for nobody.
+- [ ] New room: nobody joins. The host uses **Walkover → TEST-A** on the dashboard, and it counts as +1. On another waiting room, **Void** (type a reason) counts for nobody.
+- [ ] Finished rooms move to the **Finished** tab (a **FINISHED** badge and a "🏆 +1 TEAM · scores" line) and voided ones to the **Void** tab (with the reason). If a player left the screen during the match, the finished card keeps one "⚠️ Left the screen: …" line.
 
 ## 7. Dark mode and sound on a result screen
 - [ ] On the winner's and the other player's result screens from section 6, toggle **☀️/🌙**. Both screens stay easy to read in dark mode (the hero card keeps its own fixed colours; the score pill and buttons below it switch with the theme).
@@ -78,8 +88,8 @@ Tick each box. If something fails, note what you did, what you saw, and on which
 - [ ] Delete a room (host **Reset playground**) while the projector is mid-highlight on it. The highlight clears and the projector falls back to idle standings within a couple of seconds, instead of freezing on a room that no longer exists.
 
 ## 8b. 3–4 player rooms (needs 2 extra devices, or extra Incognito / other-browser windows)
-- [ ] Add teams `TEST-C` and `TEST-D`. In **+ New room**, choose **Players: 4**. Four team boxes appear, and a team chosen in one box is greyed out in the others. Create **TEST-A, B, C, D, custom 4 minutes**. The card shows all four teams and "seats 0/4".
-- [ ] Each of the four players joins with the code and takes a different seat. The host's **Start** unlocks only when **all players are ready**.
+- [ ] Add teams `TEST-C` and `TEST-D`. In **+ New room**, choose **Players: 4**. Four team boxes appear, and a team chosen in one box is greyed out in the others. Create **TEST-A, B, C, D, custom 4 minutes**. The card shows **4-WAY MATCH** over the four teams numbered 1–4, **Seats 0/4**, four player rows and four seat tiles, and **Walkover…** opens a list of the four teams.
+- [ ] Each of the four players joins with the code and takes a different seat. The waiting screen shows the same numbered 4-WAY line (2 × 2 on a phone) and four seat tiles. The host's **Start** unlocks only when **all players are ready** ("4 of 4 ready").
 - [ ] After Start, every screen (and the projector) shows **4-WAY** with the four teams, then a **roulette wheel** that stops on the same team everywhere: "<TEAM> GOES FIRST!". The caption reads "🎡 Roulette: <team> goes first".
 - [ ] The score bar shows **one column per player** in seat order, highlighting the player whose turn it is. Turns go around the table from the wheel's pick. On the phone, nothing spills off the screen.
 - [ ] One player taps **⋯ → Leave**. The game **goes on**: their column shows **LEFT**, they see "You're out", and their turns are skipped.
