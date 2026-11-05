@@ -1,9 +1,12 @@
-// Host login and dashboard: teams, fixture rooms, standings, reset.
+// Host login and dashboard: tournament time, access codes, live games & players, standings.
+// The host only sets things up and watches: pairing is automatic (Find opponent), the dictionary
+// decides words, and the players' devices handle turn time, match time, disconnects and ties.
 (function (root) {
   'use strict';
 
   const HOST_ADMIN_PASSWORD = '1101';
   const esc = s => UI.escapeHtml(s);
+  const short = s => Names.short(s);
 
   function showLogin(el) {
     el.innerHTML = `
@@ -29,511 +32,621 @@
     return null;
   }
 
-  function cleanName(name) { return String(name || '').trim().replace(/\s+/g, ' ').slice(0, 40); }
-
-  // ---------- Rooms panel ----------
-
-  // the room card's status badge (CSS shows it in capitals)
-  const BADGE = {
-    waiting: '🕒 Waiting', live: '● Live', paused: '⏸ Paused', appeal: '⚖️ Appeal',
-    suddenDeath: '● Sudden death', hostDecision: '⚖️ Host decision', final: '✓ Finished', void: '🗑 Void'
-  };
-  const PLAYING = ['live', 'paused', 'appeal', 'suddenDeath', 'hostDecision'];
-  const PHASE_ORDER = { live: 0, appeal: 0, paused: 0, suddenDeath: 0, hostDecision: 0, waiting: 1, final: 2, void: 3 };
+  const PLAYING = ['live', 'suddenDeath', 'hostDecision'];
   const REASON_TEXT = {
-    time: 'time', suddenDeath: 'sudden death', bagOut: 'tiles out', resign: 'left the game',
-    awarded: 'awarded by host', walkover: 'walkover', corrected: 'corrected by host'
+    time: 'time up', suddenDeath: 'sudden death', bagOut: 'tiles out', resign: 'left the game', disconnect: 'disconnect forfeit',
+    awarded: 'awarded by host', walkover: 'walkover', corrected: 'corrected by host', draw: 'tied after sudden death'
   };
+  const DURATION_CHIPS = [30, 60, 90, 120, 180];
 
-  function teamName(state, room, seat) {
-    const id = Match.teamOf(room, seat);
-    // As shown: at most Names.MAX characters + "…" (QA pass).
-    return Names.short((state.teams[id] && state.teams[id].name) || room['team' + seat + 'Name'] || '?');
-  }
-
-
-  function clockText(room) {
-    const phase = Match.roomPhase(room);
-    if (!room.clock) return '';
-    if (phase === 'suddenDeath') return 'SD';
-    if (phase === 'hostDecision') return '';
-    const ms = room.clock.paused ? room.clock.paused.matchRemainingMs : room.clock.endsAt - Store.serverNow();
-    return UI.formatClock(ms);
-  }
-
-  const HostRooms = {
-    mount({ el, state }) {
-      const panel = el.querySelector('#roomsPanel');
-      panel.innerHTML = `
-        <details id="newRoomBox" open>
-          <summary style="cursor:pointer;font-weight:700;">+ New room</summary>
-          <form id="newRoom" class="stack" style="margin-top:6px;">
-            <div><label id="nrPlayersLbl">Players</label>
-              <div class="tabs nr-players" id="nrPlayers" role="radiogroup" aria-labelledby="nrPlayersLbl">
-                ${[2, 3, 4].map(n => `<button type="button" class="tab${n === 2 ? ' on' : ''}" role="radio" aria-checked="${n === 2}" data-players="${n}">${n}</button>`).join('')}
-              </div></div>
-            <div class="row nr-teams">
-              ${Match.ALL_SEATS.map(s => `<div class="nr-seat${s > 'B' ? ' hidden' : ''}" data-seat-box="${s}" style="flex:1;min-width:120px;"><label for="nr${s}">Team ${s}</label><select id="nr${s}" data-seat="${s}"></select></div>`).join('')}
-            </div>
-            <div class="row">
-              <div style="flex:1;min-width:120px;"><label for="nrLen">Match length</label>
-                <select id="nrLen"><option value="5">5 min</option><option value="10" selected>10 min</option><option value="15">15 min</option><option value="custom">Custom…</option></select></div>
-              <div style="flex:1;min-width:120px;" id="nrCustomBox" class="hidden"><label for="nrCustom">Minutes (1–60)</label><input id="nrCustom" type="number" min="1" max="60" value="10"></div>
-            </div>
-            <div><label for="nrLabel">Label (optional)</label><input id="nrLabel" maxlength="40" placeholder="e.g. Tonight 7 PM"></div>
-            <div id="nrError" class="warn-line hidden"></div>
-            <button type="submit" class="btn-primary">Create room</button>
-          </form>
-          <div id="nrCreated" class="hidden stack" style="margin-top:8px;"></div>
-        </details>
-        <div class="tabs" id="roomTabs" role="tablist" aria-label="Rooms"></div>
-        <div id="roomList" role="tabpanel"></div>
-        <nav class="pager hidden" id="roomPager" aria-label="Pages"></nav>`;
-
-      const $ = s => panel.querySelector(s);
-      // Room list tabs (feature #8): Active is never paged; Finished and Void remember their page.
-      const sel = { tab: 'active', page: { finished: 1, void: 1 } };
-      $('#nrLen').onchange = () => $('#nrCustomBox').classList.toggle('hidden', $('#nrLen').value !== 'custom');
-
-      // Players 2 · 3 · 4 (3-4 player rooms, 2026-11-03): one team select per seat; a team chosen in one
-      // seat is disabled in the others, and Match.createRoom refuses duplicates too.
-      let players = 2;
-      const visibleSeats = () => Match.ALL_SEATS.slice(0, players);
-      const seatSel = s => $('#nr' + s);
-
-      function syncTeamOptions() {
-        const chosen = visibleSeats().map(s => seatSel(s).value).filter(Boolean);
-        for (const s of Match.ALL_SEATS) {
-          const sel = seatSel(s);
-          for (const o of sel.options) o.disabled = !!o.value && o.value !== sel.value && chosen.includes(o.value);
-        }
-      }
-
-      function fillSelects() {
-        const ids = Object.keys(state.teams).sort((a, b) => state.teams[a].name.localeCompare(state.teams[b].name));
-        for (const s of Match.ALL_SEATS) {
-          const sel = seatSel(s);
-          const keep = sel.value;
-          sel.innerHTML = '<option value="">— choose —</option>' + ids.map(id => `<option value="${esc(id)}" title="${esc(state.teams[id].name)}">${esc(Names.short(state.teams[id].name))}</option>`).join('');
-          if (ids.includes(keep)) sel.value = keep;
-        }
-        syncTeamOptions();
-      }
-
-      $('#nrPlayers').onclick = ev => {
-        const b = ev.target.closest('[data-players]');
-        if (!b) return;
-        players = Number(b.dataset.players);
-        for (const x of panel.querySelectorAll('#nrPlayers [data-players]')) {
-          const on = Number(x.dataset.players) === players;
-          x.classList.toggle('on', on);
-          x.setAttribute('aria-checked', String(on));
-        }
-        for (const s of Match.ALL_SEATS) {
-          const show = visibleSeats().includes(s);
-          panel.querySelector(`[data-seat-box="${s}"]`).classList.toggle('hidden', !show);
-          if (!show) seatSel(s).value = '';
-        }
-        syncTeamOptions();
-      };
-      panel.querySelector('.nr-teams').onchange = syncTeamOptions;
-
-      $('#newRoom').onsubmit = async ev => {
-        ev.preventDefault();
-        const err = $('#nrError');
-        const seats = visibleSeats();
-        const ids = seats.map(s => seatSel(s).value);
-        const minutes = $('#nrLen').value === 'custom' ? Math.round(Number($('#nrCustom').value)) : Number($('#nrLen').value);
-        let msg = '';
-        if (ids.some(id => !id || !state.teams[id])) msg = players === 2 ? 'Choose both teams.' : 'Choose a team for every seat.';
-        else if (new Set(ids).size !== ids.length) msg = players === 2 ? 'Team A and Team B must be different.' : 'Each seat needs a different team.';
-        else if (!(minutes >= 1 && minutes <= 60)) msg = 'Match length must be 1–60 minutes.';
-        err.textContent = msg;
-        err.classList.toggle('hidden', !msg);
-        if (msg) return;
-        const opts = { label: cleanName($('#nrLabel').value), matchLengthSec: minutes * 60 };
-        if (players > 2) opts.players = players;
-        seats.forEach((s, i) => { opts['team' + s] = ids[i]; opts['team' + s + 'Name'] = state.teams[ids[i]].name; });
-        try {
-          const code = await Store.createRoom(opts);
-          const pretty = Match.formatCode(code);
-          const box = $('#nrCreated');
-          const names = ids.map(id => `<b class="nm">${esc(Names.short(state.teams[id].name))}</b>`).join(' vs ');
-          box.innerHTML = `<div class="small-text muted">Room created for ${names}. Share this code:</div>
-            <div class="code-big" id="nrCode">${esc(pretty)}</div>
-            <div class="row"><button type="button" class="btn-secondary small" id="nrCopy">⧉ Copy code</button><a class="rc-btn" href="#room=${esc(code)}">Open room ↗</a></div>`;
-          box.classList.remove('hidden');
-          $('#nrCopy').onclick = async () => {
-            try { await navigator.clipboard.writeText(pretty); UI.toast('Code copied.', 'ok'); }
-            catch (e) {
-              const range = document.createRange(); range.selectNodeContents($('#nrCode'));
-              const selObj = window.getSelection(); selObj.removeAllRanges(); selObj.addRange(range);
-              UI.toast('Press Ctrl+C to copy.');
-            }
-          };
-          $('#nrLabel').value = '';
-          sel.tab = 'active'; // the new room is waiting: show it
-          renderList();
-          UI.toast(`Room ${pretty} created.`, 'ok');
-        } catch (e) {
-          UI.toast(e.message || 'Could not create room.', 'error');
-        }
-      };
-
-      // A 3-4 player room's Walkover… / Correct result… picker stays open across the list's rebuilds.
-      const openPick = new Set(); // '<code>:walkover' | '<code>:correct', one per open picker
-      function picker(room, kind, label, seats) {
-        const key = room.code + ':' + kind;
-        const btns = seats.map(s => {
-          const n = teamName(state, room, s);
-          return `<button class="btn-secondary small nm-btn" data-${kind === 'walkover' ? 'walkover' : 'correct-to'}="${s}" data-code="${esc(room.code)}" title="+1 ${esc(n)}">+1 ${esc(n)}</button>`;
-        }).join('');
-        return `<details class="pick" data-pick="${esc(key)}"${openPick.has(key) ? ' open' : ''}><summary class="btn-secondary small">${esc(label)}</summary><div class="pick-list">${btns}</div></details>`;
-      }
-
-      // A room card (host room cards redesign, 2026-11-03, design "A"): teams + status, the room facts,
-      // then for a waiting or running room a Player List and a Seat Overview (RoomList.seatRows / seatTags),
-      // then the actions in one fixed order. Finished and void rooms stay compact: the result line only.
-      function playersHtml(room, phase) {
-        const rows = RoomList.seatRows(room);
-        const taken = rows.filter(r => r.taken).length;
-        const showScore = PLAYING.includes(phase);
-        const list = rows.map(r => {
-          const team = teamName(state, room, r.seat);
-          const full = r.taken ? r.name : '';
-          const tags = RoomList.seatTags(r, phase).map(t => `<span class="rc-tag ${t.kind}">${esc(t.text)}</span>`).join('');
-          return `<div class="rc-row${r.out ? ' gone' : ''}" data-seat="${r.seat}">
-            <span class="rc-num s-${r.seat.toLowerCase()}" aria-label="Seat ${r.num}">${r.num}</span>
-            <span class="rc-who"><span class="rc-name${r.taken ? '' : ' empty'}"${r.taken ? ` title="${esc(full)}"` : ''}>${r.taken ? esc(Names.short(full)) : 'Empty'}</span><span class="rc-team" title="${esc(team)}">${esc(team)}</span></span>
-            <span class="rc-tags">${tags}</span>
-            ${showScore ? `<span class="rc-score" aria-label="Score">${r.score === null ? '' : r.score}</span>` : ''}
-          </div>`;
-        }).join('');
-        const tiles = rows.map(r => {
-          const cls = !r.taken ? '' : r.out ? ' gone' : ' taken';
-          return `<div class="rc-seat${cls}" data-seat="${r.seat}"><span class="rc-seat-n">🪑 ${r.num}</span>
-            <span class="rc-seat-who${r.taken ? '' : ' empty'}"${r.taken ? ` title="${esc(r.name)}"` : ''}>${r.taken ? esc(Names.short(r.name)) : 'Empty'}</span>
-            <span class="rc-seat-sub">${r.out ? (r.out === 'left' ? 'LEFT' : 'OUT') : esc(teamName(state, room, r.seat))}</span></div>`;
-        }).join('');
-        return `<div class="rc-body">
-          <section class="rc-players" aria-label="Players"><h4>👥 Players (${taken}/${rows.length})</h4>${list}</section>
-          <section class="rc-overview" aria-label="Seat overview"><h4>🪑 Seat overview</h4><div class="rc-seats n${rows.length}">${tiles}</div></section>
-        </div>`;
-      }
-
-      // a finished or void card has no player list: its screen-leave counts stay visible for the host's call
-      function fairLine(room) {
-        if (room.status !== 'final' && room.status !== 'void') return '';
-        const who = RoomList.fairPlayLine(room);
-        if (!who.length) return '';
-        return `<div class="rc-fair">⚠️ Left the screen: ${who.map(p => `<span class="nm" title="${esc(p.name)}">${esc(Names.short(p.name))}</span> ${p.leaves}×`).join(' · ')}</div>`;
-      }
-
-      function cardHtml(room) {
-        const phase = Match.roomPhase(room);
-        const seats = Match.seatsOf(room);
-        const multi = seats.length > 2;
-        const nameA = teamName(state, room, 'A'), nameB = teamName(state, room, 'B');
-        const seatsTaken = seats.filter(s => room.seats[s]).length;
-        const live = PLAYING.includes(phase);
-        const code = esc(room.code);
-        let status = '';
-        if (room.status === 'final' && room.result) {
-          const winName = teamName(state, room, room.result.winner);
-          const note = room.result.note ? ': ' + esc(room.result.note) : '';
-          const why = room.result.reason !== 'time' ? ` <span class="rc-why">(${esc(REASON_TEXT[room.result.reason] || room.result.reason)}${note})</span>` : '';
-          const scores = seats.map(s => Number(room.result['score' + s]) || 0).join('–');
-          status = `<div class="rc-result">🏆 +1 <span class="nm" title="${esc(winName)}">${esc(winName)}</span> · ${scores}${why}</div>`;
-        }
-        // actions, always in this order: Open room · Pin | Walkover / Correct result | Void (on the right)
-        const lead = [`<a class="rc-btn" href="#room=${code}">Open room ↗</a>`];
-        if (room.status === 'waiting' || live) {
-          const pinned = state.pinned === room.code;
-          lead.push(`<button class="btn-secondary small" data-pin="${code}">${pinned ? '📌 Unpin' : '📌 Pin to big screen'}</button>`);
-        }
-        const decide = [];
-        if (room.status === 'waiting') {
-          if (multi) decide.push(picker(room, 'walkover', '⚖️ Walkover…', seats));
-          else {
-            decide.push(`<button class="btn-secondary small nm-btn" data-walkover="A" data-code="${code}" title="Walkover → ${esc(nameA)}">⚖️ Walkover → ${esc(nameA)}</button>`);
-            decide.push(`<button class="btn-secondary small nm-btn" data-walkover="B" data-code="${code}" title="Walkover → ${esc(nameB)}">⚖️ Walkover → ${esc(nameB)}</button>`);
-          }
-        } else if (room.status === 'final') {
-          if (multi && room.result) decide.push(picker(room, 'correct', '✎ Correct result…', seats.filter(s => s !== room.result.winner)));
-          else decide.push(`<button class="btn-secondary small" data-correct="${code}">✎ Correct result</button>`);
-        }
-        const canVoid = room.status === 'waiting' || room.status === 'final';
-        const actions = lead.join('') + (decide.length ? '<span class="rc-sep" aria-hidden="true"></span>' + decide.join('') : '')
-          + (canVoid ? `<button class="danger small rc-void" data-void="${code}">🗑 Void</button>` : '');
-        // the one team line (js/teamline.js): full names in, TeamLine shortens and escapes them
-        const lineup = TeamLine.html(seats.map(s => {
-          const id = Match.teamOf(room, s);
-          return { seat: s, name: (state.teams[id] && state.teams[id].name) || room['team' + s + 'Name'] || '?' };
-        }));
-        const n = seats.length;
-        const seatPill = seatsTaken === n ? 'full' : seatsTaken ? 'part' : 'none';
-        const clock = ['live', 'paused', 'appeal'].includes(phase) ? ` <span data-clock="${code}">${esc(clockText(room))}</span>` : '';
-        const alert = phase === 'appeal' ? '⚖️ Appeal pending: open the room to decide'
-          : phase === 'hostDecision' ? '⚖️ Still tied: open the room to award the win' : '';
-        return `<div class="room-card rc-${esc(phase)}" data-room="${code}">
-          <div class="rc-head">
-            <div class="meta rc-meta"><span>📍 <span class="code">${esc(Match.formatCode(room.code))}</span></span><span>⏱ ${Math.round(room.matchLengthSec / 60)} min</span>
-              <span>👥 Seats <span class="rc-pill ${seatPill}">${seatsTaken}/${n}</span></span>${room.label ? `<span class="rc-label" title="${esc(room.label)}">🏷 ${esc(room.label)}</span>` : ''}</div>
-            <span class="badge ${esc(phase)}">${esc(BADGE[phase] || phase)}${clock}</span>
-          </div>
-          ${lineup}
-          ${room.status === 'waiting' || live ? playersHtml(room, phase) : ''}
-          ${alert ? `<div class="rc-alert">${alert}</div>` : ''}
-          ${status}${room.status === 'void' && room.voidNote ? `<div class="rc-voidnote">Void: ${esc(room.voidNote)}</div>` : ''}
-          ${fairLine(room)}
-          <div class="actions rc-actions">${actions}</div>
-        </div>`;
-      }
-
-      const TAB_LABEL = { active: '▶ Active', finished: '✓ Finished', void: '🗑 Void' };
-      const TAB_EMPTY = { active: 'No active rooms. Create one above.', finished: 'No finished rooms yet.', void: 'No void rooms.' };
-
-      // Keyboard focus on a tab or a page button survives the rebuild that every room update causes.
-      function focusKey() {
-        const a = document.activeElement;
-        if (!a || !a.closest) return null;
-        if (a.closest('#roomTabs') && a.dataset.tab) return `[data-tab="${a.dataset.tab}"]`;
-        if (a.closest('#roomPager') && a.dataset.page) return a.getAttribute('aria-label') ? `[aria-label="${a.getAttribute('aria-label')}"]` : `[data-page="${a.dataset.page}"]:not([aria-label])`;
-        return null;
-      }
-
-      function renderList() {
-        const keep = focusKey();
-        const rooms = Object.values(state.rooms).sort((x, y) =>
-          (PHASE_ORDER[Match.roomPhase(x)] ?? 9) - (PHASE_ORDER[Match.roomPhase(y)] ?? 9) || (y.createdAt || 0) - (x.createdAt || 0));
-        const v = RoomList.view(rooms, { tab: sel.tab, page: sel.page[sel.tab] || 1 }, Match.roomPhase);
-        if (v.tab !== 'active') sel.page[v.tab] = v.page; // a page that emptied steps back
-        $('#roomTabs').innerHTML = Object.keys(TAB_LABEL).map(t =>
-          `<button type="button" class="tab${t === v.tab ? ' on' : ''}" role="tab" aria-selected="${t === v.tab}" aria-controls="roomList" tabindex="${t === v.tab ? 0 : -1}" data-tab="${t}">${TAB_LABEL[t]} (${v.counts[t]})${t === 'active' && v.counts.attention
-            ? ` <span class="tab-attn" title="Waiting for your decision">⚖️ ${v.counts.attention}</span>` : ''}</button>`).join('');
-        $('#roomList').innerHTML = v.items.length ? v.items.map(cardHtml).join('') : `<p class="muted small-text">${TAB_EMPTY[v.tab]}</p>`;
-        const pager = $('#roomPager');
-        pager.classList.toggle('hidden', v.pages <= 1);
-        pager.innerHTML = v.pages <= 1 ? '' : [
-          `<button type="button" data-page="${v.page - 1}" aria-label="Previous page" ${v.page === 1 ? 'disabled' : ''}>‹</button>`,
-          ...RoomList.pageList(v.page, v.pages).map(p => p === '…' ? '<span class="gap">…</span>'
-            : `<button type="button" data-page="${p}"${p === v.page ? ' class="on" aria-current="page"' : ''}>${p}</button>`),
-          `<button type="button" data-page="${v.page + 1}" aria-label="Next page" ${v.page === v.pages ? 'disabled' : ''}>›</button>`
-        ].join('');
-        if (keep) {
-          let el = document.querySelector('#roomTabs ' + keep) || document.querySelector('#roomPager ' + keep);
-          // Next / Previous at the last / first page is disabled now: focus the current page's button instead
-          if ((!el || el.disabled) && !keep.startsWith('[data-tab')) el = document.querySelector('#roomPager [aria-current="page"]');
-          if (el && !el.disabled) el.focus({ preventScroll: true });
-        }
-      }
-
-      // Arrow keys / Home / End move focus between the tabs; Enter or Space switches (manual activation).
-      $('#roomTabs').onkeydown = ev => {
-        const tabs = [...document.querySelectorAll('#roomTabs [role=tab]')];
-        const i = tabs.indexOf(document.activeElement);
-        if (i === -1) return;
-        const to = { ArrowRight: (i + 1) % tabs.length, ArrowLeft: (i - 1 + tabs.length) % tabs.length, Home: 0, End: tabs.length - 1 }[ev.key];
-        if (to === undefined) return;
-        ev.preventDefault();
-        tabs[to].focus();
-      };
-
-      $('#roomTabs').onclick = ev => {
-        const b = ev.target.closest('[data-tab]');
-        if (!b) return;
-        sel.tab = b.dataset.tab;
-        renderList();
-      };
-      $('#roomPager').onclick = ev => {
-        const b = ev.target.closest('[data-page]');
-        if (!b || b.disabled || sel.tab === 'active') return;
-        sel.page[sel.tab] = Number(b.dataset.page);
-        renderList();
-      };
-
-      $('#roomList').onclick = async ev => {
-        const sum = ev.target.closest('.pick > summary');
-        if (sum) { // remember which picker is open (the card list is rebuilt on every room update)
-          const key = sum.parentElement.dataset.pick;
-          if (sum.parentElement.open) openPick.delete(key); else openPick.add(key);
-          return;
-        }
-        const btn = ev.target.closest('button');
-        if (!btn) return;
-        const code = btn.dataset.code || btn.dataset.void || btn.dataset.correct || btn.dataset.pin;
-        const room = state.rooms[code];
-        if (!room) return;
-        if (btn.dataset.correctTo) {
-          const to = btn.dataset.correctTo;
-          const name = teamName(state, room, to);
-          const note = prompt('Reason for the correction (kept in the record):', '');
-          if (note === null || !confirm(`Give the win to ${name} instead?`)) return;
-          openPick.delete(code + ':correct');
-          const res = await Store.mutateRoom(code, r => Match.correctResult(r, Store.serverNow(), note, to));
-          UI.toast(res.committed ? `Result corrected: +1 ${name}.` : 'Could not correct the result.', res.committed ? 'ok' : 'error');
-        } else if (btn.dataset.pin) {
-          btn.disabled = true;
-          try {
-            await Store.setPinned(state.pinned === code ? null : code);
-          } catch (e) {
-            UI.toast('Could not update the big-screen pin.', 'error');
-          } finally {
-            btn.disabled = false;
-          }
-        } else if (btn.dataset.correct) {
-          const other = teamName(state, room, room.result.winner === 'A' ? 'B' : 'A');
-          const note = prompt('Reason for the correction (kept in the record):', '');
-          if (note === null || !confirm(`Give the win to ${other} instead?`)) return;
-          const res = await Store.mutateRoom(code, r => Match.correctResult(r, Store.serverNow(), note));
-          UI.toast(res.committed ? `Result corrected: +1 ${other}.` : 'Could not correct the result.', res.committed ? 'ok' : 'error');
-        } else if (btn.dataset.walkover) {
-          const seat = btn.dataset.walkover;
-          const name = teamName(state, room, seat);
-          if (!confirm(`Give ${name} a walkover win (+1)?`)) return;
-          openPick.delete(code + ':walkover');
-          const res = await Store.mutateRoom(code, r => Match.walkover(r, seat, Store.serverNow()));
-          UI.toast(res.committed ? `Walkover recorded: +1 ${name}.` : 'Could not record walkover (room changed).', res.committed ? 'ok' : 'error');
-        } else if (btn.dataset.void) {
-          const note = prompt('Reason for voiding (kept in the record):', '');
-          if (note === null || !confirm(`Void room ${Match.formatCode(code)}? It will count for no one.`)) return;
-          const res = await Store.mutateRoom(code, r => Match.voidRoom(r, Store.serverNow(), note));
-          UI.toast(res.committed ? 'Room voided.' : 'Could not void room.', res.committed ? 'ok' : 'error');
-        }
-      };
-
-      const tried = {};
-      App.onTick(() => {
-        panel.querySelectorAll('[data-clock]').forEach(span => {
-          const room = state.rooms[span.dataset.clock];
-          if (room) span.textContent = clockText(room);
-        });
-        // The host's browser is the primary recorder of time-up results (spec §7).
-        const now = Store.serverNow();
-        for (const room of Object.values(state.rooms)) {
-          if (room.status !== 'live' || !room.clock || room.clock.paused || (room.game && room.game.pending)) continue;
-          if (now < room.clock.endsAt) continue;
-          if (RoomRetry.due(tried, room.code + ':' + room.clock.endsAt)) {
-            Store.mutateRoom(room.code, r => Match.resolveTimeUp(r, Store.serverNow()));
-          }
-        }
-      });
-
-      return { render() { fillSelects(); renderList(); } };
-    }
+  const hms = ms => {
+    const s = Math.max(0, Math.ceil(ms / 1000)), h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60;
+    return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(x).padStart(2, '0');
   };
-  root.HostRooms = HostRooms;
+  const clockOf = t => new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  const agencyKey = a => String(a || '').trim().replace(/\s+/g, ' ').toLowerCase();
+
+  function ensureHostStyles() {
+    if (document.getElementById('hostDashStyle')) return;
+    const st = document.createElement('style');
+    st.id = 'hostDashStyle';
+    st.textContent = `
+      .hd-dash{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:14px;align-items:start}
+      .hd-dash .card{margin:0}
+      .hd-status{padding:10px 12px;border-radius:12px;background:color-mix(in srgb,currentColor 6%,transparent);display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+      .hd-status b.big{font-size:1.6rem;font-variant-numeric:tabular-nums}
+      .hd-chips{display:flex;flex-wrap:wrap;gap:6px}
+      .hd-chips button{padding:4px 10px;border-radius:99px}
+      .hd-chips button.on{outline:2px solid var(--accent,#2563eb)}
+      .hd-grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+      .hd-switch{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.92rem}
+      .hd-switch input{width:auto;margin:0}
+      .hd-counts{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;text-align:center}
+      .hd-counts div{padding:6px;border-radius:10px;background:color-mix(in srgb,currentColor 5%,transparent)}
+      .hd-counts b{display:block;font-size:1.2rem}.hd-counts span{font-size:.72rem;opacity:.7;text-transform:uppercase}
+      .hd-table-wrap{max-height:420px;overflow:auto;border-radius:10px;border:1px solid color-mix(in srgb,currentColor 12%,transparent)}
+      .hd-table{width:100%;border-collapse:collapse;font-size:.88rem}
+      .hd-table th,.hd-table td{padding:6px 8px;text-align:left;border-bottom:1px solid color-mix(in srgb,currentColor 8%,transparent);vertical-align:middle}
+      .hd-table th{position:sticky;top:0;background:var(--card,#fff);font-size:.75rem;text-transform:uppercase;letter-spacing:.04em;opacity:.85;z-index:1}
+      .hd-table td.num,.hd-table th.num{text-align:right;font-variant-numeric:tabular-nums}
+      .hd-table .code{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:700;letter-spacing:.06em;white-space:nowrap}
+      .hd-table tr.off td{opacity:.5}
+      .hd-act{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
+      .hd-act button{padding:3px 8px}
+      .hd-new{padding:10px;border-radius:10px;border:2px dashed var(--accent,#2563eb)}
+      .hd-new .code-list{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:700;letter-spacing:.06em;display:flex;flex-wrap:wrap;gap:6px 14px;max-height:160px;overflow:auto}
+      .hd-game{padding:10px;border-radius:12px;border:1px solid color-mix(in srgb,currentColor 12%,transparent);display:flex;flex-direction:column;gap:6px}
+      .hd-game + .hd-game{margin-top:8px}
+      .hd-vs{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center}
+      .hd-vs .p{min-width:0}.hd-vs .p b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+      .hd-vs .p small{display:block;opacity:.7;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+      .hd-vs .p.r{text-align:right}
+      .hd-vs .sc{font-size:1.3rem;font-weight:800;font-variant-numeric:tabular-nums;text-align:center;white-space:nowrap}
+      .hd-meta{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:.82rem;opacity:.85}
+      .hd-empty{opacity:.7;font-size:.9rem;padding:8px 0}
+      .hd-tag{display:inline-block;padding:1px 7px;border-radius:99px;font-size:.72rem;font-weight:700;background:color-mix(in srgb,currentColor 10%,transparent)}
+      .hd-tag.live{background:#16a34a;color:#fff}.hd-tag.q{background:#2563eb;color:#fff}.hd-tag.k{background:#c81e1e;color:#fff}.hd-tag.on{background:color-mix(in srgb,#16a34a 25%,transparent)}
+      .hd-tag.w{background:#f59e0b;color:#111}
+      .hd-search{margin-bottom:8px}`;
+    document.head.appendChild(st);
+  }
 
   function show(el) {
     if (!App.isHost()) return showLogin(el);
+    ensureHostStyles();
 
     el.innerHTML = `
-      <div class="spread" style="margin-bottom:12px;">
+      <div class="spread" style="margin-bottom:12px;flex-wrap:wrap;gap:8px;">
         <h2 style="margin:0;">⚙ Host dashboard</h2>
         <div class="row">
+          <button class="btn-secondary small" id="bigScreenBtn">📺 Big screen</button>
           <button class="btn-secondary small" id="lockBtn">🔒 Lock host</button>
           <button class="danger small" id="resetBtn">Reset tournament</button>
         </div>
       </div>
-      <div class="dash">
-        <section class="card">
-          <h3>1 · Teams</h3>
-          <div id="teamList"></div>
-          <form id="addTeam" class="row" style="margin-top:8px;">
-            <input id="teamName" maxlength="40" placeholder="Add team name…" style="flex:1;min-width:0;">
-            <button type="submit" class="btn-primary">Add</button>
+      <div class="hd-dash">
+        <section class="card stack" id="secTour">
+          <h3 style="margin:0;">1 · Tournament</h3>
+          <div class="hd-status" id="tourStatus"></div>
+          <div class="hd-grid2">
+            <div><label for="tourDur">Tournament length (minutes)</label><input id="tourDur" type="number" min="5" max="720" value="120"></div>
+            <div><label for="matchLen">Each game</label>
+              <select id="matchLen"><option value="5">5 min</option><option value="10">10 min</option><option value="15">15 min</option><option value="20">20 min</option><option value="custom">Custom…</option></select>
+              <input id="matchCustom" class="hidden" type="number" min="1" max="60" value="10" style="margin-top:6px;" aria-label="Minutes per game (1–60)"></div>
+          </div>
+          <div class="hd-chips" id="durChips">${DURATION_CHIPS.map(m => `<button type="button" class="btn-secondary small" data-dur="${m}">${m < 60 ? m + ' min' : (m / 60) + ' h'}</button>`).join('')}</div>
+          <div class="row" id="tourBtns"></div>
+          <label class="hd-switch"><input type="checkbox" id="reqCode"> Require an access code to join</label>
+          <label class="hd-switch"><input type="checkbox" id="lockReg"> Lock registration (only players who already joined can sign in)</label>
+          <div class="hd-counts" id="tourCounts"></div>
+          <p class="small-text muted" style="margin:0;">When the time runs out, no new games start. Games in progress finish normally.</p>
+        </section>
+
+        <section class="card stack" id="secCodes">
+          <h3 style="margin:0;">2 · Access codes</h3>
+          <form id="genForm" class="stack">
+            <div class="tabs" id="codeType" role="radiogroup" aria-label="Code type">
+              <button type="button" class="tab on" role="radio" aria-checked="true" data-type="individual">👤 Individual</button>
+              <button type="button" class="tab" role="radio" aria-checked="false" data-type="shared">👥 Shared</button>
+            </div>
+            <p class="small-text muted" style="margin:0;" id="codeTypeHelp"></p>
+            <div class="hd-grid2">
+              <div id="countBox"><label for="codeCount">How many</label><input id="codeCount" type="number" min="1" max="300" value="10"></div>
+              <div><label for="codeBatch">Batch label (optional)</label><input id="codeBatch" maxlength="30" placeholder="e.g. Region III"></div>
+            </div>
+            <button type="submit" class="btn-primary">Generate codes</button>
           </form>
+          <div id="newCodes"></div>
+          <div class="row" style="justify-content:space-between;">
+            <div class="tabs" id="codeFilter" role="tablist" aria-label="Show codes"></div>
+            <span class="row"><button class="btn-secondary small" id="copyUnused">⧉ Copy unused</button><button class="btn-secondary small" id="csvCodes">⬇ CSV</button></span>
+          </div>
+          <div class="hd-table-wrap"><table class="hd-table"><thead><tr><th>Code</th><th>Type</th><th>Used by</th><th></th></tr></thead><tbody id="codeRows"></tbody></table></div>
         </section>
-        <section class="card">
-          <h3>2 · Fixture rooms</h3>
-          <div id="roomsPanel"></div>
+
+        <section class="card stack" id="secGames">
+          <h3 style="margin:0;">3 · Live games &amp; players</h3>
+          <div class="tabs" id="gameTabs" role="tablist" aria-label="Games and players"></div>
+          <input id="playerSearch" class="hd-search hidden" placeholder="Search name or agency…" aria-label="Search players">
+          <div id="gameList"></div>
         </section>
-        <section class="card">
-          <h3>3 · Standings</h3>
-          <div id="standings"></div>
-          <button class="btn-secondary small" id="bigScreenBtn" style="margin-top:10px;width:100%;">📺 Open big-screen view</button>
+
+        <section class="card stack" id="secStand">
+          <h3 style="margin:0;">4 · Standings</h3>
+          <div class="tabs" id="standTabs" role="tablist" aria-label="Standings">
+            <button type="button" class="tab on" data-stand="player">By player</button>
+            <button type="button" class="tab" data-stand="agency">By agency</button>
+          </div>
+          <div class="hd-table-wrap" id="standBox"></div>
+          <p class="small-text muted" style="margin:0;">Win 1 · Draw ½ · Loss 0. Ties: more wins first. Agencies are grouped by name as typed (capitals and extra spaces ignored).</p>
         </section>
       </div>`;
 
-    const state = { teams: {}, rooms: {}, pinned: null };
-    const ctx = { el, state };
+    const $ = s => el.querySelector(s);
+    const state = { rooms: {}, players: {}, codes: {}, tour: null, settings: {}, lobby: {}, pinned: null };
+    const sel = { codeType: 'individual', codeFilter: 'all', gameTab: 'live', stand: 'player', search: '', lastBatch: [] };
 
-    function renderTeams() {
-      const list = el.querySelector('#teamList');
-      const ids = Object.keys(state.teams).sort((a, b) => state.teams[a].name.localeCompare(state.teams[b].name));
-      if (!ids.length) { list.innerHTML = '<p class="muted small-text">Add the teams taking part.</p>'; return; }
-      const used = new Set();
-      for (const r of Object.values(state.rooms)) for (const s of Match.seatsOf(r)) used.add(Match.teamOf(r, s));
-      list.innerHTML = ids.map(id => `
-        <div class="list-item">
-          <span class="name" title="${esc(state.teams[id].name)}">${esc(Names.short(state.teams[id].name))}</span>
-          <span class="row">
-            <button class="btn-secondary small" data-rename="${esc(id)}">Rename</button>
-            ${used.has(id) ? '' : `<button class="danger small" data-delete="${esc(id)}" title="Delete">✕</button>`}
-          </span>
-        </div>`).join('');
+    // ---------- 1 · Tournament ----------
+    function matchMinutes() {
+      const v = $('#matchLen').value;
+      return v === 'custom' ? Math.round(Number($('#matchCustom').value)) : Number(v);
+    }
+    let settingsSynced = false;
+    function syncSettingsInputs() {
+      const s = state.settings;
+      $('#reqCode').checked = !!s.requireCode;
+      $('#lockReg').checked = !!s.lockRegistration;
+      if (!settingsSynced || document.activeElement !== $('#matchCustom')) {
+        const m = Number(s.matchMin) || 10;
+        if ([5, 10, 15, 20].includes(m)) { $('#matchLen').value = String(m); $('#matchCustom').classList.add('hidden'); }
+        else { $('#matchLen').value = 'custom'; $('#matchCustom').value = m; $('#matchCustom').classList.remove('hidden'); }
+      }
+      settingsSynced = true;
+    }
+    $('#matchLen').onchange = () => {
+      $('#matchCustom').classList.toggle('hidden', $('#matchLen').value !== 'custom');
+      saveMatchLen();
+    };
+    $('#matchCustom').onchange = saveMatchLen;
+    function saveMatchLen() {
+      const m = matchMinutes();
+      if (!(m >= 1 && m <= 60)) return UI.toast('Each game must be 1–60 minutes.', 'error');
+      Store.updateSettings({ matchMin: m }).then(() => UI.toast(`New games will be ${m} minutes.`, 'ok'));
+    }
+    $('#reqCode').onchange = () => Store.updateSettings({ requireCode: $('#reqCode').checked });
+    $('#lockReg').onchange = () => Store.updateSettings({ lockRegistration: $('#lockReg').checked });
+    $('#durChips').onclick = ev => {
+      const b = ev.target.closest('[data-dur]');
+      if (!b) return;
+      $('#tourDur').value = b.dataset.dur;
+      markChips();
+    };
+    $('#tourDur').oninput = markChips;
+    function markChips() {
+      const v = Number($('#tourDur').value);
+      el.querySelectorAll('#durChips [data-dur]').forEach(b => b.classList.toggle('on', Number(b.dataset.dur) === v));
+    }
+    markChips();
+
+    function tourPhase(now) {
+      const t = state.tour;
+      if (!t || !t.status) return 'idle';
+      if (t.status === 'ended' || now >= (t.endsAt || 0)) return 'ended';
+      return 'running';
     }
 
-    function isDuplicate(name, exceptId) {
-      const n = name.toLowerCase();
-      return Object.keys(state.teams).some(id => id !== exceptId && state.teams[id].name.toLowerCase() === n);
+    function renderTour() {
+      const now = Store.serverNow();
+      const t = state.tour;
+      const phase = tourPhase(now);
+      const status = $('#tourStatus');
+      let html;
+      if (phase === 'running') html = `<span>🟢 <b>Running</b> · ends at ${esc(clockOf(t.endsAt))}</span><b class="big" id="tourLeft">${hms(t.endsAt - now)}</b>`;
+      else if (phase === 'ended') html = `<span>🏁 <b>Ended</b>${t && t.endsAt ? ' at ' + esc(clockOf(Math.min(t.endsAt, t.endedAt || t.endsAt))) : ''}. No new games start.</span>`;
+      else html = '<span>⏳ <b>Not started.</b> Players can sign in, but Find opponent opens when you start.</span>';
+      if (status.dataset.html !== html) { status.innerHTML = html; status.dataset.html = html; }
+      const btns = phase === 'running'
+        ? `<button class="btn-secondary" data-tour="extend">＋15 min</button><button class="danger" data-tour="end">■ End now</button>`
+        : `<button class="btn-go" data-tour="start">▶ ${phase === 'ended' ? 'Start again' : 'Start tournament'}</button>`;
+      const box = $('#tourBtns');
+      if (box.dataset.html !== btns) { box.innerHTML = btns; box.dataset.html = btns; }
     }
-
-    el.querySelector('#teamList').onclick = async ev => {
-      const renameId = ev.target.dataset.rename;
-      const deleteId = ev.target.dataset.delete;
-      if (renameId) {
-        const name = cleanName(prompt('New team name:', state.teams[renameId].name));
-        if (!name) return;
-        if (isDuplicate(name, renameId)) return UI.toast('A team with that name already exists.', 'error');
-        await Store.renameTeam(renameId, name);
-      } else if (deleteId) {
-        if (!confirm(`Delete team "${state.teams[deleteId].name}"?`)) return;
-        await Store.deleteTeam(deleteId);
+    $('#tourBtns').onclick = async ev => {
+      const b = ev.target.closest('[data-tour]');
+      if (!b) return;
+      const now = Store.serverNow();
+      const act = b.dataset.tour;
+      if (act === 'start') {
+        const dur = Math.round(Number($('#tourDur').value));
+        if (!(dur >= 5 && dur <= 720)) return UI.toast('Tournament length must be 5–720 minutes.', 'error');
+        const m = matchMinutes();
+        if (!(m >= 1 && m <= 60)) return UI.toast('Each game must be 1–60 minutes.', 'error');
+        if (!confirm(`Start the tournament for ${dur} minutes (${m}-minute games)? Results so far are kept.`)) return;
+        await Store.updateSettings({ matchMin: m });
+        await Store.setTournament({ status: 'running', startedAt: now, endsAt: now + dur * 60000, durationMin: dur, matchMin: m });
+        UI.toast('Tournament started. Players can now Find opponent.', 'ok');
+      } else if (act === 'extend') {
+        await Store.updateTournament({ endsAt: (state.tour.endsAt || now) + 15 * 60000, durationMin: (state.tour.durationMin || 0) + 15 });
+        UI.toast('Added 15 minutes.', 'ok');
+      } else if (act === 'end') {
+        if (!confirm('End the tournament now? No new games will start; games in progress finish.')) return;
+        await Store.updateTournament({ status: 'ended', endedAt: now, endsAt: Math.min(state.tour.endsAt || now, now) });
+        UI.toast('Tournament ended.', 'ok');
       }
     };
 
-    el.querySelector('#addTeam').onsubmit = async ev => {
-      ev.preventDefault();
-      const input = el.querySelector('#teamName');
-      const name = cleanName(input.value);
-      if (!name) return;
-      if (isDuplicate(name)) return UI.toast('A team with that name already exists.', 'error');
-      input.value = '';
-      await Store.addTeam(name);
-    };
-
-    function renderStandings() {
-      UI.renderStandings(el.querySelector('#standings'), Match.computeStandings(state.teams, state.rooms));
+    function renderCounts() {
+      const players = Object.values(state.players).filter(p => p && p.name);
+      const online = players.filter(p => p.online && !p.kicked).length;
+      const queue = Object.keys((state.lobby && state.lobby.queue) || {}).length;
+      const live = Object.values(state.rooms).filter(r => PLAYING.includes(r.status)).length;
+      const html = `<div><b>${online}/${players.length}</b><span>Online</span></div><div><b>${queue}</b><span>Searching</span></div><div><b>${live}</b><span>Live games</span></div>`;
+      const box = $('#tourCounts');
+      if (box.innerHTML !== html) box.innerHTML = html;
     }
 
-    el.querySelector('#lockBtn').onclick = () => { App.setHost(false); App.route(); };
-    el.querySelector('#bigScreenBtn').onclick = () => window.open(location.pathname + '?view=scoreboard', '_blank');
-    el.querySelector('#resetBtn').onclick = async () => {
-      const typed = prompt('This deletes ALL teams, rooms and results.\nType RESET to confirm.');
+    // ---------- 2 · Access codes ----------
+    const TYPE_HELP = {
+      individual: 'One code per player. The first person to sign in with it owns it; the same code signs them in again on any device.',
+      shared: 'One code for everyone: hand it out once. Players are told apart by name + agency.'
+    };
+    function syncCodeType() {
+      el.querySelectorAll('#codeType [data-type]').forEach(b => {
+        const on = b.dataset.type === sel.codeType;
+        b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on));
+      });
+      $('#codeTypeHelp').textContent = TYPE_HELP[sel.codeType];
+      $('#countBox').classList.toggle('hidden', sel.codeType === 'shared');
+    }
+    $('#codeType').onclick = ev => {
+      const b = ev.target.closest('[data-type]');
+      if (!b) return;
+      sel.codeType = b.dataset.type;
+      syncCodeType();
+    };
+    syncCodeType();
+
+    $('#genForm').onsubmit = async ev => {
+      ev.preventDefault();
+      const type = sel.codeType;
+      const n = type === 'shared' ? 1 : Math.round(Number($('#codeCount').value));
+      if (!(n >= 1 && n <= 300)) return UI.toast('Generate 1–300 codes at a time.', 'error');
+      const batch = String($('#codeBatch').value || '').trim().slice(0, 30);
+      const now = Store.serverNow();
+      const map = {};
+      const made = [];
+      let guard = 0;
+      while (made.length < n && guard++ < n * 20) {
+        const c = Match.generateAccessCode();
+        if (state.codes[c] || map[c]) continue;
+        map[c] = { type, batch: batch || null, createdAt: now };
+        made.push(c);
+      }
+      try {
+        await Store.addAccessCodes(map);
+      } catch (e) {
+        return UI.toast('Could not save the codes.', 'error');
+      }
+      sel.lastBatch = made;
+      renderNewCodes(type);
+      UI.toast(`${made.length} ${type} code${made.length > 1 ? 's' : ''} created.`, 'ok');
+    };
+
+    function renderNewCodes(type) {
+      const box = $('#newCodes');
+      if (!sel.lastBatch.length) { box.innerHTML = ''; return; }
+      const pretty = sel.lastBatch.map(Match.formatAccessCode);
+      box.innerHTML = `<div class="hd-new stack">
+        <div class="small-text"><b>New ${type} code${pretty.length > 1 ? 's' : ''}</b>${type === 'shared' ? ': give this one code to everyone.' : ': one per player.'}</div>
+        ${type === 'shared' ? `<div class="code-big">${esc(pretty[0])}</div>` : `<div class="code-list">${pretty.map(c => `<span>${esc(c)}</span>`).join('')}</div>`}
+        <div class="row"><button class="btn-secondary small" id="copyNew">⧉ Copy</button><button class="btn-secondary small" id="hideNew">Done</button></div></div>`;
+      box.querySelector('#copyNew').onclick = () => copyText(pretty.join('\n'));
+      box.querySelector('#hideNew').onclick = () => { sel.lastBatch = []; box.innerHTML = ''; };
+    }
+
+    async function copyText(text) {
+      try { await navigator.clipboard.writeText(text); UI.toast('Copied.', 'ok'); }
+      catch (e) { prompt('Copy these:', text); }
+    }
+
+    // players per code (shared codes: everyone who signed in with it)
+    function usersOf(code) { return Object.entries(state.players).filter(([, p]) => p && p.code === code); }
+    function codeStatus(code, c) {
+      if (c.revoked) return 'disabled';
+      if (c.type === 'individual') return c.pid ? 'used' : 'unused';
+      return usersOf(code).length ? 'used' : 'unused';
+    }
+    function codeList() {
+      return Object.entries(state.codes).filter(([, c]) => c && c.type)
+        .sort(([a, x], [b, y]) => (y.createdAt || 0) - (x.createdAt || 0) || a.localeCompare(b));
+    }
+    function renderCodes() {
+      const list = codeList();
+      const counts = { all: list.length, unused: 0, used: 0, disabled: 0 };
+      for (const [code, c] of list) counts[codeStatus(code, c)] += 1;
+      const tabs = ['all', 'unused', 'used', 'disabled'].map(f => `<button type="button" class="tab${sel.codeFilter === f ? ' on' : ''}" data-filter="${f}">${f[0].toUpperCase() + f.slice(1)} (${counts[f]})</button>`).join('');
+      if ($('#codeFilter').innerHTML !== tabs) $('#codeFilter').innerHTML = tabs;
+      const shown = list.filter(([code, c]) => sel.codeFilter === 'all' || codeStatus(code, c) === sel.codeFilter);
+      const rows = shown.length ? shown.map(([code, c]) => {
+        const st = codeStatus(code, c);
+        let who = '<span class="muted">—</span>';
+        if (c.type === 'individual' && c.pid) who = `<b>${esc(short(c.name || ''))}</b><br><small class="muted">${esc(c.agency || '')}</small>`;
+        if (c.type === 'shared') { const n = usersOf(code).length; who = n ? `${n} player${n > 1 ? 's' : ''}` : who; }
+        return `<tr class="${st === 'disabled' ? 'off' : ''}">
+          <td><span class="code">${esc(Match.formatAccessCode(code))}</span>${c.batch ? `<br><small class="muted">${esc(c.batch)}</small>` : ''}</td>
+          <td>${c.type === 'shared' ? '👥 Shared' : '👤 Individual'}${st === 'disabled' ? ' <span class="hd-tag k">Disabled</span>' : ''}</td>
+          <td>${who}</td>
+          <td><div class="hd-act">
+            <button class="btn-secondary small" data-copy="${code}" title="Copy">⧉</button>
+            <button class="btn-secondary small" data-revoke="${code}">${c.revoked ? 'Enable' : 'Disable'}</button>
+            ${st === 'unused' ? `<button class="danger small" data-del="${code}" title="Delete">✕</button>` : ''}
+          </div></td></tr>`;
+      }).join('') : `<tr><td colspan="4" class="hd-empty">${list.length ? 'No codes here.' : 'No codes yet. Generate some above.'}</td></tr>`;
+      const body = $('#codeRows');
+      if (body.dataset.html !== rows) { body.innerHTML = rows; body.dataset.html = rows; }
+    }
+    $('#codeFilter').onclick = ev => {
+      const b = ev.target.closest('[data-filter]');
+      if (!b) return;
+      sel.codeFilter = b.dataset.filter;
+      renderCodes();
+    };
+    $('#codeRows').onclick = async ev => {
+      const b = ev.target.closest('button');
+      if (!b) return;
+      if (b.dataset.copy) return copyText(Match.formatAccessCode(b.dataset.copy));
+      if (b.dataset.revoke) {
+        const code = b.dataset.revoke, c = state.codes[code];
+        if (!c) return;
+        if (!c.revoked && !confirm(`Disable ${Match.formatAccessCode(code)}? Nobody new can sign in with it. Players already signed in stay.`)) return;
+        await Store.setCodeRevoked(code, !c.revoked);
+      }
+      if (b.dataset.del) {
+        if (!confirm(`Delete unused code ${Match.formatAccessCode(b.dataset.del)}?`)) return;
+        await Store.deleteAccessCode(b.dataset.del);
+      }
+    };
+    $('#copyUnused').onclick = () => {
+      const unused = codeList().filter(([code, c]) => codeStatus(code, c) === 'unused').map(([code]) => Match.formatAccessCode(code));
+      if (!unused.length) return UI.toast('No unused codes.', 'error');
+      copyText(unused.join('\n'));
+    };
+    $('#csvCodes').onclick = () => {
+      const q = v => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
+      const lines = [['Code', 'Type', 'Batch', 'Status', 'Player', 'Agency', 'Players using it'].map(q).join(',')];
+      for (const [code, c] of codeList()) {
+        lines.push([Match.formatAccessCode(code), c.type, c.batch || '', codeStatus(code, c), c.name || '', c.agency || '', c.type === 'shared' ? usersOf(code).length : ''].map(q).join(','));
+      }
+      const blob = new Blob([lines.join('\r\n')], { type: 'text/csv' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'scrabble-access-codes.csv';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    };
+
+    // ---------- 3 · Live games & players ----------
+    const seatName = (r, s) => (r.seats[s] ? r.seats[s].name : Match.teamNameOf(r, s));
+    const seatAgency = (r, s) => r['agency' + s] || (r.seats[s] && r.seats[s].agency) || '';
+    function standingsList() { return Match.computeStandings(teamsMap(), state.rooms); }
+    function teamsMap() {
+      const out = {};
+      for (const [pid, p] of Object.entries(state.players)) if (p && p.name) out[pid] = { name: p.name };
+      return out;
+    }
+    function liveRoomOf(pid) {
+      return Object.values(state.rooms).find(r => PLAYING.includes(r.status) && Match.seatOfPid(r, pid)) || null;
+    }
+
+    function gameClock(r) {
+      if (r.status === 'suddenDeath') return 'Sudden death';
+      if (!r.clock) return '';
+      const ms = r.clock.paused ? r.clock.paused.matchRemainingMs : r.clock.endsAt - Store.serverNow();
+      return UI.formatClock(ms);
+    }
+
+    function gameCard(r) {
+      const seats = Match.seatsOf(r);
+      const live = PLAYING.includes(r.status);
+      const sc = (r.status === 'final' && r.result) ? s => Number(r.result['score' + s]) || 0 : s => (r.game && r.game.scores[s]) || 0;
+      const side = (s, right) => {
+        const tags = [];
+        if (live && r.seats[s] && !Match.isSeatOnline(r, s)) tags.push('<span class="hd-tag w">📴 offline</span>');
+        if (r.fairPlay[s] && r.fairPlay[s].screenLeaves) tags.push(`<span class="hd-tag w">⚠️ left screen ${r.fairPlay[s].screenLeaves}×</span>`);
+        if (r.status === 'final' && r.result && r.result.winner === s) tags.push('<span class="hd-tag live">🏆 Win</span>');
+        return `<div class="p${right ? ' r' : ''}"><b title="${esc(seatName(r, s))}">${esc(short(seatName(r, s)))}</b><small title="${esc(seatAgency(r, s))}">${esc(seatAgency(r, s))}</small>${tags.join(' ')}</div>`;
+      };
+      const vs = seats.length === 2
+        ? `<div class="hd-vs">${side('A')}<div class="sc">${sc('A')}–${sc('B')}</div>${side('B', true)}</div>`
+        : seats.map(s => `<div class="hd-vs">${side(s)}<div class="sc">${sc(s)}</div><div></div></div>`).join('');
+      let meta = '';
+      if (live) meta = `<span>⏱ <b data-gclock="${esc(r.code)}">${esc(gameClock(r))}</b></span><span>Move ${(r.game && r.game.moveCount) || 0}${r.game ? ' · bag ' + r.game.bag.length : ''}</span>`;
+      else if (r.status === 'final' && r.result) {
+        const why = REASON_TEXT[r.result.reason] || r.result.reason;
+        meta = `<span>${r.result.winner ? '🏆 ' + esc(short(seatName(r, r.result.winner))) : '🤝 Draw'} · ${esc(why)}${r.result.note ? ': ' + esc(r.result.note) : ''}</span><span>${r.result.decidedAt ? esc(clockOf(r.result.decidedAt)) : ''}</span>`;
+      } else if (r.status === 'void') meta = `<span>🗑 Void${r.voidNote ? ': ' + esc(r.voidNote) : ''}</span>`;
+      const pinned = state.pinned === r.code;
+      const acts = [`<a class="rc-btn" href="#room=${esc(r.code)}" target="_blank" rel="noopener">👁️ Watch ↗</a>`];
+      if (live) acts.push(`<button class="btn-secondary small" data-pin="${esc(r.code)}">${pinned ? '📌 Unpin' : '📌 Pin'}</button>`);
+      if (r.status === 'final') acts.push(`<button class="btn-secondary small" data-correct="${esc(r.code)}">✎ Correct result</button>`);
+      if (r.status !== 'void') acts.push(`<button class="danger small" data-void="${esc(r.code)}">🗑 Void</button>`);
+      return `<div class="hd-game">${vs}<div class="hd-meta">${meta}</div><div class="hd-act" style="justify-content:flex-start;">${acts.join('')}</div></div>`;
+    }
+
+    function playerRows() {
+      const st = {};
+      for (const row of standingsList()) st[row.teamId] = row;
+      const q = sel.search.trim().toLowerCase();
+      const queue = (state.lobby && state.lobby.queue) || {};
+      const list = Object.entries(state.players).filter(([, p]) => p && p.name)
+        .filter(([, p]) => !q || p.name.toLowerCase().includes(q) || String(p.agency || '').toLowerCase().includes(q))
+        .sort(([, a], [, b]) => (!!a.kicked - !!b.kicked) || a.name.localeCompare(b.name));
+      if (!list.length) return `<p class="hd-empty">${Object.keys(state.players).length ? 'No player matches.' : 'No players yet. They appear here when they sign in.'}</p>`;
+      return `<div class="hd-table-wrap"><table class="hd-table"><thead><tr><th>Player</th><th>Status</th><th class="num">W-D-L</th><th class="num">Pts</th><th></th></tr></thead><tbody>${list.map(([pid, p]) => {
+        const s = st[pid] || { wins: 0, draws: 0, losses: 0, points: 0 };
+        const live = liveRoomOf(pid);
+        let tag;
+        if (p.kicked) tag = '<span class="hd-tag k">Kicked</span>';
+        else if (live) tag = `<a class="hd-tag live" href="#room=${esc(live.code)}" target="_blank" rel="noopener" style="text-decoration:none;">In game ↗</a>`;
+        else if (queue[pid]) tag = '<span class="hd-tag q">Searching</span>';
+        else if (p.online) tag = '<span class="hd-tag on">Online</span>';
+        else tag = '<span class="hd-tag">Offline</span>';
+        const code = p.code ? `<small class="muted code">${esc(Match.formatAccessCode(p.code))}</small>` : '';
+        return `<tr class="${p.kicked ? 'off' : ''}"><td><b title="${esc(p.name)}">${esc(short(p.name))}</b><br><small class="muted">${esc(p.agency || '')}</small> ${code}</td>
+          <td>${tag}</td><td class="num">${s.wins}-${s.draws}-${s.losses}</td><td class="num"><b>${s.points}</b></td>
+          <td><div class="hd-act">${p.kicked ? `<button class="btn-secondary small" data-allow="${esc(pid)}">Allow back</button>` : `<button class="danger small" data-kick="${esc(pid)}">Kick</button>`}</div></td></tr>`;
+      }).join('')}</tbody></table></div>`;
+    }
+
+    function renderGames() {
+      const rooms = Object.values(state.rooms);
+      const live = rooms.filter(r => PLAYING.includes(r.status)).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      const done = rooms.filter(r => r.status === 'final' || r.status === 'void')
+        .sort((a, b) => ((b.result && b.result.decidedAt) || b.voidedAt || b.createdAt || 0) - ((a.result && a.result.decidedAt) || a.voidedAt || a.createdAt || 0));
+      const nPlayers = Object.values(state.players).filter(p => p && p.name).length;
+      const tabs = [['live', `● Live (${live.length})`], ['finished', `✓ Finished (${done.length})`], ['players', `👥 Players (${nPlayers})`]]
+        .map(([k, t]) => `<button type="button" class="tab${sel.gameTab === k ? ' on' : ''}" role="tab" aria-selected="${sel.gameTab === k}" data-gtab="${k}">${t}</button>`).join('');
+      if ($('#gameTabs').innerHTML !== tabs) $('#gameTabs').innerHTML = tabs;
+      $('#playerSearch').classList.toggle('hidden', sel.gameTab !== 'players');
+      let html;
+      if (sel.gameTab === 'live') html = live.length ? live.map(gameCard).join('') : '<p class="hd-empty">No games right now. Games start by themselves when two players accept a match.</p>';
+      else if (sel.gameTab === 'finished') html = done.length ? done.slice(0, 100).map(gameCard).join('') : '<p class="hd-empty">No finished games yet.</p>';
+      else html = playerRows();
+      const box = $('#gameList');
+      if (box.dataset.html !== html) {
+        const scroll = box.querySelector('.hd-table-wrap') ? box.querySelector('.hd-table-wrap').scrollTop : 0;
+        box.innerHTML = html; box.dataset.html = html;
+        const wrap = box.querySelector('.hd-table-wrap');
+        if (wrap) wrap.scrollTop = scroll;
+      }
+    }
+    $('#gameTabs').onclick = ev => {
+      const b = ev.target.closest('[data-gtab]');
+      if (!b) return;
+      sel.gameTab = b.dataset.gtab;
+      renderGames();
+    };
+    $('#playerSearch').oninput = () => { sel.search = $('#playerSearch').value; renderGames(); };
+
+    $('#gameList').onclick = async ev => {
+      const b = ev.target.closest('button');
+      if (!b) return;
+      if (b.dataset.pin) {
+        b.disabled = true;
+        try { await Store.setPinned(state.pinned === b.dataset.pin ? null : b.dataset.pin); }
+        catch (e) { UI.toast('Could not update the big-screen pin.', 'error'); }
+        finally { b.disabled = false; }
+        return;
+      }
+      if (b.dataset.void) {
+        const code = b.dataset.void;
+        const note = prompt('Reason for voiding (kept in the record):', '');
+        if (note === null || !confirm('Void this game? It will count for no one.')) return;
+        const res = await Store.mutateRoom(code, r => Match.voidRoom(r, Store.serverNow(), note));
+        UI.toast(res.committed ? 'Game voided.' : 'Could not void the game.', res.committed ? 'ok' : 'error');
+        return;
+      }
+      if (b.dataset.correct) {
+        const code = b.dataset.correct;
+        const r = state.rooms[code];
+        if (!r || !r.result) return;
+        const seats = Match.seatsOf(r).filter(s => s !== r.result.winner);
+        let to = seats[0];
+        if (seats.length > 1) {
+          const pick = prompt(`Give the win to which player?\n${seats.map((s, i) => `${i + 1} = ${seatName(r, s)}`).join('\n')}`, '1');
+          if (pick === null) return;
+          to = seats[Number(pick) - 1];
+          if (!to) return UI.toast('No such player.', 'error');
+        }
+        const note = prompt('Reason for the correction (kept in the record):', '');
+        if (note === null || !confirm(`Give the win to ${seatName(r, to)} instead?`)) return;
+        const res = await Store.mutateRoom(code, x => Match.correctResult(x, Store.serverNow(), note, to));
+        UI.toast(res.committed ? `Result corrected: +1 ${seatName(r, to)}.` : 'Could not correct the result.', res.committed ? 'ok' : 'error');
+        return;
+      }
+      if (b.dataset.kick) {
+        const pid = b.dataset.kick, p = state.players[pid];
+        if (!p) return;
+        const reason = prompt(`Kick ${p.name}? They are signed out and cannot sign in again until you allow them back.\nReason (shown to them, optional):`, '');
+        if (reason === null) return;
+        await Store.setKicked(pid, true, reason);
+        await Store.mutateLobby(raw => Match.lobbyLeave(raw, pid));
+        const live = liveRoomOf(pid);
+        if (live && confirm(`${p.name} is in a game. End it now as a loss for them?`)) {
+          const seat = Match.seatOfPid(live, pid);
+          await Store.mutateRoom(live.code, r => Match.resign(r, seat, Store.serverNow()));
+        }
+        UI.toast(`${p.name} was kicked.`, 'ok');
+        return;
+      }
+      if (b.dataset.allow) {
+        const p = state.players[b.dataset.allow];
+        await Store.setKicked(b.dataset.allow, false);
+        UI.toast(`${p ? p.name : 'Player'} can sign in again.`, 'ok');
+      }
+    };
+
+    // ---------- 4 · Standings ----------
+    function renderStandings() {
+      const list = standingsList().filter(r => r.played > 0 || state.players[r.teamId]);
+      let html;
+      if (sel.stand === 'player') {
+        html = list.length ? `<table class="hd-table"><thead><tr><th class="num">#</th><th>Player</th><th class="num">P</th><th class="num">W</th><th class="num">D</th><th class="num">L</th><th class="num">Pts</th></tr></thead><tbody>${list.map(r => {
+          const p = state.players[r.teamId] || {};
+          return `<tr><td class="num">${r.rank}</td><td><b title="${esc(r.name)}">${esc(short(r.name))}</b><br><small class="muted">${esc(p.agency || '')}</small></td>
+            <td class="num">${r.played}</td><td class="num">${r.wins}</td><td class="num">${r.draws}</td><td class="num">${r.losses}</td><td class="num"><b>${r.points}</b></td></tr>`;
+        }).join('')}</tbody></table>` : '<p class="hd-empty" style="padding:10px;">No players yet.</p>';
+      } else {
+        const groups = {};
+        for (const r of list) {
+          const p = state.players[r.teamId] || {};
+          const k = agencyKey(p.agency) || '(no agency)';
+          const g = groups[k] || (groups[k] = { names: {}, players: 0, wins: 0, draws: 0, losses: 0, points: 0 });
+          const label = String(p.agency || '(no agency)').trim().replace(/\s+/g, ' ');
+          g.names[label] = (g.names[label] || 0) + 1;
+          g.players += 1; g.wins += r.wins; g.draws += r.draws; g.losses += r.losses; g.points += r.points;
+        }
+        const rows = Object.values(groups).map(g => Object.assign(g, { name: Object.entries(g.names).sort((a, b) => b[1] - a[1])[0][0] }))
+          .sort((a, b) => b.points - a.points || b.wins - a.wins || a.name.localeCompare(b.name));
+        rows.forEach((g, i) => { g.rank = i > 0 && rows[i - 1].points === g.points && rows[i - 1].wins === g.wins ? rows[i - 1].rank : i + 1; });
+        html = rows.length ? `<table class="hd-table"><thead><tr><th class="num">#</th><th>Agency</th><th class="num">Players</th><th class="num">W</th><th class="num">D</th><th class="num">L</th><th class="num">Pts</th></tr></thead><tbody>${rows.map(g =>
+          `<tr><td class="num">${g.rank}</td><td><b>${esc(g.name)}</b></td><td class="num">${g.players}</td><td class="num">${g.wins}</td><td class="num">${g.draws}</td><td class="num">${g.losses}</td><td class="num"><b>${g.points}</b></td></tr>`).join('')}</tbody></table>`
+          : '<p class="hd-empty" style="padding:10px;">No players yet.</p>';
+      }
+      const box = $('#standBox');
+      if (box.dataset.html !== html) { box.innerHTML = html; box.dataset.html = html; }
+    }
+    $('#standTabs').onclick = ev => {
+      const b = ev.target.closest('[data-stand]');
+      if (!b) return;
+      sel.stand = b.dataset.stand;
+      el.querySelectorAll('#standTabs [data-stand]').forEach(x => x.classList.toggle('on', x.dataset.stand === sel.stand));
+      renderStandings();
+    };
+
+    // ---------- header buttons ----------
+    $('#lockBtn').onclick = () => { App.setHost(false); App.route(); };
+    $('#bigScreenBtn').onclick = () => window.open(location.pathname + '?view=scoreboard', '_blank');
+    $('#resetBtn').onclick = async () => {
+      const typed = prompt('This deletes EVERYTHING: games, results, players, access codes and the tournament timer.\nType RESET to confirm.');
       if (typed !== 'RESET') return UI.toast('Reset cancelled.');
       await Store.resetTournament();
       UI.toast('Tournament reset.', 'ok');
     };
 
-    const roomsPanel = HostRooms.mount(ctx);
+    // ---------- data ----------
+    const renderAll = () => { renderTour(); renderCounts(); renderCodes(); renderGames(); renderStandings(); };
+    const subs = [
+      Store.watchRooms(r => { state.rooms = r; renderCounts(); renderGames(); renderStandings(); renderCodes(); }),
+      Store.watchPlayers(p => { state.players = p || {}; renderCounts(); renderGames(); renderStandings(); renderCodes(); }),
+      Store.watchAccessCodes(c => { state.codes = c || {}; renderCodes(); }),
+      Store.watchTournament(t => { state.tour = t; renderTour(); }),
+      Store.watchSettings(s => { state.settings = s || {}; syncSettingsInputs(); }),
+      Store.watchLobby(l => { state.lobby = l || {}; renderCounts(); if (sel.gameTab === 'players') renderGames(); }),
+      Store.watchPinned(p => { state.pinned = p; if (sel.gameTab === 'live') renderGames(); })
+    ];
+    renderAll();
 
-    const unsubTeams = Store.watchTeams(t => {
-      state.teams = t;
-      renderTeams(); renderStandings();
-      if (roomsPanel) roomsPanel.render();
-    });
-    const unsubRooms = Store.watchRooms(r => {
-      state.rooms = r;
-      renderTeams(); renderStandings();
-      if (roomsPanel) roomsPanel.render();
-    });
-    const unsubPinned = Store.watchPinned(p => {
-      state.pinned = p;
-      if (roomsPanel) roomsPanel.render();
+    const tried = {};
+    App.onTick(() => {
+      const now = Store.serverNow();
+      const left = el.querySelector('#tourLeft');
+      if (left && state.tour) { if (tourPhase(now) === 'running') left.textContent = hms(state.tour.endsAt - now); else renderTour(); }
+      el.querySelectorAll('[data-gclock]').forEach(span => {
+        const r = state.rooms[span.dataset.gclock];
+        if (r) { const t = gameClock(r); if (span.textContent !== t) span.textContent = t; }
+      });
+      // The players' devices record time-up results; an open host dashboard is a backup recorder.
+      for (const room of Object.values(state.rooms)) {
+        if (room.status !== 'live' || !room.clock || room.clock.paused || (room.game && room.game.pending)) continue;
+        if (now < room.clock.endsAt) continue;
+        if (RoomRetry.due(tried, room.code + ':' + room.clock.endsAt)) {
+          Store.mutateRoom(room.code, r => Match.resolveTimeUp(r, Store.serverNow()));
+        }
+      }
     });
 
-    return () => { unsubTeams(); unsubRooms(); unsubPinned(); };
+    return () => { subs.forEach(f => f()); };
   }
 
   root.HostView = { show };
