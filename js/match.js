@@ -19,7 +19,11 @@
   // with the clock, so watching never costs turn time.
   const DROP_MS = 700;
   const CELEBRATE_MS = [1000, 2600, 2600, 3000, 4500];
-  const SUDDEN_DEATH_MAX_ROUNDS = 3;
+  const SUDDEN_DEATH_MAX_ROUNDS = 3; // still tied after this many rounds -> a draw (no host needed)
+  // A seated player offline this long during play loses by forfeit (written by the opponent's device).
+  const DISCONNECT_FORFEIT_MS = 120000;
+  // How long a device must see a seat without presence before it records the seat as offline.
+  const OFFLINE_DEBOUNCE_MS = 5000;
   // 3-4 player rooms (2026-11-03): the "3/4-WAY" team intro + roulette wheel take 2 s longer
   // (teams 2.6 s, wheel 3.4 s, then "<TEAM> GOES FIRST!" holds 2.5 s; Scenes.WHEEL_RESULT_AT).
   const INTRO_MULTI_MS = 8500;
@@ -264,21 +268,24 @@
     return Engine.scoreMove(room.game.board, placements);
   }
 
-  function finalize(room, winnerSeat, reason, now) {
+  // winnerSeat null = a draw (reason 'draw'; drawSeats = the seats sharing it).
+  function finalize(room, winnerSeat, reason, now, drawSeats = null) {
     const r = clone(room);
     const scores = (r.game && r.game.scores) || { A: 0, B: 0 };
     r.status = 'final';
     r.result = {
-      winner: winnerSeat,
-      teamId: teamOf(r, winnerSeat),
+      winner: winnerSeat || null,
+      teamId: winnerSeat ? teamOf(r, winnerSeat) : null,
       scoreA: scores.A || 0,
       scoreB: scores.B || 0,
       reason,
       decidedAt: now
     };
     for (const s of seatsOf(r).slice(2)) r.result['score' + s] = scores[s] || 0;
+    if (!winnerSeat) r.result.drawSeats = (drawSeats && drawSeats.length ? drawSeats : seatsOf(r)).slice();
     return r;
   }
+  const isDraw = room => !!(room && room.status === 'final' && room.result && !room.result.winner);
 
   // ---------- turn order, out seats, sudden death (2-4 players) ----------
   // game.out (3-4 player rooms only): { seat: 'left' (resigned) | 'sd' (out of sudden death) }.
@@ -344,7 +351,8 @@
   }
 
   // Mutates r: a sudden-death round is over. One leader wins; otherwise (3-4 players) the seats
-  // that fell behind are out too, and the round count keeps going; 3 rounds -> host decides.
+  // that fell behind are out too, and the round count keeps going; still tied after 3 rounds -> a
+  // draw between the leaders (decided automatically, the host is not needed).
   function endRound(r, now) {
     const g = r.game;
     const sd = g.suddenDeath;
@@ -357,7 +365,7 @@
       sd.played = [];
       if (g.out[g.turn]) g.turn = nextSeat(r, g.turn);
     }
-    if (sd.rounds >= SUDDEN_DEATH_MAX_ROUNDS) r.status = 'hostDecision';
+    if (sd.rounds >= SUDDEN_DEATH_MAX_ROUNDS) return finalize(r, null, 'draw', now, leaders);
     return r;
   }
 
@@ -572,9 +580,10 @@
     if (room.status !== 'final' || !room.result) return null;
     const cur = room.result.winner;
     const valid = isSeat(room, toSeat) && toSeat !== cur;
-    if (isMulti(room) && !valid) return null;
+    if ((isMulti(room) || !cur) && !valid) return null; // a draw: the host names the winner
     const r = clone(room);
     const winner = valid ? toSeat : other(cur);
+    delete r.result.drawSeats;
     r.result.originalReason = r.result.originalReason || r.result.reason;
     r.result.winner = winner;
     r.result.teamId = teamOf(r, winner);
@@ -639,6 +648,201 @@
     return room.status;
   }
 
+  // ---------- disconnects (no host needed) ----------
+  // seats[s].offlineAt: when a device first saw the seat without presence (after OFFLINE_DEBOUNCE_MS).
+  // Any other seated player's device records it; the player's own device clears it on return; after
+  // DISCONNECT_FORFEIT_MS the other side's device ends the game by forfeit.
+
+  function markOffline(room, seat, now) {
+    if (!PLAYING.includes(room.status) || !isSeat(room, seat)) return null;
+    const s = room.seats[seat];
+    if (!s || s.offlineAt || isSeatOnline(room, seat)) return null;
+    if (room.game && room.game.out && room.game.out[seat]) return null;
+    const r = clone(room);
+    r.seats[seat].offlineAt = now;
+    return r;
+  }
+
+  function markOnline(room, seat, clientId) {
+    const s = room.seats && room.seats[seat];
+    if (!s || !s.offlineAt || s.clientId !== clientId) return null;
+    const r = clone(room);
+    delete r.seats[seat].offlineAt;
+    return r;
+  }
+
+  function offlineLeftMs(room, seat, now) {
+    const s = room.seats && room.seats[seat];
+    if (!s || !s.offlineAt) return null;
+    return Math.max(0, s.offlineAt + DISCONNECT_FORFEIT_MS - now);
+  }
+
+  function forfeitOffline(room, seat, now, expectedOfflineAt) {
+    if (!PLAYING.includes(room.status) || !isSeat(room, seat)) return null;
+    const s = room.seats[seat];
+    if (!s || !s.offlineAt || s.offlineAt !== expectedOfflineAt) return null;
+    if (now < s.offlineAt + DISCONNECT_FORFEIT_MS) return null;
+    if (isSeatOnline(room, seat)) return null;
+    if (!isMulti(room)) {
+      const f = finalize(room, other(seat), 'disconnect', now);
+      f.result.forfeitSeat = seat;
+      return f;
+    }
+    return resign(room, seat, now);
+  }
+
+  // A signed-in player opening their game on another device: the seat follows the player (pid).
+  function reclaimSeat(room, seat, pid, clientId) {
+    if (room.status === 'final' || room.status === 'void' || !isSeat(room, seat)) return null;
+    const cur = room.seats[seat];
+    if (!cur || !pid || cur.pid !== pid) return null;
+    const r = clone(room);
+    r.seats[seat] = Object.assign({}, cur, { clientId, online: true });
+    delete r.seats[seat].offlineAt;
+    return r;
+  }
+
+  function seatOfPid(room, pid) {
+    if (!room || !pid) return null;
+    return seatsOf(room).find(s => room.seats[s] && room.seats[s].pid === pid) || null;
+  }
+
+  // A matchmade game: both seats filled, ready, and started at once (VS intro first).
+  // p: { pid, name, agency, clientId } for seats A and B.
+  function createMatchRoom({ code, a, b, matchLengthSec, now, rng = Math.random, offerId = '' }) {
+    const room = createRoom({ code, teamA: a.pid, teamB: b.pid, teamAName: a.name, teamBName: b.name, matchLengthSec, now });
+    room.agencyA = String(a.agency || '').slice(0, 60);
+    room.agencyB = String(b.agency || '').slice(0, 60);
+    room.offerId = offerId;
+    room.seats.A = { name: a.name, clientId: a.clientId, pid: a.pid, agency: room.agencyA, ready: true, online: true };
+    room.seats.B = { name: b.name, clientId: b.clientId, pid: b.pid, agency: room.agencyB, ready: true, online: true };
+    return startMatch(room, now, rng, INTRO_MS);
+  }
+
+  // ---------- access codes ----------
+  const ACCESS_CODE_LEN = 8;
+  function generateAccessCode(rng = Math.random) {
+    let code = '';
+    for (let i = 0; i < ACCESS_CODE_LEN; i++) code += CODE_ALPHABET[Math.floor(rng() * CODE_ALPHABET.length) % CODE_ALPHABET.length];
+    return code;
+  }
+  function formatAccessCode(code) { return String(code || '').slice(0, 4) + '-' + String(code || '').slice(4); }
+  // Typed codes: spaces, dashes and look-alikes the alphabet never uses (0 O 1 I L) are dropped.
+  function normalizeAccessCode(input) {
+    return String(input || '').toUpperCase().split('').filter(ch => CODE_ALPHABET.includes(ch)).join('').slice(0, ACCESS_CODE_LEN);
+  }
+  // A stable id for a player on a shared code (or with no code): the same name + agency on the same
+  // code is the same player on any device.
+  function playerKey(...parts) {
+    const s = parts.map(p => String(p || '').trim().replace(/\s+/g, ' ').toLowerCase()).join('|');
+    let h1 = 0x811c9dc5, h2 = 0x01000193;
+    for (let i = 0; i < s.length; i++) {
+      const c = s.charCodeAt(i);
+      h1 = Math.imul(h1 ^ c, 16777619) >>> 0;
+      h2 = Math.imul(h2 ^ c, 2246822507) >>> 0;
+    }
+    return h1.toString(36) + h2.toString(36);
+  }
+
+  // ---------- matchmaking lobby (pure; Store runs these in one transaction on <root>/lobby) ----------
+  // lobby = { queue: { pid: { name, agency, clientId, pts, at, since, lastOpp } },
+  //           offers: { id: { a, b, players: { pid: {...} }, room, createdAt, acc: { pid: true }, status, by } } }
+  // status: 'pending' -> 'accepted' (both said yes) | 'declined' | 'expired'.
+  const OFFER_MS = 10000;          // the Accept / Decline window
+  const QUEUE_STALE_MS = 60000;    // a queue entry not refreshed for this long is dropped
+  const REMATCH_AFTER_MS = 30000;  // after waiting this long, the last opponent may be paired again
+  const OFFER_KEEP_MS = 180000;    // finished offers are cleaned up after this
+
+  function lobbyOf(raw) {
+    const l = clone(raw || {});
+    l.queue = l.queue || {};
+    l.offers = l.offers || {};
+    return l;
+  }
+  function busyInOffer(l, pid) {
+    return Object.values(l.offers).some(o => (o.a === pid || o.b === pid) && o.status === 'pending');
+  }
+  function cleanLobby(l, now) {
+    for (const [pid, q] of Object.entries(l.queue)) if (!q || now - (q.at || 0) > QUEUE_STALE_MS) delete l.queue[pid];
+    for (const [id, o] of Object.entries(l.offers)) if (!o || now - (o.createdAt || 0) > OFFER_KEEP_MS) delete l.offers[id];
+  }
+  // Swiss-like pick: never the last opponent (unless both have waited a while), then the closest
+  // score in points, then whoever has waited longest.
+  function pickOpponent(l, me, now) {
+    const mine = l.queue[me];
+    const cands = Object.entries(l.queue).filter(([pid]) => pid !== me && !busyInOffer(l, pid));
+    if (!cands.length) return null;
+    const waitedLong = q => now - (q.since || q.at || now) >= REMATCH_AFTER_MS;
+    const ok = cands.filter(([pid, q]) => {
+      const rematch = mine.lastOpp === pid || q.lastOpp === me;
+      return !rematch || (waitedLong(mine) && waitedLong(q));
+    });
+    if (!ok.length) return null;
+    ok.sort(([, x], [, y]) => Math.abs((x.pts || 0) - (mine.pts || 0)) - Math.abs((y.pts || 0) - (mine.pts || 0)) || (x.since || x.at || 0) - (y.since || y.at || 0));
+    return ok[0][0];
+  }
+  // me: { pid, name, agency, clientId, pts, lastOpp }. ids: { offerId, roomCode } (made by the caller).
+  function lobbyJoin(raw, me, now, ids) {
+    const l = lobbyOf(raw);
+    cleanLobby(l, now);
+    if (busyInOffer(l, me.pid)) return l;
+    const prev = l.queue[me.pid];
+    l.queue[me.pid] = {
+      name: me.name, agency: me.agency || '', clientId: me.clientId, pts: Number(me.pts) || 0,
+      lastOpp: me.lastOpp || '', at: now, since: (prev && prev.since) || now
+    };
+    const opp = pickOpponent(l, me.pid, now);
+    if (!opp || !ids) return l;
+    const q = l.queue[opp], m = l.queue[me.pid];
+    const entry = (pid, x) => ({ pid, name: x.name, agency: x.agency || '', clientId: x.clientId, lastOpp: x.lastOpp || '', pts: x.pts || 0 });
+    // the player who waited longer takes seat A
+    const [a, b] = (q.since || 0) <= (m.since || 0) ? [entry(opp, q), entry(me.pid, m)] : [entry(me.pid, m), entry(opp, q)];
+    l.offers[ids.offerId] = { a: a.pid, b: b.pid, players: { [a.pid]: a, [b.pid]: b }, room: ids.roomCode, createdAt: now, acc: {}, status: 'pending' };
+    delete l.queue[opp];
+    delete l.queue[me.pid];
+    return l;
+  }
+  function lobbyLeave(raw, pid) {
+    const l = lobbyOf(raw);
+    if (!l.queue[pid]) return null;
+    delete l.queue[pid];
+    return l;
+  }
+  function requeue(l, o, pid, now) {
+    const p = o.players && o.players[pid];
+    if (!p) return;
+    l.queue[pid] = { name: p.name, agency: p.agency || '', clientId: p.clientId, pts: p.pts || 0, lastOpp: p.lastOpp || '', at: now, since: now };
+  }
+  function lobbyAccept(raw, offerId, pid) {
+    const l = lobbyOf(raw);
+    const o = l.offers[offerId];
+    if (!o || o.status !== 'pending' || (o.a !== pid && o.b !== pid)) return null;
+    o.acc = o.acc || {};
+    o.acc[pid] = true;
+    if (o.acc[o.a] && o.acc[o.b]) o.status = 'accepted';
+    return l;
+  }
+  // The decliner leaves matchmaking; the other player goes straight back into the queue.
+  function lobbyDecline(raw, offerId, pid, now) {
+    const l = lobbyOf(raw);
+    const o = l.offers[offerId];
+    if (!o || o.status !== 'pending' || (o.a !== pid && o.b !== pid)) return null;
+    o.status = 'declined';
+    o.by = pid;
+    requeue(l, o, pid === o.a ? o.b : o.a, now);
+    return l;
+  }
+  // Time ran out: whoever accepted goes back into the queue, whoever didn't leaves matchmaking.
+  function lobbyExpire(raw, offerId, now) {
+    const l = lobbyOf(raw);
+    const o = l.offers[offerId];
+    if (!o || o.status !== 'pending') return null;
+    o.status = 'expired';
+    const acc = o.acc || {};
+    for (const pid of [o.a, o.b]) if (acc[pid]) requeue(l, o, pid, now);
+    return l;
+  }
+
   // ---------- standings ----------
 
   function computeStandings(teams, rooms) {
@@ -646,7 +850,7 @@
     const ensure = (id, fallbackName) => {
       if (!table[id]) {
         const name = (teams && teams[id] && teams[id].name) || fallbackName || id;
-        table[id] = { teamId: id, name, wins: 0, losses: 0, points: 0, rank: 0 };
+        table[id] = { teamId: id, name, wins: 0, draws: 0, losses: 0, points: 0, played: 0, rank: 0 };
       }
       return table[id];
     };
@@ -654,13 +858,23 @@
     for (const room of Object.values(rooms || {})) {
       if (!room || room.status !== 'final' || !room.result) continue;
       // +1 and a win for the winner; a loss for every other seat (3-4 players: 1 win, 2-3 losses).
+      // A draw: +½ and a draw for each seat sharing it, a loss for the rest.
       const winSeat = room.result.winner;
       const nameOf = s => room['team' + s + 'Name'];
+      for (const s of seatsOf(room)) ensure(teamOf(room, s), nameOf(s)).played += 1;
+      if (!winSeat) {
+        const drew = Array.isArray(room.result.drawSeats) && room.result.drawSeats.length ? room.result.drawSeats : seatsOf(room);
+        for (const s of seatsOf(room)) {
+          const t = ensure(teamOf(room, s), nameOf(s));
+          if (drew.includes(s)) { t.draws += 1; t.points += 0.5; } else t.losses += 1;
+        }
+        continue;
+      }
       const w = ensure(teamOf(room, winSeat), nameOf(winSeat));
       w.wins += 1; w.points += 1;
       for (const s of seatsOf(room)) if (s !== winSeat) ensure(teamOf(room, s), nameOf(s)).losses += 1;
     }
-    const list = Object.values(table).sort((a, b) => b.points - a.points || a.name.localeCompare(b.name));
+    const list = Object.values(table).sort((a, b) => b.points - a.points || b.wins - a.wins || String(a.name).localeCompare(String(b.name)));
     list.forEach((t, i) => {
       t.rank = i > 0 && list[i - 1].points === t.points ? list[i - 1].rank : i + 1;
     });
@@ -694,6 +908,10 @@
   return {
     CODE_ALPHABET, TURN_MS, INTRO_MS, INTRO_MULTI_MS, DROP_MS, CELEBRATE_MS, SUDDEN_DEATH_MAX_ROUNDS,
     ALL_SEATS, seatsOf, isSeat, teamOf, teamNameOf, introMsFor, activeSeats, nextSeat, ranking,
+    DISCONNECT_FORFEIT_MS, OFFLINE_DEBOUNCE_MS, isDraw, markOffline, markOnline, offlineLeftMs, forfeitOffline,
+    reclaimSeat, seatOfPid, createMatchRoom,
+    ACCESS_CODE_LEN, generateAccessCode, formatAccessCode, normalizeAccessCode, playerKey,
+    OFFER_MS, QUEUE_STALE_MS, REMATCH_AFTER_MS, lobbyJoin, lobbyLeave, lobbyAccept, lobbyDecline, lobbyExpire, busyInOffer,
     generateRoomCode, formatCode, normalizeCode, isRoomRecord, createRoom, normalizeRoom,
     claimSeat, setReady, removePlayer, leaveSeat, rejoinSeat, withTeamNames, startMatch,
     prepareMove, applyPlay, applyPass, resolveTimeUp, finalize,
