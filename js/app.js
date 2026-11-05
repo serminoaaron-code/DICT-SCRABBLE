@@ -1,5 +1,6 @@
 // Boot, routing and the shared clock ticker.
-// Routes: ?view=scoreboard | #gamehelp[=player|host|watch] | #host | #room=CODE | (default) join page.
+// Routes: ?view=scoreboard | #gamehelp[=player|host|watch] | #host | #room=CODE | (default) join page
+// (access-code sign-in, then Find opponent).
 (function (root) {
   'use strict';
 
@@ -115,7 +116,7 @@
       '<button class="small secondary" id="resetPlayground">Reset playground</button>';
     document.body.prepend(bar);
     bar.querySelector('#resetPlayground').onclick = async () => {
-      if (!confirm('Delete ALL playground teams, rooms and results? (Real tournament data is not affected.)')) return;
+      if (!confirm('Delete ALL playground players, codes, games and results? (Real tournament data is not affected.)')) return;
       await Store.resetTournament();
       UI.toast('Playground reset.', 'ok');
     };
