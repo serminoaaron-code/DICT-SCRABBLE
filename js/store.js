@@ -1,5 +1,6 @@
 // Firebase wiring. Every room write goes through mutateRoom(), whose update
 // function is a pure Match.* function (null = reject = abort transaction).
+// The matchmaking lobby works the same way: mutateLobby() runs a pure Match.lobby* function.
 (function (root) {
   'use strict';
 
@@ -54,7 +55,16 @@
     return () => ref.off('value', handler);
   }
 
-  function watchTeams(cb) { return watch(`${ROOT}/teams`, s => s.val() || {}, cb); }
+  // Players are their own "teams" now (matchmaking, no fixture rooms): { pid: { name, agency } }, so
+  // the standings and the big screen rank players. Kicked players stay listed with their results.
+  function watchTeams(cb) {
+    return watch(`${ROOT}/players`, s => {
+      const raw = s.val() || {};
+      const out = {};
+      for (const pid of Object.keys(raw)) if (raw[pid] && raw[pid].name) out[pid] = { name: raw[pid].name, agency: raw[pid].agency || '' };
+      return out;
+    }, cb);
+  }
 
   function watchRooms(cb) {
     return watch(`${ROOT}/rooms`, s => {
@@ -140,6 +150,86 @@
 
   function resetTournament() { return db.ref(ROOT).remove(); }
 
+  // ---------- tournament, access codes, players, matchmaking ----------
+  const once = path => db.ref(path).once('value').then(s => s.val());
+
+  // tournament: { status: 'running' | 'ended', startedAt, endsAt, durationMin, matchMin }
+  // settings:   { requireCode, lockRegistration, matchMin }
+  function watchTournament(cb) { return watch(`${ROOT}/tournament`, s => s.val() || null, cb); }
+  function setTournament(t) { return db.ref(`${ROOT}/tournament`).set(t); }
+  function updateTournament(u) { return db.ref(`${ROOT}/tournament`).update(u); }
+  function watchSettings(cb) { return watch(`${ROOT}/settings`, s => s.val() || {}, cb); }
+  function updateSettings(u) { return db.ref(`${ROOT}/settings`).update(u); }
+
+  // accessCodes/<CODE>: { type: 'shared' | 'individual', batch, createdAt, revoked,
+  //                       (individual, once used) pid, name, agency, usedAt }
+  function watchAccessCodes(cb) { return watch(`${ROOT}/accessCodes`, s => s.val() || {}, cb); }
+  function getAccessCode(code) { return once(`${ROOT}/accessCodes/${code}`); }
+  function addAccessCodes(map) { return db.ref(`${ROOT}/accessCodes`).update(map); }
+  function setCodeRevoked(code, revoked) { return db.ref(`${ROOT}/accessCodes/${code}/revoked`).set(revoked ? true : null); }
+  function deleteAccessCode(code) { return db.ref(`${ROOT}/accessCodes/${code}`).remove(); }
+  // An individual code belongs to the first player who signs in with it; the same code signs that
+  // player in again on any device (their stored name and agency are kept).
+  function claimIndividualCode(code, name, agency) {
+    return db.ref(`${ROOT}/accessCodes/${code}`).transaction(cur => {
+      if (cur === null) return null; // not cached yet: Firebase retries with the server value
+      if (cur.type !== 'individual' || cur.revoked) return undefined;
+      if (cur.pid) return cur; // already claimed: unchanged
+      return Object.assign({}, cur, { pid: 'p_' + code, name, agency, usedAt: serverNow() });
+    }).then(r => (r.committed && r.snapshot.exists() ? r.snapshot.val() : null));
+  }
+
+  // players/<pid>: { name, agency, code, codeType, joinedAt, lastSeen, online, kicked, kickReason, room, lastOpp }
+  function watchPlayers(cb) { return watch(`${ROOT}/players`, s => s.val() || {}, cb); }
+  function watchPlayer(pid, cb) { return watch(`${ROOT}/players/${pid}`, s => s.val() || null, cb); }
+  function getPlayer(pid) { return once(`${ROOT}/players/${pid}`); }
+  function updatePlayer(pid, u) { return db.ref(`${ROOT}/players/${pid}`).update(u); }
+  function setKicked(pid, kicked, reason = '') {
+    return db.ref(`${ROOT}/players/${pid}`).update({ kicked: kicked ? true : null, kickReason: kicked ? String(reason || '').slice(0, 120) : null });
+  }
+  // online = true while this device is connected (cleared by the server on disconnect)
+  function playerPresence(pid) {
+    const ref = db.ref(`${ROOT}/players/${pid}/online`);
+    const connRef = db.ref('.info/connected');
+    const onConn = snap => {
+      if (snap.val() !== true) return;
+      ref.onDisconnect().set(null);
+      ref.set(true);
+      db.ref(`${ROOT}/players/${pid}/lastSeen`).set(serverNow());
+    };
+    connRef.on('value', onConn);
+    return () => { connRef.off('value', onConn); ref.onDisconnect().cancel(); ref.set(null); };
+  }
+
+  // The matchmaking lobby (queue + offers) changes only through Match.lobby* in one transaction.
+  function watchLobby(cb) { return watch(`${ROOT}/lobby`, s => s.val() || {}, cb); }
+  function mutateLobby(fn, attempt = 0) {
+    return db.ref(`${ROOT}/lobby`).transaction(cur => {
+      const next = fn(cur);
+      // A rejection on a not-yet-cached (null) lobby writes null instead of aborting, so Firebase
+      // retries with the server's value; on an empty server it changes nothing.
+      if (next === null) return cur === null ? null : undefined;
+      return next;
+    }).then(r => ({ committed: r.committed && r.snapshot.exists(), lobby: r.snapshot.val() || {} }), err => {
+      if (attempt < 2) return mutateLobby(fn, attempt + 1);
+      console.warn('Lobby update aborted:', err && err.message);
+      return { committed: false, lobby: null, error: err && err.message };
+    });
+  }
+  // A queued player drops out of the queue if this device disconnects.
+  function queueOnDisconnect(pid, on) {
+    const d = db.ref(`${ROOT}/lobby/queue/${pid}`).onDisconnect();
+    return on ? d.remove() : d.cancel();
+  }
+
+  // The accepted offer's game: whichever player's device gets here first creates it; the other's
+  // transaction sees it exists and changes nothing.
+  async function createMatchRoom(code, build) {
+    const res = await db.ref(`${ROOT}/rooms/${code}`).transaction(cur => (cur === null ? build() : undefined));
+    return res.committed;
+  }
+  function getRoom(code) { return once(`${ROOT}/rooms/${code}`); }
+
   // Host pin for the big screen: a plain value (room code, or null), not a room transaction.
   // Only one room is pinned at a time; setting it replaces whatever was pinned before.
   function setPinned(code) { return db.ref(`${ROOT}/broadcast/pinned`).set(code); }
@@ -151,6 +241,10 @@
     watchTeams, watchRooms, watchRoom,
     addTeam, renameTeam, deleteTeam,
     mutateRoom, createRoom, setPresence, resetTournament,
-    setPinned, watchPinned
+    setPinned, watchPinned,
+    watchTournament, setTournament, updateTournament, watchSettings, updateSettings,
+    watchAccessCodes, getAccessCode, addAccessCodes, setCodeRevoked, deleteAccessCode, claimIndividualCode,
+    watchPlayers, watchPlayer, getPlayer, updatePlayer, setKicked, playerPresence,
+    watchLobby, mutateLobby, queueOnDisconnect, createMatchRoom, getRoom
   };
 })(window);
