@@ -1,4 +1,6 @@
-// Join page and room view (lobby, live game, final) for players, spectators and the host.
+// Join page (access code sign-in + Find opponent matchmaking) and room view (live game, final)
+// for players, spectators and the host. Games run without the host: the dictionary decides words,
+// the players' devices write turn timeouts, time-up, disconnect forfeits and sudden-death draws.
 (function (root) {
   'use strict';
 
@@ -26,34 +28,495 @@
   // "A", "A and B", "A, B and C"
   const andList = xs => (xs.length < 3 ? xs.join(' and ') : xs.slice(0, -1).join(', ') + ' and ' + xs[xs.length - 1]);
 
-  // ---------- join page ----------
+  // ---------- signed-in player (access codes) ----------
+  // Store.local 'scrabble.player' = { pid, name, agency, code, codeType }. pid: 'p_<CODE>' for an individual
+  // code, 's_<hash>' for a shared code (code + name + agency), 'g_<hash>' when the host allows no code.
+  const PLAYER_KEY = 'scrabble.player';
+  function session() {
+    try { const p = JSON.parse(Store.local.get(PLAYER_KEY) || 'null'); return p && p.pid ? p : null; } catch (e) { return null; }
+  }
+  function setSession(p) { if (p) Store.local.set(PLAYER_KEY, JSON.stringify(p)); else Store.local.remove(PLAYER_KEY); }
+  // The player's "online" flag for the host's Players tab: kept across routes, stopped on sign-out.
+  let presence = { pid: null, off: null };
+  function keepPresence(pid) {
+    if (presence.pid === pid) return;
+    if (presence.off) presence.off();
+    presence = { pid, off: pid ? Store.playerPresence(pid) : null };
+  }
+  function signOut() {
+    const me = session();
+    if (me) { Store.mutateLobby(raw => Match.lobbyLeave(raw, me.pid)); Store.queueOnDisconnect(me.pid, false); }
+    keepPresence(null);
+    setSession(null);
+  }
+  const cleanText = (s, n = 60) => String(s || '').trim().replace(/\s+/g, ' ').slice(0, n);
+  const PLAYING_ROOM = ['live', 'suddenDeath', 'hostDecision'];
+
+  // Tournament time: running until endsAt; 'ended' (or past endsAt) stops new games, games in progress finish.
+  function tourState(t, now) {
+    if (!t || !t.status) return { open: false, kind: 'idle', text: '⏳ The tournament has not started yet. Find opponent opens when the host starts it.' };
+    if (t.status === 'ended' || now >= (t.endsAt || 0)) return { open: false, kind: 'ended', text: '🏁 The tournament has ended. No new games start; games in progress finish.' };
+    return { open: true, kind: 'running', left: t.endsAt - now, text: '' };
+  }
+  const hms = ms => {
+    const s = Math.max(0, Math.ceil(ms / 1000)), h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60;
+    return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(x).padStart(2, '0');
+  };
+
+  // Styles for the screens added with access codes and matchmaking (the rest come from css/).
+  function ensureStyles() {
+    if (document.getElementById('mmStyle')) return;
+    const st = document.createElement('style');
+    st.id = 'mmStyle';
+    st.textContent = `
+      .mm-card{border:2px solid var(--accent,#2563eb);box-shadow:0 0 0 4px color-mix(in srgb,var(--accent,#2563eb) 15%,transparent)}
+      .mm-code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:1.35rem;letter-spacing:.12em;text-transform:uppercase;text-align:center;font-weight:700}
+      .mm-hint{font-size:.8rem;opacity:.75;margin-top:4px}
+      .mm-err{color:#c81e1e;font-weight:600;font-size:.9rem}
+      .mm-me{display:flex;align-items:center;gap:10px}
+      .mm-av{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;font-weight:800;color:#fff;background:var(--accent,#2563eb);flex:none}
+      .mm-me .mm-who{flex:1;min-width:0}.mm-me b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+      .mm-me .mm-sub{font-size:.82rem;opacity:.75;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+      .mm-tour{padding:8px 10px;border-radius:10px;background:color-mix(in srgb,currentColor 6%,transparent);font-size:.9rem;text-align:center}
+      .mm-tour b{font-variant-numeric:tabular-nums}
+      .mm-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;text-align:center}
+      .mm-stats div{padding:6px 2px;border-radius:10px;background:color-mix(in srgb,currentColor 5%,transparent)}
+      .mm-stats b{display:block;font-size:1.25rem}.mm-stats span{font-size:.72rem;opacity:.7;text-transform:uppercase;letter-spacing:.04em}
+      .mm-find{width:100%;font-size:1.15rem;padding:14px 10px}
+      .mm-search{display:flex;flex-direction:column;align-items:center;gap:8px;padding:6px 0}
+      .mm-radar{width:64px;height:64px;border-radius:50%;border:3px solid var(--accent,#2563eb);position:relative;display:grid;place-items:center;font-size:26px}
+      .mm-radar::after{content:"";position:absolute;inset:-3px;border-radius:50%;border:3px solid var(--accent,#2563eb);animation:mmPing 1.6s ease-out infinite}
+      @keyframes mmPing{from{transform:scale(1);opacity:.7}to{transform:scale(1.7);opacity:0}}
+      @media (prefers-reduced-motion:reduce){.mm-radar::after{animation:none}}
+      .mm-return{padding:10px;border-radius:10px;border:2px solid #16a34a;background:color-mix(in srgb,#16a34a 10%,transparent);display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+      .mm-live{display:flex;flex-direction:column;gap:6px}
+      .mm-live a{display:flex;justify-content:space-between;gap:8px;padding:8px 10px;border-radius:10px;background:color-mix(in srgb,currentColor 5%,transparent);text-decoration:none;color:inherit}
+      .mm-live a span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+      .mm-overlay{position:fixed;inset:0;z-index:1000;background:rgba(5,15,42,.55);display:flex;align-items:flex-end;justify-content:center;padding:16px}
+      @media (min-width:600px){.mm-overlay{align-items:center}}
+      .mm-modal{width:100%;max-width:400px;border-radius:16px;padding:18px;background:var(--card,#fff);color:var(--ink,#0b1a3d);box-shadow:0 20px 50px rgba(0,0,0,.35);text-align:center;display:flex;flex-direction:column;gap:10px}
+      .mm-vs{display:flex;align-items:center;justify-content:center;gap:10px}
+      .mm-vs div{flex:1;min-width:0}.mm-vs b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.mm-vs small{opacity:.7}
+      .mm-vs i{font-style:normal;font-weight:900;opacity:.6}
+      .mm-bar{height:8px;border-radius:99px;background:color-mix(in srgb,currentColor 12%,transparent);overflow:hidden}
+      .mm-bar i{display:block;height:100%;background:var(--accent,#2563eb);transition:width .25s linear}
+      .mm-btns{display:flex;gap:8px}.mm-btns button{flex:1;padding:12px 8px;font-size:1rem}
+      .mm-draw{text-align:center}.mm-draw .mm-big{font-size:3rem;line-height:1}
+      .mm-forfeit{font-variant-numeric:tabular-nums;font-weight:700}`;
+    document.head.appendChild(st);
+  }
+
+  // ---------- join page: sign in with an access code, then Find opponent ----------
 
   function showJoin(el) {
-    el.innerHTML = `
-      <div class="card narrow">
-        <h2>🔤 Join a room</h2>
-        <p class="muted small-text">Enter the room code from your host and your name.</p>
-        <form id="joinForm" class="stack">
-          <div><label for="joinCode">Room code</label><input id="joinCode" placeholder="e.g. K7Q-42M" autocomplete="off" autocapitalize="characters"></div>
-          <div><label for="joinName">Your name</label><input id="joinName" maxlength="40" autocomplete="name" placeholder="Your name"></div>
-          <button type="submit" class="btn-primary">Find room</button>
+    ensureStyles();
+    const state = { me: session(), player: undefined, tour: null, settings: {}, lobby: {}, rooms: {},
+      seenOffer: {}, offerStart: {}, queueStart: null, starting: null, handled: {}, expiring: {}, heartbeat: null, built: null };
+    const subs = [];
+    let standings = null;
+
+    const offSub = () => { while (subs.length) { try { subs.pop()(); } catch (e) { /* ignore */ } } };
+    subs.push(Store.watchTournament(t => { state.tour = t; refresh(); }));
+    subs.push(Store.watchSettings(s => { state.settings = s || {}; refresh(); }));
+    subs.push(Store.watchRooms(r => { state.rooms = r; refresh(); }));
+
+    let meSubs = [];
+    function watchMe() {
+      meSubs.forEach(f => f()); meSubs = [];
+      state.player = undefined;
+      if (!state.me) return;
+      keepPresence(state.me.pid);
+      meSubs.push(Store.watchPlayer(state.me.pid, p => {
+        state.player = p;
+        if (p && p.kicked) {
+          const why = p.kickReason ? ` (${p.kickReason})` : '';
+          signOut(); state.me = null; watchMe();
+          UI.toast('You were removed from the tournament by the host' + why + '.', 'error');
+          return build();
+        }
+        if (p === null && state.me) { // the tournament was reset: sign in again
+          signOut(); state.me = null; watchMe(); return build();
+        }
+        refresh();
+      }));
+      meSubs.push(Store.watchLobby(l => { state.lobby = l || {}; onLobby(); refresh(); }));
+    }
+
+    function build() {
+      if (standings) { standings.off(); standings = null; }
+      state.built = state.me ? 'home' : 'signin';
+      el.innerHTML = (state.me ? homeHtml() : signInHtml()) + `
+        <div class="card narrow"><h3>🏆 Standings</h3><div id="joinStandings"><p class="muted small-text">Loading…</p></div></div>
+        <div class="card narrow"><h3>👁️ Live games</h3><div id="mmLive" class="mm-live"></div></div>
+        <div id="mmOverlay"></div>`;
+      standings = UI.mountStandings(() => el.querySelector('#joinStandings'));
+      if (state.me) wireHome(); else wireSignIn();
+      refresh();
+    }
+
+    // ----- sign in -----
+    function signInHtml() {
+      const last = (() => { try { return JSON.parse(Store.local.get('scrabble.lastSignIn') || '{}'); } catch (e) { return {}; } })();
+      return `<div class="card narrow stack mm-card">
+        <h2 style="margin:0;">🔤 Join the tournament</h2>
+        <p class="muted small-text" style="margin:0;">Enter the access code from your host, your name and your agency.</p>
+        <div class="mm-tour" id="mmTour"></div>
+        <form id="signIn" class="stack" autocomplete="off">
+          <div><label for="acCode">Access code</label>
+            <input id="acCode" class="mm-code" placeholder="ABCD-EF23" maxlength="12" autocapitalize="characters" spellcheck="false" value="${esc(last.code ? Match.formatAccessCode(last.code) : '')}">
+            <div class="mm-hint" id="acHint">Individual codes are for one player; a shared code is used by everyone.</div></div>
+          <div><label for="acName">Name</label><input id="acName" maxlength="40" autocomplete="name" placeholder="Juan Dela Cruz" value="${esc(last.name || Store.local.get('scrabble.name') || '')}"></div>
+          <div><label for="acAgency">Agency / Office / Department / Region</label><input id="acAgency" maxlength="60" placeholder="e.g. DICT Region III" value="${esc(last.agency || '')}"></div>
+          <div class="mm-err hidden" id="acErr" role="alert"></div>
+          <button type="submit" class="btn-primary" id="acJoin">Join</button>
         </form>
-      </div>
-      <div class="card narrow">
-        <h3>🏆 Team standings</h3>
-        <div id="joinStandings"><p class="muted small-text">Loading…</p></div>
       </div>`;
-    const standings = UI.mountStandings(() => el.querySelector('#joinStandings'));
-    el.querySelector('#joinName').value = Store.local.get('scrabble.name') || '';
-    el.querySelector('#joinForm').onsubmit = ev => {
-      ev.preventDefault();
-      const code = Match.normalizeCode(el.querySelector('#joinCode').value);
-      const name = el.querySelector('#joinName').value.trim().slice(0, 40);
-      if (code.length !== 6) return UI.toast('Room codes have 6 characters, like K7Q-42M.', 'error');
-      if (name) Store.local.set('scrabble.name', name);
-      App.go('room=' + code);
+    }
+
+    function wireSignIn() {
+      const $ = s => el.querySelector(s);
+      const codeIn = $('#acCode');
+      codeIn.oninput = () => {
+        const c = Match.normalizeAccessCode(codeIn.value);
+        const pretty = c.length > 4 ? Match.formatAccessCode(c) : c;
+        if (codeIn.value !== pretty) codeIn.value = pretty;
+      };
+      $('#signIn').onsubmit = async ev => {
+        ev.preventDefault();
+        const err = $('#acErr');
+        const fail = msg => { err.textContent = msg; err.classList.remove('hidden'); $('#acJoin').disabled = false; $('#acJoin').textContent = 'Join'; };
+        err.classList.add('hidden');
+        $('#acJoin').disabled = true; $('#acJoin').textContent = 'Checking…';
+        try {
+          const res = await registerPlayer(codeIn.value, $('#acName').value, $('#acAgency').value, state.settings);
+          if (res.error) return fail(res.error);
+          Store.local.set('scrabble.lastSignIn', JSON.stringify({ code: res.player.code || '', name: res.player.name, agency: res.player.agency }));
+          Store.local.set('scrabble.name', res.player.name);
+          state.me = res.player;
+          setSession(res.player);
+          if (res.note) UI.toast(res.note, 'ok');
+          watchMe();
+          build();
+        } catch (e) {
+          console.error(e);
+          fail('Could not sign in. Check your connection and try again.');
+        }
+      };
+    }
+
+    // ----- home: Find opponent -----
+    function homeHtml() {
+      const me = state.me;
+      const initials = me.name.split(' ').filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+      const codeTag = me.code ? `<span class="rc-tag ok">${me.codeType === 'individual' ? 'Individual' : 'Shared'} code ${esc(Match.formatAccessCode(me.code))}</span>` : '';
+      return `<div class="card narrow stack mm-card">
+        <div class="mm-me"><span class="mm-av" aria-hidden="true">${esc(initials || '?')}</span>
+          <span class="mm-who"><b title="${esc(me.name)}">${esc(me.name)}</b><span class="mm-sub" title="${esc(me.agency)}">${esc(me.agency)}</span></span>
+          <button class="link small-text" id="mmSignOut">Sign out</button></div>
+        <div>${codeTag}</div>
+        <div class="mm-tour" id="mmTour"></div>
+        <div class="mm-stats" id="mmStats"></div>
+        <div id="mmReturn"></div>
+        <div id="mmMain"></div>
+      </div>`;
+    }
+
+    function wireHome() {
+      el.querySelector('#mmSignOut').onclick = () => {
+        if (inQueue() && !confirm('Stop looking for an opponent and sign out?')) return;
+        stopHeartbeat();
+        signOut(); state.me = null; watchMe(); build();
+      };
+      el.querySelector('#mmMain').onclick = ev => {
+        const b = ev.target.closest('button');
+        if (!b) return;
+        if (b.dataset.act === 'find') find();
+        if (b.dataset.act === 'cancel') cancel();
+      };
+    }
+
+    const myRecord = () => {
+      const list = Match.computeStandings({}, state.rooms);
+      return (state.me && list.find(r => r.teamId === state.me.pid)) || { points: 0, wins: 0, draws: 0, losses: 0, played: 0, rank: 0 };
     };
-    return () => standings.off();
+    const inQueue = () => !!(state.me && state.lobby.queue && state.lobby.queue[state.me.pid]);
+    const myOffer = () => {
+      if (!state.me) return null;
+      const pid = state.me.pid;
+      let best = null;
+      for (const [id, o] of Object.entries(state.lobby.offers || {})) {
+        if (!o || (o.a !== pid && o.b !== pid)) continue;
+        if (!best || (o.createdAt || 0) > (best.o.createdAt || 0)) best = { id, o };
+      }
+      return best;
+    };
+    // My game in progress, if any (players/<pid>/room, or any live room with my pid in a seat).
+    const myLiveRoom = () => {
+      if (!state.me) return null;
+      const code = state.player && state.player.room;
+      const r = code && state.rooms[code];
+      if (r && PLAYING_ROOM.includes(r.status) && Match.seatOfPid(r, state.me.pid)) return r;
+      return Object.values(state.rooms).find(x => PLAYING_ROOM.includes(x.status) && Match.seatOfPid(x, state.me.pid)) || null;
+    };
+
+    function canFind() {
+      const t = tourState(state.tour, Store.serverNow());
+      if (!t.open) return t.text;
+      if (myLiveRoom()) return 'Finish your game in progress first.';
+      return '';
+    }
+
+    function stopHeartbeat() { if (state.heartbeat) { clearInterval(state.heartbeat); state.heartbeat = null; } }
+    function joinQueue() {
+      const me = state.me;
+      if (!me) return Promise.resolve();
+      const rec = myRecord();
+      const entry = { pid: me.pid, name: me.name, agency: me.agency, clientId: Store.clientId(), pts: rec.points, lastOpp: (state.player && state.player.lastOpp) || '' };
+      const ids = { offerId: 'o' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), roomCode: Match.generateRoomCode() };
+      return Store.mutateLobby(raw => (canFind() ? null : Match.lobbyJoin(raw, entry, Store.serverNow(), ids)));
+    }
+    async function find() {
+      const why = canFind();
+      if (why) return UI.toast(why, 'error');
+      Store.queueOnDisconnect(state.me.pid, true);
+      state.queueStart = performance.now();
+      await joinQueue();
+      Sound.play && Sound.play('place');
+      startHeartbeat();
+    }
+    function startHeartbeat() {
+      stopHeartbeat();
+      // Keeps my queue entry fresh and retries pairing (a recent opponent becomes allowed after a while).
+      state.heartbeat = setInterval(() => { if (inQueue()) joinQueue(); }, 10000);
+    }
+    async function cancel() {
+      stopHeartbeat();
+      state.queueStart = null;
+      await Store.mutateLobby(raw => Match.lobbyLeave(raw, state.me.pid));
+      Store.queueOnDisconnect(state.me.pid, false);
+    }
+
+    function onLobby() {
+      const mo = myOffer();
+      if (!mo) return;
+      const { id, o } = mo;
+      const pid = state.me.pid;
+      if (o.status === 'pending' && !state.offerStart[id]) {
+        // a stopwatch on this device (never the device clocks), from when the offer first showed here
+        state.offerStart[id] = performance.now();
+        Sound.play && Sound.play('turn');
+        if (Sound.buzz) Sound.buzz();
+      }
+      if (o.status === 'accepted') startGame(id, o);
+      if ((o.status === 'declined' || o.status === 'expired') && !state.seenOffer[id]) {
+        state.seenOffer[id] = true;
+        const fresh = Store.serverNow() - (o.createdAt || 0) < 60000;
+        if (!fresh || !state.offerStart[id]) return; // an old one from before this page opened
+        const iAccepted = o.acc && o.acc[pid];
+        if (o.status === 'declined') UI.toast(o.by === pid ? 'You declined. Tap Find opponent when you are ready.' : 'Your opponent declined. Looking for another opponent…', o.by === pid ? '' : 'ok');
+        else UI.toast(iAccepted ? 'Your opponent did not accept in time. Looking again…' : 'You did not accept in time. Tap Find opponent when you are ready.', iAccepted ? 'ok' : 'error');
+        if (inQueue()) startHeartbeat(); else stopHeartbeat();
+      }
+    }
+
+    async function startGame(id, o) {
+      if (state.handled[id] || state.starting === id) return;
+      state.starting = id;
+      try {
+        const pid = state.me.pid;
+        const code = o.room;
+        const existing = await Store.getRoom(code);
+        if (existing && (existing.status === 'final' || existing.status === 'void')) { state.handled[id] = true; return; } // an old offer
+        stopHeartbeat();
+        const a = o.players[o.a], b = o.players[o.b];
+        const mins = Number(state.settings.matchMin || (state.tour && state.tour.matchMin)) || 10;
+        if (!existing) {
+          await Store.createMatchRoom(code, () => Match.createMatchRoom({ code, a, b, matchLengthSec: Math.round(mins * 60), now: Store.serverNow(), offerId: id }));
+        }
+        const seat = o.a === pid ? 'A' : 'B';
+        Store.local.set(seatKey(code), seat);
+        Store.queueOnDisconnect(pid, false);
+        await Store.updatePlayer(pid, { room: code, lastOpp: seat === 'A' ? o.b : o.a });
+        state.handled[id] = true;
+        App.go('room=' + code);
+      } catch (e) {
+        console.error(e);
+        UI.toast('Could not start the game. Trying again…', 'error');
+      } finally {
+        if (state.starting === id) state.starting = null;
+      }
+    }
+
+    function respond(id, yes) {
+      const pid = state.me.pid;
+      if (yes) Store.mutateLobby(raw => Match.lobbyAccept(raw, id, pid));
+      else { stopHeartbeat(); Store.queueOnDisconnect(pid, false); Store.mutateLobby(raw => Match.lobbyDecline(raw, id, pid, Store.serverNow())); }
+    }
+
+    // ----- refresh (watchers) and tick (countdowns) -----
+    function refresh() {
+      if (!state.built) return;
+      const now = Store.serverNow();
+      const t = tourState(state.tour, now);
+      const tourEl = el.querySelector('#mmTour');
+      if (tourEl) {
+        tourEl.dataset.kind = t.kind;
+        tourEl.innerHTML = t.open ? `🟢 Tournament ends in <b id="mmTourLeft">${hms(t.left)}</b>` : esc(t.text);
+      }
+      if (state.built === 'signin') {
+        const hint = el.querySelector('#acHint');
+        if (hint) hint.textContent = state.settings.requireCode ? 'Required. Individual codes are for one player; a shared code is used by everyone.'
+          : 'Individual codes are for one player; a shared code is used by everyone.';
+        const code = el.querySelector('#acCode');
+        if (code) code.placeholder = state.settings.requireCode ? 'ABCD-EF23' : 'ABCD-EF23 (optional)';
+      }
+      renderLiveList();
+      if (state.built !== 'home' || !state.me) return;
+
+      const rec = myRecord();
+      const stats = el.querySelector('#mmStats');
+      const sHtml = `<div><b>${rec.points}</b><span>Points</span></div><div><b>${rec.wins}</b><span>Won</span></div><div><b>${rec.draws}</b><span>Drawn</span></div><div><b>${rec.losses}</b><span>Lost</span></div>`;
+      if (stats.innerHTML !== sHtml) stats.innerHTML = sHtml;
+
+      const live = myLiveRoom();
+      const ret = el.querySelector('#mmReturn');
+      const rHtml = live ? `<div class="mm-return"><span>▶ Your game is in progress.</span><a class="btn-go small" href="#room=${esc(live.code)}" style="text-decoration:none;padding:6px 12px;border-radius:8px;">Return to game</a></div>` : '';
+      if (ret.innerHTML !== rHtml) ret.innerHTML = rHtml;
+
+      const main = el.querySelector('#mmMain');
+      const why = canFind();
+      let mHtml;
+      if (inQueue()) {
+        if (state.queueStart === null) state.queueStart = performance.now();
+        if (!state.heartbeat) startHeartbeat();
+        mHtml = `<div class="mm-search"><div class="mm-radar" aria-hidden="true">🔍</div>
+          <b>Looking for an opponent…</b><span class="muted small-text">Waiting <span id="mmWait">0:00</span> · paired by points, never the same opponent twice in a row</span>
+          <button class="btn-secondary" data-act="cancel">Cancel</button></div>`;
+      } else {
+        state.queueStart = null;
+        mHtml = `<button class="btn-go mm-find" data-act="find" ${why ? 'disabled' : ''}>🔍 Find opponent</button>
+          ${why ? `<p class="muted small-text center" style="margin:0;">${esc(why)}</p>` : '<p class="muted small-text center" style="margin:0;">You will have 10 seconds to accept when an opponent is found.</p>'}`;
+      }
+      if (main.dataset.html !== mHtml) { main.innerHTML = mHtml; main.dataset.html = mHtml; }
+      // the tournament ended (or a game started elsewhere) while queued: leave the queue
+      if (inQueue() && why) cancel();
+      renderOffer();
+    }
+
+    function renderLiveList() {
+      const box = el.querySelector('#mmLive');
+      if (!box) return;
+      const live = Object.values(state.rooms).filter(r => PLAYING_ROOM.includes(r.status))
+        .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).slice(0, 12);
+      const html = live.length ? live.map(r => {
+        const sc = r.game ? r.game.scores : {};
+        const names = seatsOf(r).map(s => esc(short(r.seats[s] ? r.seats[s].name : Match.teamNameOf(r, s)))).join(' vs ');
+        return `<a href="#room=${esc(r.code)}"><span>${names}</span><span>${seatsOf(r).map(s => sc[s] || 0).join('–')} · 👁️ Watch</span></a>`;
+      }).join('') : '<p class="muted small-text" style="margin:0;">No games being played right now.</p>';
+      if (box.dataset.html !== html) { box.innerHTML = html; box.dataset.html = html; }
+    }
+
+    function renderOffer() {
+      const box = el.querySelector('#mmOverlay');
+      if (!box) return;
+      const mo = myOffer();
+      const pid = state.me && state.me.pid;
+      if (!mo || !['pending', 'accepted'].includes(mo.o.status) || state.handled[mo.id] || !state.offerStart[mo.id]) {
+        if (box.innerHTML) box.innerHTML = '';
+        return;
+      }
+      const { id, o } = mo;
+      const opp = o.players[o.a === pid ? o.b : o.a] || {};
+      const mine = o.players[pid] || {};
+      const accepted = o.acc && o.acc[pid];
+      const key = id + ':' + o.status + ':' + !!accepted;
+      if (box.dataset.key === key && box.innerHTML) return;
+      box.dataset.key = key;
+      const body = o.status === 'accepted' ? '<b>✓ Both accepted. Starting your game…</b>'
+        : accepted ? '<b>✓ Accepted. Waiting for your opponent…</b>'
+          : `<div class="mm-btns"><button class="btn-secondary" data-offer="no">Decline</button><button class="btn-go" data-offer="yes">✓ Accept</button></div>`;
+      box.innerHTML = `<div class="mm-overlay"><div class="mm-modal" role="dialog" aria-modal="true" aria-labelledby="mmOfferTitle">
+        <h3 id="mmOfferTitle" style="margin:0;">🎯 Opponent found!</h3>
+        <div class="mm-vs"><div><b title="${esc(mine.name || '')}">${esc(short(mine.name || 'You'))}</b><small>${esc(mine.agency || '')}</small></div><i>VS</i>
+          <div><b title="${esc(opp.name || '')}">${esc(short(opp.name || '?'))}</b><small>${esc(opp.agency || '')}</small></div></div>
+        ${o.status === 'accepted' ? '' : '<div class="mm-bar"><i id="mmOfferBar" style="width:100%"></i></div><div class="small-text muted"><span id="mmOfferLeft">10</span> s to accept</div>'}
+        ${body}</div></div>`;
+      box.onclick = ev => {
+        const b = ev.target.closest('[data-offer]');
+        if (!b) return;
+        b.disabled = true;
+        respond(id, b.dataset.offer === 'yes');
+      };
+      const yes = box.querySelector('[data-offer="yes"]');
+      if (yes) yes.focus({ preventScroll: true });
+    }
+
+    function tick() {
+      const now = Store.serverNow();
+      const left = el.querySelector('#mmTourLeft');
+      const t = tourState(state.tour, now);
+      if (left) { if (t.open) left.textContent = hms(t.left); else refresh(); }
+      const wait = el.querySelector('#mmWait');
+      if (wait && state.queueStart !== null) wait.textContent = hms(performance.now() - state.queueStart);
+      const mo = myOffer();
+      if (mo && mo.o.status === 'pending' && state.offerStart[mo.id]) {
+        const el2 = performance.now() - state.offerStart[mo.id];
+        const ms = Math.max(0, Match.OFFER_MS - el2);
+        const bar = el.querySelector('#mmOfferBar'), sec = el.querySelector('#mmOfferLeft');
+        if (bar) bar.style.width = (ms / Match.OFFER_MS * 100) + '%';
+        if (sec) sec.textContent = String(Math.ceil(ms / 1000));
+        // after the window (+1.5 s grace for the other device), either device closes the offer
+        if (el2 > Match.OFFER_MS + 1500 && RoomRetry.due(state.expiring, mo.id)) {
+          const id = mo.id;
+          Store.mutateLobby(raw => Match.lobbyExpire(raw, id, Store.serverNow()));
+        }
+      }
+      if (mo && mo.o.status === 'accepted' && !state.handled[mo.id] && RoomRetry.due(state.expiring, 'start:' + mo.id)) startGame(mo.id, mo.o);
+    }
+
+    watchMe();
+    build();
+    App.onTick(tick);
+    return () => {
+      offSub();
+      meSubs.forEach(f => f());
+      stopHeartbeat();
+      if (standings) standings.off();
+      state.built = null;
+    };
+  }
+
+  // Checks the access code and registers (or signs in again) the player. Returns { player, note } or { error }.
+  async function registerPlayer(codeRaw, nameRaw, agencyRaw, settings) {
+    let name = cleanText(nameRaw, 40), agency = cleanText(agencyRaw, 60);
+    const code = Match.normalizeAccessCode(codeRaw);
+    let pid, codeType, note = '';
+    if (code) {
+      if (code.length !== Match.ACCESS_CODE_LEN) return { error: 'Access codes have 8 characters, like ABCD-EF23.' };
+      const rec = await Store.getAccessCode(code);
+      if (!rec) return { error: 'That access code was not found. Check it with your host.' };
+      if (rec.revoked) return { error: 'That access code has been disabled by the host.' };
+      if (rec.type === 'individual') {
+        if (!rec.pid && (!name || !agency)) return { error: 'Enter your name and your agency / office / department / region.' };
+        const c = await Store.claimIndividualCode(code, name, agency);
+        if (!c || !c.pid) return { error: 'Could not use that code. Ask your host for help.' };
+        if (rec.pid && (c.name !== name || c.agency !== agency) && name) note = `Signed in as ${c.name}: this code belongs to them.`;
+        pid = c.pid; name = c.name; agency = c.agency; codeType = 'individual';
+      } else {
+        if (!name || !agency) return { error: 'Enter your name and your agency / office / department / region.' };
+        pid = 's_' + Match.playerKey(code, name, agency); codeType = 'shared';
+      }
+    } else {
+      if (settings.requireCode) return { error: 'Enter the access code from your host.' };
+      if (!name || !agency) return { error: 'Enter your name and your agency / office / department / region.' };
+      pid = 'g_' + Match.playerKey('', name, agency); codeType = 'none';
+    }
+    const existing = await Store.getPlayer(pid);
+    if (existing && existing.kicked) return { error: 'You were removed from the tournament by the host' + (existing.kickReason ? ` (${existing.kickReason})` : '') + '.' };
+    if (!existing && settings.lockRegistration) return { error: 'Registration is closed. Players who already joined can still sign in.' };
+    const now = Store.serverNow();
+    await Store.updatePlayer(pid, { name, agency, code: code || null, codeType, joinedAt: (existing && existing.joinedAt) || now, lastSeen: now });
+    return { player: { pid, name, agency, code: code || '', codeType }, note };
   }
 
   // ---------- room view ----------
@@ -106,21 +569,37 @@
     async function firstLoad(room) {
       if (!room) return;
       const s = state.mySeat;
-      if (isSeatCode(s)) {
-        if (room.status === 'final' || room.status === 'void') return; // read-only result
-        const res = await Store.mutateRoom(code, r => Match.rejoinSeat(r, s, me));
-        if (res.committed) setRole(s);
-        else { forgetSeat(); UI.toast('Your seat was freed. If you are still playing, take it again below.'); }
-      } else if (s === 'watch') {
-        setRole('watch');
+      const player = session();
+      if (player) keepPresence(player.pid);
+      // The signed-in player's own seat follows them to a new device (same access code).
+      const pidSeat = player ? Match.seatOfPid(room, player.pid) : null;
+      if (room.status === 'final' || room.status === 'void') {
+        if (pidSeat && !isSeatCode(s)) { state.mySeat = pidSeat; Store.local.set(seatKey(code), pidSeat); }
+        return; // read-only result
+      }
+      if (isSeatCode(s) || pidSeat) {
+        const seat = isSeatCode(s) ? s : pidSeat;
+        let res = await Store.mutateRoom(code, r => Match.rejoinSeat(r, seat, me));
+        if (!res.committed && pidSeat) res = await Store.mutateRoom(code, r => Match.reclaimSeat(r, pidSeat, player.pid, me));
+        if (res.committed) {
+          const got = res.committed && Match.seatOfPid(res.room, player && player.pid) || seat;
+          state.mySeat = got; Store.local.set(seatKey(code), got); setRole(got);
+        } else { forgetSeat(); watchMode(); }
       } else if (App.isHost()) {
         setRole('host');
+      } else {
+        watchMode(); // everyone else watches (no seat picking: games are made by matchmaking)
       }
+    }
+    function watchMode() {
+      if (App.isHost()) { setRole('host'); return; }
+      state.mySeat = 'watch';
+      setRole('watch');
     }
 
     function onRoom(raw) {
       state.rawRoom = raw;
-      const room = raw ? Match.withTeamNames(raw, state.teams) : raw;
+      const room = raw ? Object.assign(raw, { code }) : raw;
       const first = !state.loaded;
       state.loaded = true;
       state.room = room;
@@ -132,7 +611,7 @@
       const s = state.mySeat;
       if (!first && room && isSeatCode(s) && room.status !== 'final' && room.status !== 'void') {
         const seat = room.seats[s];
-        if (!seat || seat.clientId !== me) forgetSeat('You were removed from your seat by the host.');
+        if (!seat || seat.clientId !== me) { forgetSeat('Your game continued on another device.'); watchMode(); }
       }
       if (first) firstLoad(room).then(render); else render();
     }
@@ -158,69 +637,16 @@
 
       const seated = Match.isSeat(room, state.mySeat);
       const host = App.isHost();
-      if (!seated && state.mySeat !== 'watch' && !host && room.status !== 'final' && room.status !== 'void') {
-        return renderChoices(room);
-      }
+      if (!seated && state.mySeat !== 'watch' && !host && room.status !== 'final' && room.status !== 'void') watchMode();
       if (room.status === 'waiting') return renderLobby(room);
       if (room.status === 'final' || room.status === 'void') return RoomLive.renderFinal(el, room, ctx);
       return RoomLive.renderLive(el, room, ctx);
     }
 
+    // Spectators leave by going back to the start page (there are no seats to take).
     function stopWatching() {
       Store.local.remove(seatKey(code));
-      state.mySeat = null;
-      setRole(App.isHost() ? 'host' : null);
-      render();
-    }
-
-    function renderChoices(room) {
-      const inPlay = room.status !== 'waiting';
-      // a seat tile: a free seat is the button to tap, a taken one is shown but disabled
-      const btn = seat => {
-        const s = room.seats[seat];
-        const team = nameOf(room, seat);
-        if (s) return `<button type="button" class="lb-seat taken" disabled title="${esc(team)}: taken by ${esc(s.name)}">${seatTop(room, seat)}
-          <span class="lb-name"><span class="lb-txt" title="${esc(s.name)}">${esc(short(s.name))}</span></span><span class="lb-sub">Seat taken by ${esc(short(s.name))}</span></button>`;
-        // An empty seat in a running game: the player is continuing on a new device (host freed the seat).
-        // The team is on the tile's top line, so the label stays short on a phone; the full action is the button's name.
-        const action = inPlay ? `Take ${short(team)}'s seat` : `Play for ${short(team)}`;
-        return `<button type="button" class="lb-seat free" data-claim="${seat}" title="${esc(action)}" aria-label="${esc(action)}">${seatTop(room, seat)}
-          <span class="lb-name"><span class="lb-txt">Free seat</span></span><span class="rc-tag ok lb-join">${inPlay ? 'Tap to take it' : 'Tap to join'}</span></button>`;
-      };
-      const SEATS = seatsOf(room);
-      const anyFree = SEATS.some(s => !room.seats[s]);
-      const badge = inPlay ? '<span class="badge live">● Live</span>' : '<span class="badge waiting">🕒 Waiting</span>';
-      el.innerHTML = `
-        <div class="card narrow stack lobby-card">
-          ${lobbyHead(room, badge, code)}
-          <div><label for="choiceName">Your name</label><input id="choiceName" maxlength="40" placeholder="Your name"></div>
-          ${!inPlay ? `<div class="lb-seats">${SEATS.map(btn).join('')}</div>`
-            : (anyFree ? '<p class="muted small-text center">This match is in progress. If you are a player switching devices, take your seat:</p>' +
-                `<div class="lb-seats">${SEATS.filter(s => !room.seats[s]).map(btn).join('')}</div>`
-              : '<p class="muted small-text center">This match has already started. You can watch it. (Switching devices? Ask the host to free your seat.)</p>')}
-          <button class="btn-secondary" data-watch="1">👁️ Just watch</button>
-          <div class="lb-foot"><a href="#" class="small-text">← Back to start</a></div>
-        </div>`;
-      const nameInput = el.querySelector('#choiceName');
-      nameInput.value = Store.local.get('scrabble.name') || '';
-      el.querySelector('.card').onclick = async ev => {
-        const b = ev.target.closest('button');
-        if (!b || b.disabled) return;
-        if (b.dataset.watch) {
-          Store.local.set(seatKey(code), 'watch');
-          state.mySeat = 'watch';
-          setRole('watch');
-          return render();
-        }
-        const name = nameInput.value.trim().slice(0, 40);
-        if (!name) { UI.toast('Enter your name first.', 'error'); nameInput.focus(); return; }
-        Store.local.set('scrabble.name', name);
-        b.disabled = true;
-        if (!(await claim(b.dataset.claim, name))) {
-          UI.toast('That seat was just taken.', 'error');
-        }
-        render();
-      };
+      App.go('');
     }
 
     function renderLobby(room) {
@@ -263,7 +689,7 @@
             <span class="lb-links">
               <a href="#" class="small-text">← Back to start</a>
               ${mine ? '<button class="link small-text" id="leaveSeat">Leave seat</button>' : ''}
-              ${state.mySeat === 'watch' ? '<button class="link small-text" id="stopWatching">Stop watching / take a seat</button>' : ''}
+              ${state.mySeat === 'watch' ? '<button class="link small-text" id="stopWatching">Stop watching</button>' : ''}
             </span>
           </div>
         </div>`;
@@ -306,10 +732,7 @@
     document.addEventListener('visibilitychange', onVisibility);
 
     render(); // "Loading room…" right away instead of the previous view
-    const unsubTeams = Store.watchTeams(t => {
-      state.teams = t;
-      if (state.rawRoom) { state.room = Match.withTeamNames(state.rawRoom, t); render(); }
-    });
+    const unsubTeams = () => {}; // players are named in the room itself (no team renames)
     const unsub = Store.watchRoom(code, onRoom);
     const unsubPinned = Store.watchPinned(p => { state.pinned = p; render(); });
     return () => {
@@ -425,7 +848,7 @@
         </div>
         <div id="hostBar"></div>
         <div class="row live-foot" id="liveFoot"><a href="#" class="small-text">← Back to start</a>
-          <button class="link small-text hidden" id="stopWatching">Stop watching / take a seat</button></div>
+          <button class="link small-text hidden" id="stopWatching">Stop watching</button></div>
         </div>
         <div id="board-container"></div>
         <div id="tauntLive" class="fx-sr" aria-live="polite"></div>
@@ -573,6 +996,7 @@
         // Vertical words are checked both ways (top to bottom, bottom to top); spellings = what to show.
         const check = await Dictionary.checkPlay(m.words);
         if (check.rejected.length) {
+          if (Sound.buzz) Sound.buzz();
           const words = m.words.map(w => ({ word: w.word, score: w.score })); // the appeal stores no back
           ui.rejected = { placements, words, rejectedWords: check.rejected, total: m.total, expectedMoveCount };
           return;
@@ -595,20 +1019,7 @@
       const b = ev.target.closest('button');
       if (!b || !ui.rejected) return;
       if (b.dataset.act === 'recall') { ui.rejected = null; ui.temp = []; ui.selected = null; return update(el, ctx.state.room, ctx); }
-      if (b.dataset.act === 'appeal') {
-        const rej = ui.rejected;
-        const seat = ctx.state.mySeat;
-        b.disabled = true;
-        ui.lastUsed = ui.temp.map(t => t.rackIndex);
-        ui.lastRack = ctx.state.room.game.racks[seat].slice();
-        const res = await Store.mutateRoom(ctx.code, r => Match.requestAppeal(r, seat, rej.placements, {
-          now: Store.serverNow(), expectedMoveCount: rej.expectedMoveCount, words: rej.words, rejectedWords: rej.rejectedWords, total: rej.total
-        }));
-        ui.rejected = null;
-        if (res.committed) { ui.temp = []; ui.selected = null; UI.toast('Sent to the host for a decision.', 'ok'); }
-        else { UI.toast('Could not send the appeal (time up or the game changed).', 'error'); ui.lastUsed = null; ui.lastRack = null; }
-        update(el, ctx.state.room, ctx);
-      }
+      if (b.dataset.act === 'fix') { ui.rejected = null; return update(el, ctx.state.room, ctx); } // keep the tiles on the board to change them
     };
 
     // Clocks + automatic timeout / time-up writes.
@@ -735,7 +1146,8 @@
       side.classList.toggle('turn', g.turn === s && PLAYING.includes(room.status));
       side.classList.toggle('out', !!o);
       const tag = o ? `<span class="sb-out">${o === 'left' ? 'LEFT' : 'OUT'}</span>` : '';
-      const html = `<span class="chip chip-${s.toLowerCase()} team">${esc(teamOf(room, s))}</span>
+      const agency = room['agency' + s] || (room.seats[s] && room.seats[s].agency) || '';
+      const html = `<span class="chip chip-${s.toLowerCase()} team" title="${esc(agency || Match.teamNameOf(room, s))}">${esc(agency ? short(agency) : teamOf(room, s))}</span>
         <div class="who"><span class="player" title="${esc(room.seats[s] ? room.seats[s].name : Match.teamNameOf(room, s))}">${esc(playerOf(room, s))}${seat === s ? ' (you)' : ''}</span><span class="score disp">${g.scores[s]}</span></div>${tag}`;
       // Rewrite only on change: a celebration holds the old score in this element until its points land.
       if (ui.sideHtml[s] !== html) { side.innerHTML = html; ui.sideHtml[s] = html; }
@@ -797,12 +1209,10 @@
     $('#resignBtn').disabled = !isSeat(seat) || iAmOut || !['live', 'suddenDeath', 'hostDecision'].includes(room.status);
 
     // Bottom sheet (empty = hidden): the recall / ask-host choice, or my appeal waiting for the host.
-    let sheet = ui.rejected ? `<div class="sheet-msg">❌ <b>${ui.rejected.rejectedWords.map(esc).join(', ')}</b> not found in the dictionary.</div>
+    // The dictionary decides (no host appeal): fix the word, or take the tiles back. The turn clock keeps running.
+    let sheet = ui.rejected ? `<div class="sheet-msg">❌ <b>${ui.rejected.rejectedWords.map(esc).join(', ')}</b> is not in the dictionary. Try another word.</div>
         <div class="sheet-hint">${esc(ScrabbleEngine.READ_HINT)}</div>
-        <div class="sheet-actions"><button class="secondary" data-act="recall">↩ Recall</button><button class="btn-primary" data-act="appeal">⚖️ Ask host</button></div>` : '';
-    if (isSeat(seat) && g.pending && g.pending.seat === seat) {
-      sheet = '<div class="sheet-msg">⚖️ Waiting for the host to approve your word…</div>';
-    }
+        <div class="sheet-actions"><button class="secondary" data-act="recall">↩ Recall tiles</button><button class="btn-primary" data-act="fix">✎ Move tiles</button></div>` : '';
     $('#rejectBox').innerHTML = sheet;
 
     $('#lastMove').innerHTML = lastMoveText(room);
@@ -915,8 +1325,10 @@
     mc.classList.toggle('low', room.status === 'live' && matchMs <= 60000);
     renderPill(el, room, ctx);
 
+    tickForfeit(el, room);
     // Only seated players and the host write automatic transitions; spectators never write.
     const writer = isSeat(ctx.state.mySeat) || App.isHost();
+    if (writer && PLAYING.includes(room.status)) watchDisconnects(room, ctx, now);
     if (!writer || !PLAYING.includes(room.status) || c.paused || (room.game && room.game.pending)) return;
     const tried = ctx.state.ui.tried;
     if (room.status === 'live' && now >= c.endsAt) {
@@ -930,6 +1342,44 @@
         Store.mutateRoom(ctx.code, r => Match.applyPass(r, seat, { now: Store.serverNow(), expectedMoveCount, timeout: true, expectedTurnStartedAt }));
       }
     }
+  }
+
+  // Disconnects (no host needed): a seat without presence for OFFLINE_DEBOUNCE_MS (this device's own
+  // stopwatch) is recorded as offline; DISCONNECT_FORFEIT_MS later the other player's device (or the
+  // host's) ends the game by forfeit. A returning player's device clears its own seat's mark.
+  function watchDisconnects(room, ctx, now) {
+    const ui = ctx.state.ui;
+    ui.offSince = ui.offSince || {};
+    const mine = ctx.state.mySeat;
+    for (const s of seatsOf(room)) {
+      const seat = room.seats[s];
+      if (!seat || outOf(room, s)) continue;
+      if (s === mine) {
+        if (seat.offlineAt && seat.clientId === ctx.me && room.presence[ctx.me] && Retry.due(ui.tried, 'on:' + seat.offlineAt)) {
+          Store.mutateRoom(ctx.code, r => Match.markOnline(r, s, ctx.me));
+        }
+        continue;
+      }
+      if (Match.isSeatOnline(room, s)) { delete ui.offSince[s]; continue; }
+      if (!ui.offSince[s]) ui.offSince[s] = performance.now();
+      if (!seat.offlineAt) {
+        if (performance.now() - ui.offSince[s] >= Match.OFFLINE_DEBOUNCE_MS && Retry.due(ui.tried, 'off:' + s + ':' + seat.clientId)) {
+          Store.mutateRoom(ctx.code, r => Match.markOffline(r, s, Store.serverNow()));
+        }
+      } else if (now >= seat.offlineAt + Match.DISCONNECT_FORFEIT_MS && Retry.due(ui.tried, 'forfeit:' + s + ':' + seat.offlineAt)) {
+        const at = seat.offlineAt;
+        Store.mutateRoom(ctx.code, r => Match.forfeitOffline(r, s, Store.serverNow(), at));
+      }
+    }
+  }
+
+  // The "wins by forfeit in m:ss" countdown inside the disconnect notice.
+  function tickForfeit(el, room) {
+    el.querySelectorAll('[data-forfeit]').forEach(span => {
+      const left = Match.offlineLeftMs(room, span.dataset.forfeit, Store.serverNow());
+      const t = left === null ? '' : UI.formatClock(left);
+      if (span.textContent !== t) span.textContent = t;
+    });
   }
 
   // Emoji taunts (batch 5): a taunt shows on every room view (players, spectators, host) when it
@@ -1057,6 +1507,28 @@
     ui.introKey = played ? key : null;
   }
 
+  // A draw (still tied after the sudden-death rounds): Scenes.renderResult shows a winner, so draws
+  // get this screen, with the same parts (#board-container, #finalStandings, #backBtn, #finalHost).
+  function renderDraw(el, room, ctx) {
+    ensureStyles();
+    const drew = (room.result.drawSeats && room.result.drawSeats.length) ? room.result.drawSeats : seatsOf(room);
+    const line = seatsOf(room).map(s => {
+      const nm = room.seats[s] ? room.seats[s].name : Match.teamNameOf(room, s);
+      return `<div><b title="${esc(nm)}">${esc(short(nm))}</b><small>${esc(room['agency' + s] || '')}</small><div class="disp" style="font-size:1.6rem;font-weight:800;">${Number(room.result['score' + s]) || 0}</div></div>`;
+    }).join('<i>–</i>');
+    const mine = isSeat(ctx.state.mySeat) && drew.includes(ctx.state.mySeat);
+    el.innerHTML = `<div class="card narrow stack res-final mm-draw">
+        <div class="mm-big" aria-hidden="true">🤝</div>
+        <h2 style="margin:0;">It's a draw!</h2>
+        <p class="muted small-text" style="margin:0;">Still tied after ${Match.SUDDEN_DEATH_MAX_ROUNDS} sudden-death rounds.${mine ? ' You get ½ point.' : ' ½ point each.'}</p>
+        <div class="mm-vs">${line}</div>
+        <button class="btn-primary" id="backBtn">← Back to start</button>
+        <div id="finalHost"></div>
+      </div>
+      <div class="card"><div id="board-container"></div></div>
+      <div class="card narrow"><h3>🏆 Standings</h3><div id="finalStandings"></div></div>`;
+  }
+
   const RoomLive = {
     renderLive(el, room, ctx) {
       document.body.classList.add('in-game'); // collapsed header during a live game
@@ -1103,11 +1575,17 @@
       const ending = Scenes.endingCelebration(ui.lastSeenMove, room);
       if (room.game) ui.lastSeenMove = room.game.moveCount; // nothing replays on a later rebuild
       const delayMs = ending ? (Match.CELEBRATE_MS[ending.tier] || 0) : 0;
-      Scenes.renderResult(el, room, viewer, { animate: Scenes.resultFresh(room, Store.serverNow()), delayMs, winSoundDelayMs: bellRang ? 1200 : 0 });
+      if (Match.isDraw(room)) renderDraw(el, room, ctx);
+      else Scenes.renderResult(el, room, viewer, { animate: Scenes.resultFresh(room, Store.serverNow()), delayMs, winSoundDelayMs: bellRang ? 1200 : 0 });
       if (room.game) UI.renderBoard(el.querySelector('#board-container'), room.game.board, {});
       if (!ui.standings) ui.standings = UI.mountStandings(() => el.querySelector('#finalStandings'));
       else ui.standings.render();
-      el.querySelector('#backBtn').onclick = () => App.go('');
+      const back = el.querySelector('#backBtn');
+      if (back) {
+        // players go straight back to matchmaking; the start page is where Find opponent lives
+        if (isSeat(ctx.state.mySeat) && session()) back.textContent = '🔍 Find next opponent';
+        back.onclick = () => App.go('');
+      }
       RoomLive.updateFinalHost(el, room, ctx);
       if (ending) Celebrate.show(ending, { container: el, scoreEl: null, mine: ending.seat === ctx.state.mySeat });
     },
@@ -1127,61 +1605,42 @@
       const noticeKey = offline.map(s => s + ':' + room.seats[s].clientId).join('|');
       if (!offline.length) ui.noticeHidden = null; // a new disconnect shows again
       const notice = el.querySelector('#noticeBox');
+      // "<name> disconnected · <other> wins by forfeit in 1:43 unless they come back"
+      const line = offline.map(s => {
+        const seat = room.seats[s];
+        const others = SEATS.filter(x => x !== s && room.seats[x] && !outOf(room, x));
+        const cd = seat.offlineAt ? ` · ${isMulti ? 'out' : `<span class="nm">${esc(short(others.length ? room.seats[others[0]].name : ''))}</span> wins by forfeit`} in <span class="mm-forfeit" data-forfeit="${s}"></span> unless they return` : '';
+        return `<span class="nm">${esc(short(seat.name))}</span> disconnected${cd}`;
+      }).join('<br>');
       notice.innerHTML = inPlay && offline.length && ui.noticeHidden !== noticeKey
-        ? `<div class="sheet-row"><div class="sheet-msg">📴 ${andList(offline.map(s => `<span class="nm">${esc(short(room.seats[s].name))}</span>`))} disconnected${App.isHost() ? ' · Pause to wait, or Award win' : ''}</div>
+        ? `<div class="sheet-row"><div class="sheet-msg">📴 ${line}</div>
             <button class="btn-ghost sheet-close" data-act="hideNotice" aria-label="Hide this notice">✕</button></div>`
         : '';
+      tickForfeit(el, room);
       notice.onclick = ev => {
         if (!ev.target.closest('[data-act=hideNotice]')) return;
         ui.noticeHidden = noticeKey;
         notice.innerHTML = '';
       };
 
+      // The host only watches: Pin to the big screen, and an emergency Void. Everything else is automatic.
       const bar = el.querySelector('#hostBar');
       if (!App.isHost()) { bar.innerHTML = ''; return; }
       const warnings = SEATS
         .filter(s => room.seats[s] && room.fairPlay[s].screenLeaves > 0)
         .map(s => `<div class="warn-line">⚠️ ${esc(short(room.seats[s].name))} left the screen ${room.fairPlay[s].screenLeaves}×</div>`).join('');
-      let decision = '';
-      if (phase === 'appeal') {
-        const p = g.pending;
-        decision = `<div class="warn-line stack">
-          <div>⚖️ <b class="nm">${esc(playerOf(room, p.seat))}</b> played ${p.words.map(w => `${esc(w.word)} (${Number(w.score) || 0})`).join(', ')}: <b>${Number(p.total) || 0} pts</b>.
-          Not found: ${p.rejectedWords.map(esc).join(', ')}</div>
-          <div class="row"><button class="small" data-host="approve">✅ Approve</button><button class="small danger" data-host="deny">✖ Deny</button></div>
-        </div>`;
-      } else if (phase === 'hostDecision') {
-        // The tied sudden-death players (3-4 player rooms store them; 2 players = both).
-        const sd = g.suddenDeath;
-        // Only real seats (room data is client-written; normalizeRoom filters too).
-        const stored = sd && Array.isArray(sd.seats) ? sd.seats.filter(s => SEATS.includes(s)) : [];
-        const tied = stored.length ? stored : SEATS;
-        decision = `<div class="warn-line stack"><div>Still tied after 3 sudden-death rounds. Award the win:</div>
-          <div class="row">${tied.map(s => `<button class="small nm-btn" data-host="award" data-seat="${esc(s)}" title="${esc(teamOf(room, s))}">🏆 ${esc(teamOf(room, s))}</button>`).join('')}</div></div>`;
-      }
-      const canPause = PLAYING.includes(room.status) && !room.clock.paused;
       const pinned = ctx.state.pinned === ctx.code;
-      const awardBtn = s => `<button class="small secondary nm-btn" data-host="award" data-seat="${s}" title="Award win → ${esc(teamOf(room, s))}">${isMulti ? '🏆' : 'Award win →'} ${esc(teamOf(room, s))}</button>`;
-      // 3-4 player rooms: one "Award win…" picker instead of four buttons (kept open across redraws)
-      const award = isMulti
-        ? `<details class="pick" id="awardPick"${ui.awardOpen ? ' open' : ''}><summary class="btn-secondary">Award win…</summary><div class="pick-list">${SEATS.map(awardBtn).join('')}</div></details>`
-        : SEATS.map(awardBtn).join('');
       bar.innerHTML = `<div class="hostbar">
-        <h4>⚙ Host controls</h4>
-        ${warnings}${decision}
+        <h4>⚙ Host (watching)</h4>
+        ${warnings}
         <div class="row">
-          ${phase === 'paused' ? '<button class="small" data-host="resume">▶ Resume</button>' : `<button class="small secondary" data-host="pause" ${canPause ? '' : 'disabled'}>⏸ Pause</button>`}
-          ${award}
+          ${phase === 'paused' ? '<button class="small" data-host="resume">▶ Resume</button>' : ''}
           <button class="small secondary" data-host="pin">${pinned ? 'Unpin' : '📌 Pin to big screen'}</button>
-          <button class="small danger" data-host="void">Void</button>
+          <button class="small danger" data-host="void">🗑 Void (emergency)</button>
         </div>
-        <div class="row small-text">
-          <span class="muted">Player switching devices?</span>
-          ${SEATS.filter(s => room.seats[s]).map(s => `<button class="small secondary nm-btn" data-host="remove" data-seat="${s}" title="Free ${esc(room.seats[s].name)}'s seat">Free ${esc(short(room.seats[s].name))}'s seat</button>`).join('')}
-        </div>
+        <div class="small-text muted">Words, turn time, match time, disconnects and ties are handled automatically.</div>
       </div>`;
       bar.onclick = async ev => {
-        if (ev.target.closest('#awardPick > summary')) { ui.awardOpen = !el.querySelector('#awardPick').open; return; }
         const b = ev.target.closest('button[data-host]');
         if (!b || b.disabled) return;
         const act = b.dataset.host;
@@ -1198,29 +1657,16 @@
         }
         const now = () => Store.serverNow();
         let fn = null;
-        if (act === 'pause') fn = r => Match.pauseClocks(r, now(), 'host');
-        else if (act === 'resume') fn = r => Match.resumeClocks(r, now());
-        else if (act === 'approve') fn = r => Match.resolveAppeal(r, true, { now: now() });
-        else if (act === 'deny') fn = r => Match.resolveAppeal(r, false, { now: now() });
-        else if (act === 'award') {
-          const seat = b.dataset.seat;
-          if (!confirm(`Award the win to ${teamOf(ctx.state.room, seat)}?`)) return;
-          ui.awardOpen = false;
-          fn = r => Match.awardWin(r, seat, now());
-        } else if (act === 'void') {
+        if (act === 'resume') fn = r => Match.resumeClocks(r, now());
+        else if (act === 'void') {
           const note = prompt('Reason for voiding (kept in the record):', '');
-          if (note === null || !confirm('Void this room? It will count for no one.')) return;
+          if (note === null || !confirm('Void this game? It will count for no one.')) return;
           fn = r => Match.voidRoom(r, now(), note);
-        } else if (act === 'remove') {
-          const seat = b.dataset.seat;
-          const s = ctx.state.room.seats[seat];
-          if (!s || !confirm(`Free ${s.name}'s seat? They (or their new device) can take it again with the room code. Their tiles and score stay.`)) return;
-          fn = r => Match.removePlayer(r, seat);
         }
         if (!fn) return;
         b.disabled = true;
         const res = await Store.mutateRoom(ctx.code, fn);
-        if (!res.committed) UI.toast('That action is no longer possible (the room changed).', 'error');
+        if (!res.committed) UI.toast('That action is no longer possible (the game changed).', 'error');
       };
     },
 
